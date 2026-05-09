@@ -1,121 +1,188 @@
-Creative Commons Legal Code
+================================================================================
+POSTPILOT STUDIO — PROPRIETARY SOFTWARE LICENSE
+================================================================================
 
-CC0 1.0 Universal
+Copyright (c) 2025 [LaMonte Douglas / LEGACY PROTECTORS]
+All Rights Reserved.
 
-    CREATIVE COMMONS CORPORATION IS NOT A LAW FIRM AND DOES NOT PROVIDE
-    LEGAL SERVICES. DISTRIBUTION OF THIS DOCUMENT DOES NOT CREATE AN
-    ATTORNEY-CLIENT RELATIONSHIP. CREATIVE COMMONS PROVIDES THIS
-    INFORMATION ON AN "AS-IS" BASIS. CREATIVE COMMONS MAKES NO WARRANTIES
-    REGARDING THE USE OF THIS DOCUMENT OR THE INFORMATION OR WORKS
-    PROVIDED HEREUNDER, AND DISCLAIMS LIABILITY FOR DAMAGES RESULTING FROM
-    THE USE OF THIS DOCUMENT OR THE INFORMATION OR WORKS PROVIDED
-    HEREUNDER.
+This license agreement ("Agreement") governs the use of the software tools
+collectively known as "PostPilot Studio," which includes
+but is not limited to:
 
-Statement of Purpose
+  - PostPilot Social Media Scheduler
+  - Brand Post Creator (PPPostCreator)
+  - The Content Studio Wrapper Interface (index.html)
+  - All associated HTML, CSS, JavaScript, font assets, and configuration files
 
-The laws of most jurisdictions throughout the world automatically confer
-exclusive Copyright and Related Rights (defined below) upon the creator
-and subsequent owner(s) (each and all, an "owner") of an original work of
-authorship and/or a database (each, a "Work").
+(collectively referred to herein as the "Software").
 
-Certain owners wish to permanently relinquish those rights to a Work for
-the purpose of contributing to a commons of creative, cultural and
-scientific works ("Commons") that the public can reliably and without fear
-of later claims of infringement build upon, modify, incorporate in other
-works, reuse and redistribute as freely as possible in any form whatsoever
-and for any purposes, including without limitation commercial purposes.
-These owners may contribute to the Commons to promote the ideal of a free
-culture and the further production of creative, cultural and scientific
-works, or to gain reputation or greater distribution for their Work in
-part through the use and efforts of others.
+================================================================================
+SECTION 1 — OWNERSHIP
+================================================================================
 
-For these and/or other purposes and motivations, and without any
-expectation of additional consideration or compensation, the person
-associating CC0 with a Work (the "Affirmer"), to the extent that he or she
-is an owner of Copyright and Related Rights in the Work, voluntarily
-elects to apply CC0 to the Work and publicly distribute the Work under its
-terms, with knowledge of his or her Copyright and Related Rights in the
-Work and the meaning and intended legal effect of CC0 on those rights.
+The Software is the exclusive intellectual property of the copyright holder
+named above. All rights, title, and interest in and to the Software, including
+all intellectual property rights therein, are and shall remain the exclusive
+property of the copyright holder. This Agreement does not convey to you any
+rights of ownership in or related to the Software.
 
-1. Copyright and Related Rights. A Work made available under CC0 may be
-protected by copyright and related or neighboring rights ("Copyright and
-Related Rights"). Copyright and Related Rights include, but are not
-limited to, the following:
+================================================================================
+SECTION 2 — GRANT OF LICENSE
+================================================================================
 
-  i. the right to reproduce, adapt, distribute, perform, display,
-     communicate, and translate a Work;
- ii. moral rights retained by the original author(s) and/or performer(s);
-iii. publicity and privacy rights pertaining to a person's image or
-     likeness depicted in a Work;
- iv. rights protecting against unfair competition in regards to a Work,
-     subject to the limitations in paragraph 4(a), below;
-  v. rights protecting the extraction, dissemination, use and reuse of data
-     in a Work;
- vi. database rights (such as those arising under Directive 96/9/EC of the
-     European Parliament and of the Council of 11 March 1996 on the legal
-     protection of databases, and under any national implementation
-     thereof, including any amended or successor version of such
-     directive); and
-vii. other similar, equivalent or corresponding rights throughout the
-     world based on applicable law or treaty, and any national
-     implementations thereof.
+Subject to the terms and conditions of this Agreement, the copyright holder
+grants you a limited, non-exclusive, non-transferable, non-sublicensable,
+revocable license to use the Software solely for your own personal or internal
+business purposes. This license does not include the right to:
 
-2. Waiver. To the greatest extent permitted by, but not in contravention
-of, applicable law, Affirmer hereby overtly, fully, permanently,
-irrevocably and unconditionally waives, abandons, and surrenders all of
-Affirmer's Copyright and Related Rights and associated claims and causes
-of action, whether now known or unknown (including existing as well as
-future claims and causes of action), in the Work (i) in all territories
-worldwide, (ii) for the maximum duration provided by applicable law or
-treaty (including future time extensions), (iii) in any current or future
-medium and for any number of copies, and (iv) for any purpose whatsoever,
-including without limitation commercial, advertising or promotional
-purposes (the "Waiver"). Affirmer makes the Waiver for the benefit of each
-member of the public at large and to the detriment of Affirmer's heirs and
-successors, fully intending that such Waiver shall not be subject to
-revocation, rescission, cancellation, termination, or any other legal or
-equitable action to disrupt the quiet enjoyment of the Work by the public
-as contemplated by Affirmer's express Statement of Purpose.
+  (a) distribute, publish, or make the Software available to any third party
+      in any form, in whole or in part;
 
-3. Public License Fallback. Should any part of the Waiver for any reason
-be judged legally invalid or ineffective under applicable law, then the
-Waiver shall be preserved to the maximum extent permitted taking into
-account Affirmer's express Statement of Purpose. In addition, to the
-extent the Waiver is so judged Affirmer hereby grants to each affected
-person a royalty-free, non transferable, non sublicensable, non exclusive,
-irrevocable and unconditional license to exercise Affirmer's Copyright and
-Related Rights in the Work (i) in all territories worldwide, (ii) for the
-maximum duration provided by applicable law or treaty (including future
-time extensions), (iii) in any current or future medium and for any number
-of copies, and (iv) for any purpose whatsoever, including without
-limitation commercial, advertising or promotional purposes (the
-"License"). The License shall be deemed effective as of the date CC0 was
-applied by Affirmer to the Work. Should any part of the License for any
-reason be judged legally invalid or ineffective under applicable law, such
-partial invalidity or ineffectiveness shall not invalidate the remainder
-of the License, and in such case Affirmer hereby affirms that he or she
-will not (i) exercise any of his or her remaining Copyright and Related
-Rights in the Work or (ii) assert any associated claims and causes of
-action with respect to the Work, in either case contrary to Affirmer's
-express Statement of Purpose.
+  (b) sublicense, sell, resell, transfer, assign, or otherwise commercially
+      exploit the Software or any portion thereof;
 
-4. Limitations and Disclaimers.
+  (c) copy, reproduce, duplicate, or clone the Software or any portion thereof,
+      except as strictly necessary for personal backup purposes;
 
- a. No trademark or patent rights held by Affirmer are waived, abandoned,
-    surrendered, licensed or otherwise affected by this document.
- b. Affirmer offers the Work as-is and makes no representations or
-    warranties of any kind concerning the Work, express, implied,
-    statutory or otherwise, including without limitation warranties of
-    title, merchantability, fitness for a particular purpose, non
-    infringement, or the absence of latent or other defects, accuracy, or
-    the present or absence of errors, whether or not discoverable, all to
-    the greatest extent permissible under applicable law.
- c. Affirmer disclaims responsibility for clearing rights of other persons
-    that may apply to the Work or any use thereof, including without
-    limitation any person's Copyright and Related Rights in the Work.
-    Further, Affirmer disclaims responsibility for obtaining any necessary
-    consents, permissions or other rights required for any use of the
-    Work.
- d. Affirmer understands and acknowledges that Creative Commons is not a
-    party to this document and has no duty or obligation with respect to
-    this CC0 or use of the Work.
+  (d) modify, adapt, translate, merge, or create derivative works based upon
+      the Software or any portion thereof;
+
+  (e) reverse engineer, disassemble, decompile, decode, or otherwise attempt
+      to derive or gain access to the source code, structure, logic, or
+      underlying algorithms of the Software, in whole or in part;
+
+  (f) use the Software or any portion thereof as a basis for or component of
+      another product, service, or tool, whether commercial or non-commercial;
+
+  (g) remove, alter, obscure, or circumvent any proprietary notices, labels,
+      copyright notices, or this license from or within the Software;
+
+  (h) host, deploy, or serve the Software on any public platform, website,
+      server, or repository in a manner that allows third parties to access,
+      download, copy, or reuse the Software without the express prior written
+      consent of the copyright holder.
+
+================================================================================
+SECTION 3 — STRICT PROHIBITION ON REDISTRIBUTION AND RESALE
+================================================================================
+
+You may NOT, under any circumstances:
+
+  (a) sell, license, rent, lease, or otherwise transfer the Software or access
+      to the Software to any individual, company, organization, or entity,
+      whether for monetary compensation or otherwise;
+
+  (b) represent, claim, or imply that the Software — or any portion thereof,
+      or any tool derived from or inspired by the Software — was created by,
+      belongs to, or is the intellectual property of any person or entity other
+      than the copyright holder named in this Agreement;
+
+  (c) package, bundle, or include the Software as part of any product, service,
+      template pack, toolkit, course, digital download, or any other offering
+      made available to others, whether free or paid;
+
+  (d) publish the Software's source code, files, or assets to any public or
+      semi-public code repository, file-sharing platform, or collaborative
+      development platform (including but not limited to GitHub, GitLab,
+      Bitbucket, CodePen, JSFiddle, or similar services) in a manner that
+      makes the Software accessible to the general public;
+
+  (e) recreate, rebuild, or reimplement the Software or any of its distinctive
+      features, workflows, designs, or components in a substantially similar
+      form, with intent to distribute or commercialize such recreation.
+
+================================================================================
+SECTION 4 — NO FRANCHISE, PARTNERSHIP, OR AGENCY
+================================================================================
+
+Nothing in this Agreement shall be construed as creating any partnership,
+joint venture, agency, franchise, or employment relationship between you and
+the copyright holder. You have no authority to bind the copyright holder in
+any respect.
+
+================================================================================
+SECTION 5 — DISCLAIMER OF WARRANTIES
+================================================================================
+
+THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND
+NON-INFRINGEMENT. THE COPYRIGHT HOLDER DOES NOT WARRANT THAT THE SOFTWARE
+WILL BE UNINTERRUPTED, ERROR-FREE, OR FREE OF HARMFUL COMPONENTS.
+
+================================================================================
+SECTION 6 — LIMITATION OF LIABILITY
+================================================================================
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO LOSS OF
+PROFITS, DATA, BUSINESS, OR GOODWILL, ARISING OUT OF OR IN CONNECTION WITH
+YOUR USE OF OR INABILITY TO USE THE SOFTWARE, EVEN IF THE COPYRIGHT HOLDER
+HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+================================================================================
+SECTION 7 — ENFORCEMENT AND REMEDIES
+================================================================================
+
+Any unauthorized use, reproduction, distribution, or sale of the Software
+constitutes a material breach of this Agreement and an infringement of the
+copyright holder's intellectual property rights. In the event of such breach,
+the copyright holder shall be entitled to seek all available legal and
+equitable remedies, including but not limited to:
+
+  (a) injunctive relief to prevent continued or further unauthorized use;
+  (b) monetary damages, including any profits derived from unauthorized use;
+  (c) statutory damages under applicable copyright law;
+  (d) recovery of attorneys' fees and costs of litigation.
+
+The copyright holder's failure to enforce any provision of this Agreement
+shall not constitute a waiver of the copyright holder's right to enforce such
+provision or any other provision in the future.
+
+================================================================================
+SECTION 8 — TERMINATION
+================================================================================
+
+This license is effective until terminated. Your rights under this Agreement
+will terminate automatically, without notice, if you breach any term of this
+Agreement. Upon termination, you must immediately cease all use of the
+Software and permanently destroy all copies in your possession or control.
+
+================================================================================
+SECTION 9 — GOVERNING LAW
+================================================================================
+
+This Agreement shall be governed by and construed in accordance with the laws
+of the State of [YOUR STATE], United States of America, without regard to its
+conflict of law provisions. Any legal action or proceeding arising under this
+Agreement shall be brought exclusively in the federal or state courts located
+in [YOUR STATE / COUNTY], and the parties hereby consent to the personal
+jurisdiction and venue of such courts.
+
+================================================================================
+SECTION 10 — ENTIRE AGREEMENT
+================================================================================
+
+This Agreement constitutes the entire agreement between you and the copyright
+holder with respect to the Software and supersedes all prior or contemporaneous
+understandings, communications, or agreements, written or oral, regarding the
+subject matter hereof. No amendment or modification of this Agreement shall be
+binding unless made in writing and signed by the copyright holder.
+
+================================================================================
+SECTION 11 — CONTACT
+================================================================================
+
+For licensing inquiries, written permission requests, or any other questions
+regarding this Agreement, please contact:
+
+  Legacy Protectors
+  [lamonte@legacyprotectorsins.com]
+  [YOUNGDOUGLASINSURANCE.COM]
+
+================================================================================
+TO OBTAIN WRITTEN PERMISSION FOR ANY USE NOT EXPRESSLY AUTHORIZED HEREIN,
+YOU MUST CONTACT THE COPYRIGHT HOLDER DIRECTLY. PERMISSION WILL NOT BE
+INFERRED OR IMPLIED FROM ANY PRIOR CONDUCT, CORRESPONDENCE, OR DEALINGS.
+================================================================================
