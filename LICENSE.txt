@@ -1,0 +1,189 @@
+================================================================================
+POSTPILOT STUDIO — PROPRIETARY SOFTWARE LICENSE
+================================================================================
+
+Copyright (c) 2025 [YOUR FULL LEGAL NAME / LEGACY PROTECTORS]
+All Rights Reserved.
+
+This license agreement ("Agreement") governs the use of the software tools
+collectively known as "PostPilot Studio," which includes
+but is not limited to:
+
+  - PostPilot Social Media Scheduler
+  - Brand Post Creator (PPPostCreator)
+  - The Content Studio Wrapper Interface (index.html)
+  - All associated HTML, CSS, JavaScript, font assets, and configuration files
+
+(collectively referred to herein as the "Software").
+
+================================================================================
+SECTION 1 — OWNERSHIP
+================================================================================
+
+The Software is the exclusive intellectual property of the copyright holder
+named above. All rights, title, and interest in and to the Software, including
+all intellectual property rights therein, are and shall remain the exclusive
+property of the copyright holder. This Agreement does not convey to you any
+rights of ownership in or related to the Software.
+
+================================================================================
+SECTION 2 — GRANT OF LICENSE
+================================================================================
+
+Subject to the terms and conditions of this Agreement, the copyright holder
+grants you a limited, non-exclusive, non-transferable, non-sublicensable,
+revocable license to use the Software solely for your own personal or internal
+business purposes. This license does not include the right to:
+
+  (a) distribute, publish, or make the Software available to any third party
+      in any form, in whole or in part;
+
+  (b) sublicense, sell, resell, transfer, assign, or otherwise commercially
+      exploit the Software or any portion thereof;
+
+  (c) copy, reproduce, duplicate, or clone the Software or any portion thereof,
+      except as strictly necessary for personal backup purposes;
+
+  (d) modify, adapt, translate, merge, or create derivative works based upon
+      the Software or any portion thereof;
+
+  (e) reverse engineer, disassemble, decompile, decode, or otherwise attempt
+      to derive or gain access to the source code, structure, logic, or
+      underlying algorithms of the Software, in whole or in part;
+
+  (f) use the Software or any portion thereof as a basis for or component of
+      another product, service, or tool, whether commercial or non-commercial;
+
+  (g) remove, alter, obscure, or circumvent any proprietary notices, labels,
+      copyright notices, or this license from or within the Software;
+
+  (h) host, deploy, or serve the Software on any public platform, website,
+      server, or repository in a manner that allows third parties to access,
+      download, copy, or reuse the Software without the express prior written
+      consent of the copyright holder.
+
+================================================================================
+SECTION 3 — STRICT PROHIBITION ON REDISTRIBUTION AND RESALE
+================================================================================
+
+You may NOT, under any circumstances:
+
+  (a) sell, license, rent, lease, or otherwise transfer the Software or access
+      to the Software to any individual, company, organization, or entity,
+      whether for monetary compensation or otherwise;
+
+  (b) represent, claim, or imply that the Software — or any portion thereof,
+      or any tool derived from or inspired by the Software — was created by,
+      belongs to, or is the intellectual property of any person or entity other
+      than the copyright holder named in this Agreement;
+
+  (c) package, bundle, or include the Software as part of any product, service,
+      template pack, toolkit, course, digital download, or any other offering
+      made available to others, whether free or paid;
+
+  (d) publish the Software's source code, files, or assets to any public or
+      semi-public code repository, file-sharing platform, or collaborative
+      development platform (including but not limited to GitHub, GitLab,
+      Bitbucket, CodePen, JSFiddle, or similar services) in a manner that
+      makes the Software accessible to the general public;
+
+  (e) recreate, rebuild, or reimplement the Software or any of its distinctive
+      features, workflows, designs, or components in a substantially similar
+      form, with intent to distribute or commercialize such recreation.
+
+================================================================================
+SECTION 4 — NO FRANCHISE, PARTNERSHIP, OR AGENCY
+================================================================================
+
+Nothing in this Agreement shall be construed as creating any partnership,
+joint venture, agency, franchise, or employment relationship between you and
+the copyright holder. You have no authority to bind the copyright holder in
+any respect.
+
+================================================================================
+SECTION 5 — DISCLAIMER OF WARRANTIES
+================================================================================
+
+THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND
+NON-INFRINGEMENT. THE COPYRIGHT HOLDER DOES NOT WARRANT THAT THE SOFTWARE
+WILL BE UNINTERRUPTED, ERROR-FREE, OR FREE OF HARMFUL COMPONENTS.
+
+================================================================================
+SECTION 6 — LIMITATION OF LIABILITY
+================================================================================
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO LOSS OF
+PROFITS, DATA, BUSINESS, OR GOODWILL, ARISING OUT OF OR IN CONNECTION WITH
+YOUR USE OF OR INABILITY TO USE THE SOFTWARE, EVEN IF THE COPYRIGHT HOLDER
+HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+================================================================================
+SECTION 7 — ENFORCEMENT AND REMEDIES
+================================================================================
+
+Any unauthorized use, reproduction, distribution, or sale of the Software
+constitutes a material breach of this Agreement and an infringement of the
+copyright holder's intellectual property rights. In the event of such breach,
+the copyright holder shall be entitled to seek all available legal and
+equitable remedies, including but not limited to:
+
+  (a) injunctive relief to prevent continued or further unauthorized use;
+  (b) monetary damages, including any profits derived from unauthorized use;
+  (c) statutory damages under applicable copyright law;
+  (d) recovery of attorneys' fees and costs of litigation.
+
+The copyright holder's failure to enforce any provision of this Agreement
+shall not constitute a waiver of the copyright holder's right to enforce such
+provision or any other provision in the future.
+
+================================================================================
+SECTION 8 — TERMINATION
+================================================================================
+
+This license is effective until terminated. Your rights under this Agreement
+will terminate automatically, without notice, if you breach any term of this
+Agreement. Upon termination, you must immediately cease all use of the
+Software and permanently destroy all copies in your possession or control.
+
+================================================================================
+SECTION 9 — GOVERNING LAW
+================================================================================
+
+This Agreement shall be governed by and construed in accordance with the laws
+of the State of [YOUR STATE], United States of America, without regard to its
+conflict of law provisions. Any legal action or proceeding arising under this
+Agreement shall be brought exclusively in the federal or state courts located
+in [YOUR STATE / COUNTY], and the parties hereby consent to the personal
+jurisdiction and venue of such courts.
+
+================================================================================
+SECTION 10 — ENTIRE AGREEMENT
+================================================================================
+
+This Agreement constitutes the entire agreement between you and the copyright
+holder with respect to the Software and supersedes all prior or contemporaneous
+understandings, communications, or agreements, written or oral, regarding the
+subject matter hereof. No amendment or modification of this Agreement shall be
+binding unless made in writing and signed by the copyright holder.
+
+================================================================================
+SECTION 11 — CONTACT
+================================================================================
+
+For licensing inquiries, written permission requests, or any other questions
+regarding this Agreement, please contact:
+
+  [YOUR NAME]
+  Legacy Protectors
+  [YOUR EMAIL ADDRESS]
+  [YOUR WEBSITE / kittykatmaniac.com]
+
+================================================================================
+TO OBTAIN WRITTEN PERMISSION FOR ANY USE NOT EXPRESSLY AUTHORIZED HEREIN,
+YOU MUST CONTACT THE COPYRIGHT HOLDER DIRECTLY. PERMISSION WILL NOT BE
+INFERRED OR IMPLIED FROM ANY PRIOR CONDUCT, CORRESPONDENCE, OR DEALINGS.
+================================================================================
