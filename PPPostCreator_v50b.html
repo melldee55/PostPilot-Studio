@@ -4960,6 +4960,7 @@ Your message, caption, or call to action goes right here.</textarea
       function saveToStorage() {
         try {
           const snap = {
+            lastSaved: new Date().toISOString(),
             header: S.header,
             content: S.content,
             originalPost: S.originalPost || "",
@@ -5093,16 +5094,183 @@ Your message, caption, or call to action goes right here.</textarea
         } catch (e) {}
       }
 
-      // Returns the value if it's a valid image data URL, otherwise null.
+      // Returns the value if it's a valid image data URL or a GitHub raw URL, otherwise null.
       // Used to filter corrupted localStorage entries before they reach <img src>.
       function sanitizeImage(s) {
+        if (!s) return null;
+        if (typeof s === 'string' && s.startsWith('https://raw.githubusercontent.com/')) return s;
         return (typeof isValidImageDataUrl === "function" && isValidImageDataUrl(s)) ? s : null;
       }
 
       let _saveTimer = null;
       function debounceSave() {
         clearTimeout(_saveTimer);
-        _saveTimer = setTimeout(saveToStorage, 700);
+        _saveTimer = setTimeout(() => {
+          saveToStorage();
+          bpcScheduleSync(); // auto-push to GitHub after every save
+        }, 700);
+      }
+
+      // ══════════════════════════════════════════
+      // GITHUB SYNC — POST CREATOR
+      // Shares the token/config stored by PostPilot in the same localStorage
+      // ══════════════════════════════════════════
+
+      const BPC_SYNC_DEBOUNCE_MS = 5000; // push 5s after last change
+      let _bpcSyncTimer = null;
+
+      function bpcGetGhConfig() {
+        // Read whichever workspace account is active
+        const wsIds = ['ws_a', 'ws_b', 'ws_c'];
+        const activeWs = wsIds[typeof _pfActiveAccount !== 'undefined' ? (_pfActiveAccount || 0) : 0];
+        try {
+          const raw = localStorage.getItem(activeWs + '_postpilot_github_sync');
+          if (raw) return JSON.parse(raw);
+        } catch {}
+        // Fall back to other workspaces
+        for (const ws of wsIds) {
+          try {
+            const raw = localStorage.getItem(ws + '_postpilot_github_sync');
+            if (raw) { const cfg = JSON.parse(raw); if (cfg.enabled && cfg.token) return cfg; }
+          } catch {}
+        }
+        return null;
+      }
+
+      async function bpcUploadImage(dataUrl, filename) {
+        const cfg = bpcGetGhConfig();
+        if (!cfg || !cfg.token || !cfg.username) throw new Error('No GitHub config');
+        const repo   = cfg.imageRepo || cfg.repo;
+        const branch = cfg.branch || 'main';
+        const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+
+        // Check for existing file SHA
+        let sha = null;
+        try {
+          const check = await fetch(
+            `https://api.github.com/repos/${cfg.username}/${repo}/contents/images/${filename}`,
+            { headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github.v3+json' } }
+          );
+          if (check.ok) { const d = await check.json(); sha = d.sha; }
+        } catch {}
+
+        const body = { message: `Creator image: ${filename}`, content: base64, branch, ...(sha ? { sha } : {}) };
+        const res = await fetch(
+          `https://api.github.com/repos/${cfg.username}/${repo}/contents/images/${filename}`,
+          { method: 'PUT', headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json', Accept: 'application/vnd.github.v3+json' }, body: JSON.stringify(body) }
+        );
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || `HTTP ${res.status}`); }
+        return `https://raw.githubusercontent.com/${cfg.username}/${repo}/${branch}/images/${filename}`;
+      }
+
+      const BPC_CREATOR_FILE = 'postpilot-creator-state.json';
+      const isGhUrl = v => typeof v === 'string' && v.startsWith('https://raw.githubusercontent.com/');
+
+      async function bpcSyncToGitHub() {
+        const cfg = bpcGetGhConfig();
+        if (!cfg || !cfg.enabled || !cfg.token || !cfg.username || !cfg.repo) return;
+
+        const payload = {
+          version:     1,
+          lastSaved:   new Date().toISOString(),
+          settings:    JSON.parse(localStorage.getItem(LS_S) || '{}'),
+          // Only include images stored on GitHub (URLs) — skip local base64 blobs
+          bgUrl:       isGhUrl(S.bg)    ? S.bg    : null,
+          bg2Url:      isGhUrl(S.bg2)   ? S.bg2   : null,
+          bg3Url:      isGhUrl(S.bg3)   ? S.bg3   : null,
+          logoUrl:     isGhUrl(S.logo)  ? S.logo  : null,
+        };
+
+        const { username, repo, token, branch = 'main' } = cfg;
+        const encoded  = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
+        const apiBase  = `https://api.github.com/repos/${username}/${repo}/contents/${BPC_CREATOR_FILE}`;
+        const headers  = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' };
+
+        let sha = null;
+        try { const g = await fetch(`${apiBase}?ref=${branch}`, { headers }); if (g.ok) { const d = await g.json(); sha = d.sha; } } catch {}
+
+        const body = { message: `Creator sync ${new Date().toISOString()}`, content: encoded, branch, ...(sha ? { sha } : {}) };
+        try { await fetch(apiBase, { method: 'PUT', headers, body: JSON.stringify(body) }); } catch {}
+      }
+
+      async function bpcPullFromGitHub() {
+        const cfg = bpcGetGhConfig();
+        if (!cfg || !cfg.enabled || !cfg.token || !cfg.username || !cfg.repo) {
+          showPfToast('⚠ Set up GitHub Sync in PostPilot Settings first, then come back here.');
+          return;
+        }
+        showPfToast('Pulling creator state from GitHub…');
+        try {
+          const { username, repo, token, branch = 'main' } = cfg;
+          const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' };
+          const res = await fetch(
+            `https://api.github.com/repos/${username}/${repo}/contents/${BPC_CREATOR_FILE}?ref=${branch}`,
+            { headers }
+          );
+          if (res.status === 404) { showPfToast('No creator state found — save your design first, then push.'); return; }
+          if (!res.ok) throw new Error(`GitHub ${res.status}`);
+
+          const file = await res.json();
+          const data = JSON.parse(decodeURIComponent(escape(atob(file.content.replace(/\n/g, '')))));
+
+          // Restore settings
+          if (data.settings && typeof data.settings === 'object') Object.assign(S, data.settings);
+
+          // Restore GitHub-hosted images
+          if (data.bgUrl)   { S.bg    = data.bgUrl;   try { localStorage.setItem(LS_BG,   data.bgUrl);  } catch {} }
+          if (data.bg2Url)  { S.bg2   = data.bg2Url;  try { localStorage.setItem(LS_BG2,  data.bg2Url); } catch {} }
+          if (data.bg3Url)  { S.bg3   = data.bg3Url;  try { localStorage.setItem(LS_BG3,  data.bg3Url); } catch {} }
+          if (data.logoUrl) { S.logo  = data.logoUrl; try { localStorage.setItem(LS_LOGO, data.logoUrl);} catch {} }
+
+          // Re-generate palettes and rebuild UI
+          palettes = genPalettes();
+          buildPalRow();
+          buildCustomPalBar();
+          applyUI();
+          render();
+          saveToStorage();
+          showPfToast('✅ Creator state pulled from GitHub!');
+        } catch (e) {
+          showPfToast('❌ Pull failed: ' + e.message);
+          console.warn('bpcPullFromGitHub error:', e);
+        }
+      }
+
+      function bpcScheduleSync() {
+        clearTimeout(_bpcSyncTimer);
+        _bpcSyncTimer = setTimeout(bpcSyncToGitHub, BPC_SYNC_DEBOUNCE_MS);
+      }
+
+      async function bpcAutoPullOnStartup() {
+        const cfg = bpcGetGhConfig();
+        if (!cfg || !cfg.enabled || !cfg.token) return;
+        // Only pull if local state was last saved BEFORE the GitHub state
+        try {
+          const localSaved = JSON.parse(localStorage.getItem(LS_S) || '{}').lastSaved || null;
+          const { username, repo, token, branch = 'main' } = cfg;
+          const res = await fetch(
+            `https://api.github.com/repos/${username}/${repo}/contents/${BPC_CREATOR_FILE}?ref=${branch}`,
+            { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' } }
+          );
+          if (!res.ok) return;
+          const file = await res.json();
+          const data = JSON.parse(decodeURIComponent(escape(atob(file.content.replace(/\n/g, '')))));
+          const remoteSaved = data.lastSaved;
+          // Pull silently only if remote is newer
+          if (remoteSaved && (!localSaved || remoteSaved > localSaved)) {
+            if (data.settings) Object.assign(S, data.settings);
+            if (data.bgUrl)   { S.bg    = data.bgUrl;   try { localStorage.setItem(LS_BG,   data.bgUrl);  } catch {} }
+            if (data.bg2Url)  { S.bg2   = data.bg2Url;  try { localStorage.setItem(LS_BG2,  data.bg2Url); } catch {} }
+            if (data.bg3Url)  { S.bg3   = data.bg3Url;  try { localStorage.setItem(LS_BG3,  data.bg3Url); } catch {} }
+            if (data.logoUrl) { S.logo  = data.logoUrl; try { localStorage.setItem(LS_LOGO, data.logoUrl);} catch {} }
+            palettes = genPalettes();
+            buildPalRow();
+            buildCustomPalBar();
+            applyUI();
+            render();
+            showPfToast('☁ Creator state synced from GitHub');
+          }
+        } catch {}
       }
 
       let _renderTimer = null;
@@ -5336,8 +5504,19 @@ Your message, caption, or call to action goes right here.</textarea
         const file = input.files[0];
         if (!file) return;
         const fr = new FileReader();
-        fr.onload = (e) => {
-          S[key] = e.target.result;
+        fr.onload = async (e) => {
+          let result = e.target.result;
+          const cfg = bpcGetGhConfig();
+          if (cfg && cfg.enabled && cfg.imageStorageEnabled && cfg.token && !file.type.startsWith('video/')) {
+            try {
+              showPfToast('Uploading to GitHub…');
+              result = await bpcUploadImage(result, key + '-' + Date.now() + '.' + (file.name.split('.').pop() || 'png'));
+              showPfToast('✅ Uploaded to GitHub — syncs everywhere!');
+            } catch (err) {
+              showPfToast('GitHub upload failed — saved locally.');
+            }
+          }
+          S[key] = result;
           updateZonePreview(key);
           render();
           debounceSave();
@@ -5445,8 +5624,15 @@ Your message, caption, or call to action goes right here.</textarea
         const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith("image"));
         if (!item) return;
         const fr = new FileReader();
-        fr.onload = (ev) => {
-          S.bg = ev.target.result;
+        fr.onload = async (ev) => {
+          let result = ev.target.result;
+          const cfg = bpcGetGhConfig();
+          if (cfg && cfg.enabled && cfg.imageStorageEnabled && cfg.token) {
+            try {
+              result = await bpcUploadImage(result, 'paste-bg-' + Date.now() + '.png');
+            } catch {}
+          }
+          S.bg = result;
           updateZonePreview("bg");
           render();
           debounceSave();
@@ -12970,6 +13156,8 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
         try { buildDateNotif(); } catch (e) { console.warn("buildDateNotif init error:", e); }
         initCollapsibleSections();
         buildFilterChips();
+        // Auto-pull creator state from GitHub on startup (silent, non-blocking)
+        setTimeout(() => { bpcAutoPullOnStartup(); }, 1200);
         // Auto-launch tour on first visit
         setTimeout(() => {
           const p = loadPrefs();
@@ -13655,6 +13843,36 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
                     />
                     <span class="tog-track"><span class="tog-thumb"></span></span>
                   </label>
+                </div>
+              </div>
+              <!-- ── GitHub Sync ─────────────────────────────── -->
+              <div class="guide-section">
+                <h3>
+                  <span class="guide-icon">☁️</span>
+                  GitHub Sync
+                </h3>
+                <div style="font-size:11.5px;color:var(--muted);margin-bottom:12px;line-height:1.6">
+                  Sync your design state (headline, colors, fonts, background, logo) to GitHub so it loads on any device. Uses the same token and repo you set up in <strong>PostPilot → Settings → GitHub Sync</strong>.
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <button onclick="bpcPullFromGitHub()"
+                    style="width:100%;padding:9px;border-radius:7px;border:1px solid rgba(255,255,255,.12);
+                           background:rgba(255,255,255,.05);color:var(--text);font-family:inherit;
+                           font-size:12.5px;font-weight:600;cursor:pointer;transition:background .15s;text-align:center"
+                    onmouseenter="this.style.background='rgba(255,255,255,.1)'"
+                    onmouseleave="this.style.background='rgba(255,255,255,.05)'">
+                    ☁ Pull from GitHub
+                  </button>
+                  <button onclick="bpcSyncToGitHub().then(()=>showPfToast('✅ Pushed to GitHub!')).catch(e=>showPfToast('❌ Push failed: '+e.message))"
+                    style="width:100%;padding:9px;border-radius:7px;border:none;
+                           background:#5a4fcf;color:#fff;font-family:inherit;
+                           font-size:12.5px;font-weight:700;cursor:pointer;transition:opacity .15s"
+                    onmouseenter="this.style.opacity='.85'" onmouseleave="this.style.opacity='1'">
+                    ↑ Push to GitHub
+                  </button>
+                  <div style="font-size:10px;color:var(--muted);line-height:1.5">
+                    Changes auto-push 5 seconds after you stop editing. Background &amp; logo images sync only if <strong>GitHub Image Storage</strong> is enabled in PostPilot.
+                  </div>
                 </div>
               </div>
               <div class="guide-section">

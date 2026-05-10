@@ -3452,12 +3452,25 @@ function saveWorkspaceLogo(wsId) {
   if (!input || !input.files || !input.files[0]) return;
   const file = input.files[0];
   if (!file.type.startsWith('image/')) { showToast('Please select an image file.', 'error'); return; }
-  if (file.size > 200 * 1024) { showToast('Logo must be under 200 KB.', 'error'); return; }
+  if (file.size > 400 * 1024) { showToast('Logo must be under 400 KB.', 'error'); return; }
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     try {
-      localStorage.setItem(getWsLogoKey(wsId), e.target.result);
-      showToast('Brand logo saved!');
+      let logoData = e.target.result;
+      if (ghImgReady()) {
+        try {
+          showToast('Uploading logo to GitHub…');
+          const fname = `workspace-logo-${wsId}-${Date.now()}.png`;
+          logoData = await uploadImageToGitHub(logoData, fname);
+          showToast('✅ Logo uploaded to GitHub — syncs to all devices!');
+        } catch (err) {
+          showToast('Logo saved locally (GitHub upload failed: ' + err.message + ')');
+        }
+      } else {
+        showToast('Brand logo saved!');
+      }
+      localStorage.setItem(getWsLogoKey(wsId), logoData);
+      scheduleSyncToGitHub();
       render();
     } catch { showToast('Logo too large to save.', 'error'); }
   };
@@ -3808,6 +3821,7 @@ let POST_TAGS = (() => {
 
 function savePostTags() {
   try { localStorage.setItem(CUSTOM_TAGS_KEY(), JSON.stringify(POST_TAGS)); } catch {}
+  scheduleSyncToGitHub();
 }
 
 function savePlatformOrder() {
@@ -12442,28 +12456,52 @@ function buildSyncPayload() {
     return out;
   };
   return {
-    version: 1,
-    lastSaved: new Date().toISOString(),
-    posts:       stripImages(state.posts),
-    drafts:      stripDraftImages(state.drafts),
-    hashtagSets: state.hashtagSets  || [],
-    analytics:   state.analytics    || {},
-    tags:        state.tags         || [],
-    customTags:  state.customTags   || [],
-    streaks:     state.streaks      || {},
+    version:        2,
+    lastSaved:      new Date().toISOString(),
+    workspace:      getActiveWorkspace(),
+    // ── Content ─────────────────────────────────────────────────────────
+    posts:          stripImages(state.posts),
+    drafts:         stripDraftImages(state.drafts),
+    hashtagSets:    state.hashtagSets  || [],
+    analytics:      state.analytics    || {},
+    streaks:        state.streaks      || {},
+    // ── Tags ────────────────────────────────────────────────────────────
+    customTags:     POST_TAGS,            // full tag list (user-created + defaults)
+    // ── Preferences ─────────────────────────────────────────────────────
+    hiddenPlatforms: [...state.hiddenPlatforms],
+    platformOrder:   state.platformOrder || [],
+    defaultTimezone: getDefaultTimezone(),
+    workspaceNames:  getWorkspaceNames(),
+    // Workspace logos — only GitHub URLs (base64 blobs are too large for JSON)
+    workspaceLogos: (() => {
+      const logos = {};
+      ['ws_a', 'ws_b', 'ws_c'].forEach(wsId => {
+        const val = localStorage.getItem(wsId + '_postpilot_brand_logo');
+        if (val && val.startsWith('https://')) logos[wsId] = val;
+      });
+      return logos;
+    })(),
   };
 }
 
-// Restore image refs from local data when merging remote posts
+// Merge remote posts with local image data.
+// Rule: remote GitHub URLs take precedence (they work on any device).
+//       Local IndexedDB references are only used when remote has no URL.
 function mergeWithLocalImages(remotePosts, localPosts) {
+  const isGhUrl = v => typeof v === 'string' && v.startsWith('https://raw.githubusercontent.com/');
   return (remotePosts || []).map(rp => {
     const lp = (localPosts || []).find(p => String(p.id) === String(rp.id));
-    if (!lp) return rp;
+    if (!lp) return rp; // brand-new device — use remote as-is (GitHub URLs intact)
     return {
       ...rp,
-      image: lp.image, imageOriginal: lp.imageOriginal,
-      imageId: lp.imageId, imageOriginalId: lp.imageOriginalId,
-      imageThumb: lp.imageThumb, imageThumbId: lp.imageThumbId,
+      // If remote already has a GitHub URL, keep it. Otherwise fall back to local blob.
+      image:         isGhUrl(rp.image)         ? rp.image         : (lp.image         || rp.image),
+      imageOriginal: isGhUrl(rp.imageOriginal)  ? rp.imageOriginal : (lp.imageOriginal || rp.imageOriginal),
+      // IndexedDB refs only matter on this device
+      imageId:         lp.imageId         || null,
+      imageOriginalId: lp.imageOriginalId || null,
+      imageThumb:      lp.imageThumb      || rp.imageThumb || null,
+      imageThumbId:    lp.imageThumbId    || null,
     };
   });
 }
@@ -12526,7 +12564,7 @@ async function pullFromGitHub() {
     const raw    = decodeURIComponent(escape(atob(file.content.replace(/\n/g, ''))));
     const data   = JSON.parse(raw);
 
-    // Merge posts — preserve local images
+    // ── Posts ─────────────────────────────────────────────────────────────
     if (data.posts) {
       Object.keys(data.posts).forEach(pid => {
         state.posts[pid] = mergeWithLocalImages(data.posts[pid], state.posts[pid]);
@@ -12534,23 +12572,61 @@ async function pullFromGitHub() {
       await savePosts(state.posts);
     }
 
-    // Merge drafts — preserve local images
+    // ── Drafts ───────────────────────────────────────────────────────────
     if (data.drafts) {
+      const isGhUrl = v => typeof v === 'string' && v.startsWith('https://raw.githubusercontent.com/');
       Object.keys(data.drafts).forEach(pid => {
         const remote = data.drafts[pid] || [];
         const local  = state.drafts[pid] || [];
         state.drafts[pid] = remote.map(rd => {
           const ld = local.find(d => String(d.id) === String(rd.id));
-          if (!ld) return rd;
-          return { ...rd, imageFull: ld.imageFull, imageThumb: ld.imageThumb, imageFullId: ld.imageFullId, imageThumbId: ld.imageThumbId };
+          if (!ld) return rd; // new device — use remote (GitHub URLs intact)
+          return {
+            ...rd,
+            imageFull:   isGhUrl(rd.imageFull)  ? rd.imageFull  : (ld.imageFull  || rd.imageFull),
+            imageThumb:  isGhUrl(rd.imageThumb) ? rd.imageThumb : (ld.imageThumb || rd.imageThumb),
+            imageFullId:  ld.imageFullId  || null,
+            imageThumbId: ld.imageThumbId || null,
+          };
         });
       });
       await saveDrafts(state.drafts);
     }
 
+    // ── Hashtag sets, analytics, streaks ─────────────────────────────────
     if (data.hashtagSets) { state.hashtagSets = data.hashtagSets; saveHashtagSets(); }
     if (data.analytics)   { state.analytics   = data.analytics;   saveAnalytics();   }
     if (data.streaks)     { state.streaks      = { ...state.streaks, ...data.streaks }; saveStreaks(); }
+
+    // ── Tags ─────────────────────────────────────────────────────────────
+    if (data.customTags && Array.isArray(data.customTags)) {
+      POST_TAGS = data.customTags;
+      savePostTags();
+    }
+
+    // ── Preferences ──────────────────────────────────────────────────────
+    if (data.hiddenPlatforms && Array.isArray(data.hiddenPlatforms)) {
+      state.hiddenPlatforms = new Set(data.hiddenPlatforms);
+      saveHiddenPlatforms();
+    }
+    if (data.platformOrder && Array.isArray(data.platformOrder)) {
+      state.platformOrder = data.platformOrder;
+      savePlatformOrder();
+    }
+    if (data.defaultTimezone) {
+      saveDefaultTimezone(data.defaultTimezone);
+    }
+    if (data.workspaceNames && typeof data.workspaceNames === 'object') {
+      try { localStorage.setItem('postpilot_workspace_names', JSON.stringify(data.workspaceNames)); } catch {}
+    }
+    // Workspace logos — restore GitHub URL logos
+    if (data.workspaceLogos && typeof data.workspaceLogos === 'object') {
+      Object.entries(data.workspaceLogos).forEach(([wsId, url]) => {
+        if (url && url.startsWith('https://')) {
+          try { localStorage.setItem(wsId + '_postpilot_brand_logo', url); } catch {}
+        }
+      });
+    }
 
     state.githubSync.lastSynced = new Date().toISOString();
     state.githubSync.syncError  = null;
