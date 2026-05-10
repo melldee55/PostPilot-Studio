@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-10T06:39:04.504Z",
+  "lastSaved": "2026-05-10T06:41:09.604Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -1338,7 +1338,23 @@
     "Auto",
     "home",
     "Commercial",
-    "test"
+    "Business",
+    "WorkersComp",
+    "Liability",
+    "Winter",
+    "Summer",
+    "Fall",
+    "Spring",
+    "Info",
+    "Education",
+    "Review",
+    "Update",
+    "Tips",
+    "Product",
+    "Promo",
+    "Question",
+    "Holiday",
+    "Milestone"
   ],
   "hiddenPlatforms": [
     "tiktok",
