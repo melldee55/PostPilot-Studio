@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-10T06:41:09.604Z",
+  "lastSaved": "2026-05-10T06:42:42.883Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -218,7 +218,7 @@
         "publishError": "",
         "publishedAt": null,
         "imageName": "The-most-meaningful-gift-you-can-give-mom-this-mothers-day-is-knowing-she-is-protected_0032_pinterest.png",
-        "_imageDims": "",
+        "_imageDims": "1000×1500",
         "title": "The Best Mother's Day Gift for California Moms Is a Future They Never Have to Worry About 🌸",
         "description": "This Mother's Day, flowers fade and gifts get forgotten. But peace of mind lasts forever. Life coverage is one of the most powerful ways to show the mothers in your life that their future and the future of everyone they love is truly protected. Whether she is a new mom, a grandmother, or somewhere in between, every California mother deserves to know her family is secure no matter what. Visit YoungDouglasInsurance.com today. 💛\n#MothersDay #CaliforniaMoms #MomLife #Moms #Mothers #Grandmothers ",
         "board": "",
@@ -255,7 +255,8 @@
         "ytDriveUrl": "",
         "ytLiveUrl": "",
         "tags": [
-          "Life"
+          "Life",
+          "Spring"
         ],
         "liveUrl": ""
       },
@@ -1354,7 +1355,8 @@
     "Promo",
     "Question",
     "Holiday",
-    "Milestone"
+    "Milestone",
+    "Event"
   ],
   "hiddenPlatforms": [
     "tiktok",
