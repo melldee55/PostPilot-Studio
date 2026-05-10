@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-10T06:16:55.144Z",
+  "lastSaved": "2026-05-10T06:22:40.659Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -1059,17 +1059,6 @@
         }
       },
       {
-        "id": 1778375183697.1265,
-        "platform": "pinterest",
-        "imageName": "The-most-meaningful-gift-you-can-give-mom-this-mothers-day-is-knowing-she-is-protected_0001_pinterest.png",
-        "notes": "The Most Meaningful Gift You Can Give Mom This Mother's Day Is Knowing She Is Protected · This Mother's Day, show the most important woman in your life that her future is secure. Get a free quote toda",
-        "uploadedAt": "2026-05-10T01:06:23.697Z",
-        "fromBrandCreator": true,
-        "templateName": "Horizon Glow",
-        "format": "png",
-        "dimensions": "1000×1500"
-      },
-      {
         "id": 1778393801416.5737,
         "platform": "pinterest",
         "imageName": "The-most-meaningful-gift-you-can-give-mom-this-mothers-day-is-knowing-she-is-protected_0032_pinterest.png",
@@ -1346,7 +1335,8 @@
   },
   "customTags": [
     "Life",
-    "Auto"
+    "Auto",
+    "home"
   ],
   "hiddenPlatforms": [
     "tiktok",
