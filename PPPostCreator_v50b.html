@@ -4913,6 +4913,7 @@ Your message, caption, or call to action goes right here.</textarea
       ];
 
       let selected = new Set();
+      let _lastUsedTemplateIdx = 0; // tracks which template was last previewed/used
       let fsDir = null;
 
       // ══════════════════════════════════════════
@@ -7429,12 +7430,14 @@ Your message, caption, or call to action goes right here.</textarea
           c.onclick = () => {
             if (slot) {
               S.palIdx = i;
-              S.ovBg = null;
-              S.ovPrimary = null;
-              S.ovAccent = null;
-              S.ovHighlight = null;
-              S.ovShapes = null;
-              S.ovOverlay = null;
+              // Populate custom overrides with this palette's colors
+              // so the user can see and tweak them in the Custom bar
+              S.ovBg        = slot.bg        || null;
+              S.ovPrimary   = slot.primary   || null;
+              S.ovAccent    = slot.accent    || null;
+              S.ovHighlight = slot.highlight || null;
+              S.ovShapes    = slot.shapes    || slot.accent || null;
+              S.ovOverlay   = slot.overlayTint || slot.bg  || null;
               buildPalRow();
               buildCustomPalBar();
               render();
@@ -9064,6 +9067,7 @@ Your message, caption, or call to action goes right here.</textarea
       }
 
       function previewCard(i) {
+        _lastUsedTemplateIdx = i;
         // Select only this template, open the preview panel, render it
         selected.clear();
         selected.add(i);
@@ -9223,11 +9227,12 @@ Your message, caption, or call to action goes right here.</textarea
             const fw = pl.w,
               fh = pl.h,
               pal = PAL();
-            // Render template 0 at full resolution into a hidden div
+            // Render the last-used template at full resolution into a hidden div
             const area = document.getElementById("download-area");
             const wrap = document.createElement("div");
             wrap.style.cssText = "width:" + fw + "px;height:" + fh + "px;overflow:hidden;position:relative;";
-            wrap.innerHTML = applyGifOverlay(templates[0](pal, fw, fh));
+            const tmplIdx = Math.min(_lastUsedTemplateIdx, templates.length - 1);
+            wrap.innerHTML = applyGifOverlay(templates[tmplIdx](pal, fw, fh));
             area.innerHTML = "";
             area.appendChild(wrap);
             fixObjectFitForCanvas(wrap);
@@ -10651,6 +10656,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
 
       // ── single-card save entry point ──
       function dlOne(idx, btn) {
+        _lastUsedTemplateIdx = idx;
         _openFmtPicker('single', idx, btn, null);
       }
 

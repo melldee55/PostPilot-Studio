@@ -3441,9 +3441,9 @@ function getWsLogoKey(wsId) { return wsId + '_postpilot_brand_logo'; }
 function getWorkspaceLogo(wsId) {
   try {
     const val = localStorage.getItem(getWsLogoKey(wsId));
-    if (val === 'NONE') return '';          // user explicitly cleared it
-    if (val)            return val;          // workspace-specific logo
-    return localStorage.getItem('bpc_logo') || '';  // fallback to Post Creator logo
+    if (val === 'NONE') return ''; // user explicitly cleared it
+    if (val)            return val; // workspace-specific logo
+    return '';                      // no logo set — show blank default
   } catch { return ''; }
 }
 
@@ -6275,9 +6275,9 @@ function toggleFormTag(tag) {
   if (!state.form) return;
   const tags = state.form.tags || [];
   state.form.tags = tags.includes(tag) ? tags.filter(t => t !== tag) : [...tags, tag];
-  // Re-render just the tag pills without full render
-  const container = document.getElementById('composer-tag-pills');
-  if (container) container.innerHTML = buildComposerTagPills(state.form.tags);
+  // Update ONLY the pills span — composer-pills-only sits beside the add form, so the form is never wiped
+  const pills = document.getElementById('composer-pills-only');
+  if (pills) pills.innerHTML = buildComposerTagPills(state.form.tags);
 }
 
 function buildComposerTagPills(selectedTags) {
@@ -8806,7 +8806,7 @@ function renderComposerModal(platform) {
           <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:14px">
             <div class="form-group">
               <label class="form-label">Date *</label>
-              <input type="date" id="f-date" value="${escapeHtml(form.scheduledDate)}" min="${today}" oninput="checkDateLimit(this.value)"/>
+              <input type="date" id="f-date" value="${escapeHtml(form.scheduledDate)}" min="${today}" oninput="updateFormField('scheduledDate',this.value);checkDateLimit(this.value)"/>
             </div>
             <div class="form-group">
               <label class="form-label">Hour</label>
@@ -8912,7 +8912,7 @@ function renderComposerModal(platform) {
           <div class="section-divider" style="margin-top:8px">Tags</div>
           <div class="form-group">
             <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center" id="composer-tag-pills">
-              ${buildComposerTagPills(form.tags || [])}
+              <span id="composer-pills-only" style="display:contents">${buildComposerTagPills(form.tags || [])}</span>
               <form onsubmit="event.preventDefault();const v=this.querySelector('input').value.trim();if(v){const names=addCustomTagsBatch(v,true);names.forEach(n=>toggleFormTag(n));this.querySelector('input').value='';this.querySelector('input').focus()}" style="display:inline-flex;align-items:center;gap:0">
                 <input type="text" placeholder="+ Tag (or comma list)"
                   style="padding:4px 10px;border-radius:20px 0 0 20px;border:1px dashed var(--border-light);background:transparent;color:var(--text-secondary);font-size:11px;font-family:'DM Sans',sans-serif;outline:none;width:90px;transition:all 0.15s"
@@ -11364,6 +11364,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   setTimeout(imgGarbageCollect, 3000);
   // Kick off live holiday fetch if enabled (after initial render so UI isn't blocked)
   if (state.liveHolidayFeedEnabled) setTimeout(() => fetchLiveHolidays(), 1500);
+
+  // ── Auto-backup to GitHub ────────────────────────────────────────────────
+  // Push every 10 minutes regardless of user activity
+  setInterval(() => {
+    if (state.githubSync.enabled) syncToGitHub(true);
+  }, 10 * 60 * 1000);
+  // Also push when user has been idle for 2 minutes (catches forgotten saves)
+  let _lastActivity = Date.now();
+  let _idleSynced   = false;
+  ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(evt =>
+    document.addEventListener(evt, () => { _lastActivity = Date.now(); _idleSynced = false; }, { passive: true })
+  );
+  setInterval(() => {
+    if (state.githubSync.enabled && !_idleSynced && Date.now() - _lastActivity > 2 * 60 * 1000) {
+      _idleSynced = true;
+      syncToGitHub(true);
+    }
+  }, 30 * 1000);
 });
 
 document.addEventListener('keydown', e => {
@@ -12595,7 +12613,16 @@ async function syncToGitHub(silent) {
     if (sha) body.sha = sha;
 
     const putRes = await fetch(apiBase, { method: 'PUT', headers, body: JSON.stringify(body) });
-    if (!putRes.ok) throw new Error(`GitHub API ${putRes.status}: ${putRes.statusText}`);
+
+    // 409 = stale SHA (another sync happened between our GET and PUT) — retry once with fresh SHA
+    if (putRes.status === 409) {
+      const freshGet = await fetch(`${apiBase}?ref=${branch}`, { headers });
+      if (freshGet.ok) { const d = await freshGet.json(); body.sha = d.sha; }
+      const retryRes = await fetch(apiBase, { method: 'PUT', headers, body: JSON.stringify(body) });
+      if (!retryRes.ok) throw new Error(`GitHub API ${retryRes.status} (after retry)`);
+    } else if (!putRes.ok) {
+      throw new Error(`GitHub API ${putRes.status}: ${putRes.statusText}`);
+    }
 
     state.githubSync.lastSynced = new Date().toISOString();
     state.githubSync.syncError  = null;
