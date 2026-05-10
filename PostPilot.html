@@ -2581,11 +2581,10 @@
   /* ── Holiday & Events Panel ─────────────────────────────────── */
   #cal-holiday-bar {
     margin: 0 14px 14px;
-    padding-right: 0; /* removed fixed FAB clearance — handled by card scroll instead */
     border: 1px solid var(--border-light);
     border-radius: 10px;
     background: var(--bg-card);
-    overflow: hidden;
+    /* No overflow:hidden — it cancels child scroll and clips cards */
   }
   .cal-hol-bar-hdr {
     font-size: 9px;
@@ -2595,29 +2594,21 @@
     color: var(--text-muted);
     padding: 8px 14px 6px;
     border-bottom: 1px solid var(--border);
+    border-radius: 10px 10px 0 0;  /* round top corners since parent no longer clips */
   }
   .cal-hol-cards {
     display: flex;
     flex-direction: row;
+    flex-wrap: wrap;        /* cards wrap to next row — never clipped or cut off */
     padding: 8px;
     gap: 6px;
     align-items: stretch;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scroll-snap-type: x proximity;
-    -webkit-overflow-scrolling: touch;
-    /* thin scrollbar */
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-light) transparent;
   }
-  .cal-hol-cards::-webkit-scrollbar { height: 4px; }
-  .cal-hol-cards::-webkit-scrollbar-track { background: transparent; }
-  .cal-hol-cards::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
   .cal-hol-card {
-    flex: 0 0 auto;           /* don't shrink — fixed width so they scroll */
-    width: clamp(160px, 22%, 240px);
-    scroll-snap-align: start;
-    height: 140px;
+    flex: 1 1 200px;        /* grow/shrink freely, floor at 200px */
+    min-width: 180px;
+    max-width: 320px;
+    min-height: 120px;
     background: var(--bg-elevated);
     border: 1px solid var(--border);
     border-left: 3px solid #6366f1;
@@ -2679,52 +2670,76 @@
   }
   .cal-post-chip {
     display: flex;
-    align-items: flex-start;
-    gap: 4px;
-    border-radius: 4px;
-    padding: 3px 5px;
-    font-size: 9.5px;
-    line-height: 1.35;
+    align-items: center;
+    gap: 3px;
+    border-radius: 3px;
+    padding: 2px 4px;
+    font-size: 8.5px;
+    line-height: 1.2;
     cursor: pointer;
     transition: filter 0.12s, transform 0.1s;
     border-left: 3px solid transparent;
     overflow: hidden;
+    white-space: nowrap;
   }
   .cal-post-chip:hover { filter: brightness(1.18); transform: translateX(1px); }
   .cal-post-chip-icon {
     flex-shrink: 0;
-    margin-top: 1px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
     opacity: 0.9;
   }
   .cal-post-chip-icon svg { display: block; }
-  .cal-post-chip-body { overflow: hidden; min-width: 0; }
+  .cal-post-chip-plat {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    flex-shrink: 0;
+    opacity: 0.9;
+  }
   .cal-post-chip-time {
     font-weight: 700;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    flex-shrink: 0;
+    font-size: 8px;
   }
   .cal-post-chip-title {
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    opacity: 0.8;
+    flex: 1;
+    min-width: 0;
+    opacity: 0.82;
   }
-  .cal-post-chip-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 2px;
-    margin-top: 2px;
-  }
+  /* Only show 1 tag inline, keep it tiny */
   .cal-tag-pill {
-    font-size: 8.5px;
+    font-size: 7.5px;
     font-weight: 600;
-    padding: 1px 4px;
-    border-radius: 3px;
-    background: rgba(255,255,255,0.1);
+    padding: 0 3px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.12);
     opacity: 0.85;
     white-space: nowrap;
+    flex-shrink: 0;
   }
+  /* Chips beyond the visible limit are hidden until expanded */
+  .cal-post-chip.cal-chip-hidden { display: none; }
+  /* "▼ N more" toggle button */
+  .cal-more-btn {
+    font-size: 8px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    margin-top: 1px;
+    transition: background 0.12s, color 0.12s;
+  }
+  .cal-more-btn:hover { background: var(--bg-elevated); color: var(--text-secondary); }
   /* Drag-and-drop */
   .cal-post-chip[draggable="true"] { cursor: grab; }
   .cal-post-chip[draggable="true"]:active { cursor: grabbing; }
@@ -3968,7 +3983,7 @@ function platDrop(e, pid) {
 }
 function platDragEnd() { _platDragSrc = null; }
 
-function addCustomTag(tagName) {
+function addCustomTag(tagName, skipRender = false) {
   const name = tagName.trim();
   if (!name) return;
   if (POST_TAGS.map(t => t.toLowerCase()).includes(name.toLowerCase())) {
@@ -3976,7 +3991,7 @@ function addCustomTag(tagName) {
   }
   POST_TAGS = [...POST_TAGS, name];
   savePostTags();
-  render();
+  if (!skipRender) render();
   showToast('Tag "' + name + '" added!');
 }
 
@@ -4182,12 +4197,65 @@ const BEST_TIMES = {
   _default:   ['09:00','12:00','15:00','18:00'],
 };
 
+
+// ── Timezone support ──────────────────────────────────────────────────────────
+const TIMEZONES = [
+  { id: 'America/Los_Angeles', label: 'Pacific Time (PST/PDT)'    },
+  { id: 'America/Denver',      label: 'Mountain Time (MST/MDT)'   },
+  { id: 'America/Chicago',     label: 'Central Time (CST/CDT)'    },
+  { id: 'America/New_York',    label: 'Eastern Time (EST/EDT)'     },
+  { id: 'America/Anchorage',   label: 'Alaska Time (AKST/AKDT)'   },
+  { id: 'Pacific/Honolulu',    label: 'Hawaii Time (HST)'          },
+  { id: 'UTC',                 label: 'UTC / GMT (Universal)'     },
+  { id: 'Europe/London',       label: 'London (GMT/BST)'          },
+  { id: 'Europe/Paris',        label: 'Central European (CET/CEST)'},
+  { id: 'Asia/Dubai',          label: 'Gulf Standard (GST +4)'    },
+  { id: 'Asia/Kolkata',        label: 'India Standard (IST +5:30)'},
+  { id: 'Asia/Singapore',      label: 'Singapore (SGT +8)'        },
+  { id: 'Asia/Tokyo',          label: 'Japan Standard (JST +9)'   },
+  { id: 'Australia/Sydney',    label: 'Sydney (AEST/AEDT)'        },
+];
+
+const TZ_STORAGE_KEY = 'postpilot_default_tz';
+const TZ_DEFAULT     = 'America/Los_Angeles';  // PST/PDT
+
+function getDefaultTimezone() {
+  try { return localStorage.getItem(TZ_STORAGE_KEY) || TZ_DEFAULT; } catch { return TZ_DEFAULT; }
+}
+function saveDefaultTimezone(ianaId) {
+  try { localStorage.setItem(TZ_STORAGE_KEY, ianaId); } catch {}
+}
+
+// Returns the current abbreviation for a timezone (e.g. "PDT", "EST")
+function getTzAbbr(ianaId) {
+  if (!ianaId) return '';
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: ianaId, timeZoneName: 'short'
+    }).formatToParts(new Date());
+    return (parts.find(p => p.type === 'timeZoneName') || {}).value || '';
+  } catch { return ''; }
+}
+
+function getTzLabel(ianaId) {
+  if (!ianaId) return '';
+  return (TIMEZONES.find(tz => tz.id === ianaId) || {}).label || ianaId;
+}
+
+function applyDefaultTimezone(ianaId) {
+  saveDefaultTimezone(ianaId);
+  const badge = document.getElementById('tz-current-abbr');
+  if (badge) badge.textContent = getTzAbbr(ianaId);
+  showToast('Default timezone set to ' + getTzAbbr(ianaId) + ' — applies to new posts');
+}
+
 function defaultForm(platform) {
   return {
     id: Date.now() + Math.random(),
     platform,
     scheduledDate: '',
     scheduledTime: '09:00',
+    timezone: getDefaultTimezone(),
     publishStatus: 'scheduled',   // 'scheduled' | 'publishing' | 'published' | 'failed'
     publishError: '',
     publishedAt: null,
@@ -6225,7 +6293,7 @@ function renderTagSearchResults() {
           <div class="post-title">${escapeHtml(getPostSummary(post))}</div>
           <div class="post-time" style="margin-top:3px">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            ${formatDateTime(post.scheduledDate, post.scheduledTime)}
+            ${formatDateTime(post.scheduledDate, post.scheduledTime)}${post.timezone ? `<span style="font-size:9.5px;font-weight:700;opacity:0.7;margin-left:4px;letter-spacing:0.03em">${getTzAbbr(post.timezone)}</span>` : ''}
           </div>
         </div>
       </div>`).join('');
@@ -7378,39 +7446,47 @@ function renderCalendarView() {
       posts.length ? 'has-posts' : ''
     ].filter(Boolean).join(' ');
 
-    const chipsHtml = posts.map(({ post, plat }) => {
-      const time = post.scheduledTime || '00:00';
-      const [hh, mm] = time.split(':');
-      const h = parseInt(hh);
-      const ampm = h >= 12 ? 'pm' : 'am';
-      const h12 = h % 12 || 12;
-      const timeLabel = `${h12}:${mm}${ampm}`;
-      const title = escapeHtml(getPostSummary(post)).substring(0, 28);
-      const tagHtml = (post.tags || []).slice(0, 3).map(t =>
-        `<span class="cal-tag-pill">${escapeHtml(t)}</span>`).join('');
+    const MAX_VISIBLE_CHIPS = 4;
+    const chipsHtml = (() => {
+      if (!posts.length) return '';
+      const chipParts = posts.map(({ post, plat }, idx) => {
+        const time = post.scheduledTime || '00:00';
+        const [hh, mm] = time.split(':');
+        const h = parseInt(hh);
+        const ampm = h >= 12 ? 'pm' : 'am';
+        const h12 = h % 12 || 12;
+        const timeLabel = `${h12}:${mm}${ampm}`;
+        const title = escapeHtml(getPostSummary(post)).substring(0, 26);
+        const firstTag = (post.tags || [])[0];
+        const tagHtml = firstTag ? `<span class="cal-tag-pill">${escapeHtml(firstTag)}</span>` : '';
+        const platLabel = plat.id === 'google' ? 'G·Biz' : plat.name.substring(0, 7);
+        const hidden = idx >= MAX_VISIBLE_CHIPS ? ' cal-chip-hidden' : '';
 
-      return `<div class="cal-post-chip"
-          draggable="true"
-          data-post-id="${post.id}"
-          data-plat-id="${plat.id}"
-          data-src-date="${cellDate}"
-          ondragstart="calChipDragStart(event)"
-          ondragend="calChipDragEnd(event)"
-          style="background:${plat.color}18;border-left-color:${plat.color};color:#e8eaf0${post.manualUpload ? ';border-left-width:3px;opacity:0.85' : ''}"
-          onclick="calChipClick(event,'${post.id}','${plat.id}')"
-          title="${escapeHtml(getPostSummary(post))} — ${plat.name} @ ${timeLabel}${post.manualUpload ? ' [Manually Uploaded]' : ''}">
-          <div class="cal-post-chip-icon" style="display:flex;align-items:center;gap:3px">
-            ${plat.icon.replace('width="20" height="20"','width="10" height="10"')}
-            <span style="font-size:9px;font-weight:700;color:${plat.color};letter-spacing:0.02em;line-height:1.2;opacity:0.9">${plat.id === 'google' ? 'Google<br>Business' : plat.name}</span>
-            ${post.manualUpload ? '<span style="color:#39ff6e;font-size:10px;font-weight:700;line-height:1;margin-left:1px">↑</span>' : ''}
-          </div>
-          <div class="cal-post-chip-body">
-            <div class="cal-post-chip-time" style="color:${plat.color}">${timeLabel}</div>
-            <div class="cal-post-chip-title">${title}</div>
-            ${tagHtml ? `<div class="cal-post-chip-tags">${tagHtml}</div>` : ''}
-          </div>
+        return `<div class="cal-post-chip${hidden}"
+            draggable="true"
+            data-post-id="${post.id}"
+            data-plat-id="${plat.id}"
+            data-src-date="${cellDate}"
+            ondragstart="calChipDragStart(event)"
+            ondragend="calChipDragEnd(event)"
+            style="background:${plat.color}18;border-left-color:${plat.color};color:#e8eaf0"
+            onclick="calChipClick(event,'${post.id}','${plat.id}')"
+            title="${escapeHtml(getPostSummary(post))} — ${plat.name} @ ${timeLabel}">
+          <div class="cal-post-chip-icon">${plat.icon.replace('width="20" height="20"','width="9" height="9"')}</div>
+          <span class="cal-post-chip-plat" style="color:${plat.color}">${escapeHtml(platLabel)}</span>
+          <span class="cal-post-chip-time" style="color:${plat.color}">${timeLabel}</span>
+          <span class="cal-post-chip-title">${title}</span>
+          ${tagHtml}
         </div>`;
-    }).join('');
+      });
+
+      const overflow = posts.length - MAX_VISIBLE_CHIPS;
+      const moreBtn = overflow > 0
+        ? `<button class="cal-more-btn" onclick="event.stopPropagation();this.closest('.cal-cell').querySelectorAll('.cal-chip-hidden').forEach(e=>e.classList.remove('cal-chip-hidden'));this.remove()">▼ ${overflow} more</button>`
+        : '';
+
+      return chipParts.join('') + moreBtn;
+    })();
 
 
     const holidays = !otherMonth ? getHolidaysForDate(cellDate) : [];
@@ -8338,7 +8414,7 @@ function render() {
               <button class="tag-pill${on ? ' active' : ''}" onclick="toggleTagFilter('${escapeHtml(tag)}')" style="border-radius:${isCustom?'20px 0 0 20px':'20px'};border-right:${isCustom?'none':''}">${escapeHtml(tag)}</button>${isCustom ? `<button onclick="deleteCustomTag('${escapeHtml(tag)}')" title="Delete tag" style="padding:3px 7px;border-radius:0 20px 20px 0;border:1px solid var(--border-light);border-left:none;background:var(--bg-elevated);color:var(--text-muted);font-size:10px;cursor:pointer;line-height:1;transition:all 0.15s" onmouseenter="this.style.background='var(--bg-danger)';this.style.color='var(--text-danger)'" onmouseleave="this.style.background='var(--bg-elevated)';this.style.color='var(--text-muted)'">×</button>` : ''}
             </span>`;
           }).join('')}
-          <form onsubmit="event.preventDefault();addCustomTag(this.querySelector('input').value);this.querySelector('input').value=''" style="display:inline-flex;align-items:center;gap:0">
+          <form onsubmit="event.preventDefault();const v=this.querySelector('input').value.trim();if(v){addCustomTag(v);this.querySelector('input').value=''}" style="display:inline-flex;align-items:center;gap:0">
             <input type="text" placeholder="+ New tag"
               style="padding:3px 10px;border-radius:20px 0 0 20px;border:1px dashed var(--border-light);background:transparent;color:var(--text-secondary);font-size:11px;font-family:'DM Sans',sans-serif;outline:none;width:90px;transition:all 0.15s"
               onfocus="this.style.borderColor='#7aa3c8';this.style.color='var(--text-primary)'"
@@ -8632,7 +8708,7 @@ function renderComposerModal(platform) {
           </div>
           <!-- Schedule -->
           <div class="section-divider">Schedule</div>
-          <div class="row3">
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:14px">
             <div class="form-group">
               <label class="form-label">Date *</label>
               <input type="date" id="f-date" value="${escapeHtml(form.scheduledDate)}" min="${today}" oninput="checkDateLimit(this.value)"/>
@@ -8649,6 +8725,12 @@ function renderComposerModal(platform) {
                 ${mins.map(m => `<option value="${m}"${m===fMin?' selected':''}>${m}</option>`).join('')}
               </select>
             </div>
+          </div>
+          <div class="form-group" style="margin-top:-6px">
+            <label class="form-label">Timezone</label>
+            <select id="f-tz" onchange="updateFormField('timezone',this.value)" style="font-size:12px">
+              ${TIMEZONES.map(tz => `<option value="${tz.id}"${(form.timezone||getDefaultTimezone())===tz.id?' selected':''}>${tz.label}</option>`).join('')}
+            </select>
           </div>
           <!-- #4 Smart time suggestions -->
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:-4px;margin-bottom:8px">
@@ -8736,7 +8818,7 @@ function renderComposerModal(platform) {
           <div class="form-group">
             <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center" id="composer-tag-pills">
               ${buildComposerTagPills(form.tags || [])}
-              <form onsubmit="event.preventDefault();const v=this.querySelector('input').value.trim();if(v){addCustomTag(v);this.querySelector('input').value=''}" style="display:inline-flex;align-items:center;gap:0">
+              <form onsubmit="event.preventDefault();const v=this.querySelector('input').value.trim();if(v){addCustomTag(v,true);toggleFormTag(v);this.querySelector('input').value='';this.querySelector('input').focus()}" style="display:inline-flex;align-items:center;gap:0">
                 <input type="text" placeholder="+ New tag"
                   style="padding:4px 10px;border-radius:20px 0 0 20px;border:1px dashed var(--border-light);background:transparent;color:var(--text-secondary);font-size:11px;font-family:'DM Sans',sans-serif;outline:none;width:90px;transition:all 0.15s"
                   onfocus="this.style.borderColor='#7aa3c8';this.style.color='var(--text-primary)'"
@@ -9643,6 +9725,23 @@ function renderSettingsModal() {
               </button>
             </div>
           </div>
+          <!-- DEFAULT TIMEZONE -->
+          <div class="section-header" style="margin-top:8px">
+            <span class="section-header-icon">🕐</span>Default Timezone
+          </div>
+          <div style="padding:0 0 16px">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
+              New posts default to this timezone. You can override it per-post in the composer.
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <select id="settings-default-tz"
+                onchange="applyDefaultTimezone(this.value)"
+                style="flex:1;min-width:200px;font-size:13px;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-light);background:var(--bg-elevated);color:var(--text-primary);font-family:inherit">
+                ${TIMEZONES.map(tz => `<option value="${tz.id}"${tz.id===getDefaultTimezone()?' selected':''}>${tz.label}</option>`).join('')}
+              </select>
+              <span id="tz-current-abbr" style="font-size:12px;font-weight:700;color:var(--accent);letter-spacing:0.04em;min-width:40px">${getTzAbbr(getDefaultTimezone())}</span>
+            </div>
+          </div>
           <!-- DANGER ZONE -->
           <div class="danger-zone">
             <div class="danger-zone-header">
@@ -10398,6 +10497,7 @@ function syncFormFromDOM() {
   const date = g('f-date'); if (date !== null) state.form.scheduledDate = date;
   const hour = g('f-hour'); const min = g('f-min');
   if (hour !== null && min !== null) state.form.scheduledTime = `${hour}:${min}`;
+  const tz = g('f-tz'); if (tz !== null) state.form.timezone = tz;
   const liveUrl = g('f-liveurl'); if (liveUrl !== null) state.form.liveUrl = liveUrl;
   // platform fields
   const fields = {
@@ -11890,10 +11990,18 @@ function renderPlatformPickerModal() {
         </div>
 
         <div class="pp-footer">
-          <div class="pp-count">
-            ${selectedCount === 0
-              ? 'Pick at least one platform to continue'
-              : `${selectedCount} platform${selectedCount === 1 ? '' : 's'} selected`}
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div class="pp-count">
+              ${selectedCount === 0
+                ? 'Pick at least one platform to continue'
+                : `${selectedCount} platform${selectedCount === 1 ? '' : 's'} selected`}
+            </div>
+            <button type="button" onclick="skipPlatformPicker()"
+              style="background:none;border:none;color:var(--text-muted);font-size:11.5px;font-family:inherit;cursor:pointer;text-align:left;padding:0;text-decoration:underline;text-underline-offset:2px;transition:color 0.12s"
+              onmouseenter="this.style.color='var(--text-secondary)'"
+              onmouseleave="this.style.color='var(--text-muted)'">
+              Just browsing — skip for now
+            </button>
           </div>
           <button type="button" class="pp-continue"
                   ${selectedCount === 0 ? 'disabled' : ''}
@@ -11970,7 +12078,19 @@ function confirmPlatformPicker() {
   setTimeout(() => { if (!isTourSeen()) startTour(); }, 600);
 }
 
-// ── Reset confirm modal ───────────────────────────────────────────────────
+function skipPlatformPicker() {
+  // Show all platforms (nothing hidden) so the user can explore freely
+  state.hiddenPlatforms = new Set();
+  saveHiddenPlatforms();
+  try { localStorage.setItem('postpilot_initialized', '1'); } catch {}
+  state.showPlatformPicker = false;
+  state.platformPickerSelection = new Set();
+  render();
+  // Start tour for new users after a beat
+  setTimeout(() => { if (!isTourSeen()) startTour(); }, 600);
+}
+
+
 
 function openResetConfirm() {
   state.showResetConfirm = true;
@@ -12099,6 +12219,8 @@ window.platformPickerSelectRecommended = platformPickerSelectRecommended;
 window.platformPickerSelectAll = platformPickerSelectAll;
 window.platformPickerClear = platformPickerClear;
 window.confirmPlatformPicker = confirmPlatformPicker;
+window.skipPlatformPicker    = skipPlatformPicker;
+window.applyDefaultTimezone  = applyDefaultTimezone;
 
 // ── GitHub Sync ───────────────────────────────────────────────────────────────
 window.updateGithubSyncField        = updateGithubSyncField;
