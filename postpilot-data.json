@@ -1,6 +1,7 @@
 {
-  "version": 1,
-  "lastSaved": "2026-05-10T05:50:30.527Z",
+  "version": 2,
+  "lastSaved": "2026-05-10T05:59:42.810Z",
+  "workspace": "ws_a",
   "posts": {
     "pinterest": [
       {
@@ -1063,8 +1064,6 @@
   },
   "hashtagSets": [],
   "analytics": {},
-  "tags": [],
-  "customTags": [],
   "streaks": {
     "pinterest": {
       "count": 0,
@@ -1196,5 +1195,35 @@
       "tokenMilestonesHit": [],
       "missedDayPending": null
     }
-  }
+  },
+  "customTags": [],
+  "hiddenPlatforms": [
+    "tiktok",
+    "youtube",
+    "kofi",
+    "tumblr",
+    "patreon"
+  ],
+  "platformOrder": [
+    "pinterest",
+    "google",
+    "linkedin",
+    "instagram",
+    "shopify",
+    "bluesky",
+    "tiktok",
+    "youtube",
+    "twitter",
+    "kofi",
+    "facebook",
+    "tumblr",
+    "patreon"
+  ],
+  "defaultTimezone": "America/Los_Angeles",
+  "workspaceNames": {
+    "ws_a": "YDI",
+    "ws_b": "Brand B",
+    "ws_c": "Brand C"
+  },
+  "workspaceLogos": {}
 }
