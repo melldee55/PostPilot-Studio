@@ -1211,6 +1211,7 @@
         border: 1.5px solid transparent;
         transition: 0.15s;
         flex-shrink: 0;
+        position: relative;
       }
       .history-thumb:hover {
         border-color: var(--hi);
@@ -1219,6 +1220,49 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
+        display: block;
+      }
+      /* Action buttons overlay on hover */
+      .history-thumb-actions {
+        position: absolute;
+        inset: 0;
+        background: rgba(10,8,25,0.72);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        opacity: 0;
+        transition: opacity 0.15s;
+        padding: 4px;
+      }
+      .history-thumb:hover .history-thumb-actions {
+        opacity: 1;
+      }
+      .history-thumb-btn {
+        width: 100%;
+        padding: 3px 0;
+        border-radius: 3px;
+        border: 1px solid rgba(255,255,255,0.18);
+        background: rgba(255,255,255,0.1);
+        color: #fff;
+        font-size: 9px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        text-align: center;
+        transition: background 0.12s;
+        white-space: nowrap;
+      }
+      .history-thumb-btn:hover {
+        background: rgba(255,255,255,0.22);
+      }
+      .history-thumb-btn.send {
+        border-color: rgba(245,158,11,0.5);
+        color: #f5c842;
+      }
+      .history-thumb-btn.send:hover {
+        background: rgba(245,158,11,0.2);
       }
       .history-thumb-empty {
         width: 84px;
@@ -2086,6 +2130,15 @@
       }
       .align-btn svg {
         display: block;
+      }
+      /* Bold / Italic toggle buttons share the active glow */
+      #cBoldBtn.active, #cItalicBtn.active {
+        background: var(--acc);
+        border-color: var(--acc);
+        color: #fff;
+      }
+      #cBoldBtn:hover, #cItalicBtn:hover {
+        border-color: var(--acc);
       }
       .color-ovr-row {
         display: flex;
@@ -4094,6 +4147,10 @@ Your message, caption, or call to action goes right here.</textarea
             <option value="'Horizon',sans-serif">Horizon — Bold Display</option>
             <option value="'League Spartan',sans-serif">League Spartan — Strong Sans</option>
           </select>
+          <div style="display:flex;gap:6px;margin:6px 0 2px;">
+            <button id="cBoldBtn" onclick="S.cBold=!S.cBold;this.classList.toggle('active',S.cBold);debounceSave();render();" style="flex:1;padding:5px 0;border-radius:5px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s;" title="Bold body text"><b>B</b></button>
+            <button id="cItalicBtn" onclick="S.cItalic=!S.cItalic;this.classList.toggle('active',S.cItalic);debounceSave();render();" style="flex:1;padding:5px 0;border-radius:5px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:13px;font-style:italic;cursor:pointer;font-family:inherit;transition:.15s;" title="Italic body text"><i>I</i></button>
+          </div>
           <div class="sl-row">
             <label>Size</label>
             <input type="range" min="8" max="80" value="18" id="contentSize" oninput="sl(this, 'csv')" />
@@ -4673,6 +4730,8 @@ Your message, caption, or call to action goes right here.</textarea
         cColorOv: null,
         hSize: 52,
         cSize: 18,
+        cBold: false,
+        cItalic: false,
         lSize: 60,
         lOpacity: 100,
         // Image / overlay adjustments
@@ -5070,6 +5129,11 @@ Your message, caption, or call to action goes right here.</textarea
         set("contentText", S.content);
         set("hFont", S.hFont || "'DM Sans',sans-serif");
         set("cFont", S.cFont || "'DM Sans',sans-serif");
+        // Sync bold/italic button active state
+        const cBoldBtn = document.getElementById('cBoldBtn');
+        const cItalicBtn = document.getElementById('cItalicBtn');
+        if (cBoldBtn) cBoldBtn.classList.toggle('active', !!S.cBold);
+        if (cItalicBtn) cItalicBtn.classList.toggle('active', !!S.cItalic);
         set("sFont", S.sFont || "'DM Sans',sans-serif");
         set("headerSize", S.hSize);
         set("contentSize", S.cSize);
@@ -7936,7 +8000,8 @@ Your message, caption, or call to action goes right here.</textarea
         return `<div style="font-family:${S.hFont || S.font};font-size:${sz}px;font-weight:900;color:${col};line-height:${lh};text-align:${align};letter-spacing:${ls}px;position:relative;${tfm}${ts(W, S.hDropShadow, outShadows)}">${escHtml(S.header)}</div>`;
       }
       function body(W, color, mult = 1) {
-        const sz = Math.max(20, S.cSize * mult * (W / 1080));
+        const minSz = S.platform === 'pinterest' ? 30 : 20; // Pinterest body never below 30px
+        const sz = Math.max(minSz, S.cSize * mult * (W / 1080));
         const lh = (S.cLineH || 158) / 100;
         const ls = (S.cLetterS || 0) * (W / 1080);
         const align = S.cAlign || "left";
@@ -7946,10 +8011,10 @@ Your message, caption, or call to action goes right here.</textarea
         const offX = ((S.bdyX || 0) / 100) * W;
         const offY = ((S.bdyY || 0) / 100) * _canvasH(W);
         const tfm = offX !== 0 || offY !== 0 ? `transform:translate(${offX.toFixed(1)}px,${offY.toFixed(1)}px);` : "";
-        return `<div style="font-family:${S.cFont || S.font};font-size:${sz}px;color:${col};line-height:${lh};text-align:${align};letter-spacing:${ls}px;position:relative;${tfm}${ts(W, S.bDropShadow, outShadows)}">${escHtml(S.content)}</div>`;
+        return `<div style="font-family:${S.cFont || S.font};font-size:${sz}px;color:${col};line-height:${lh};text-align:${align};letter-spacing:${ls}px;position:relative;font-weight:${S.cBold ? '700' : '400'};font-style:${S.cItalic ? 'italic' : 'normal'};${tfm}${ts(W, S.bDropShadow, outShadows)}">${escHtml(S.content)}</div>`;
       }
       function aline(W, color, wide = false) {
-        return `<div style="width:${W * (wide ? 0.12 : 0.055)}px;height:${W * 0.005}px;background:${color};border-radius:2px;margin-bottom:${W * 0.022}px;"></div>`;
+        return ''; // decorative accent dashes removed per user request
       }
       function siteTag(W, H) {
         const url = S.siteURL || "";
@@ -9028,11 +9093,46 @@ Your message, caption, or call to action goes right here.</textarea
             thumb.className = "history-thumb";
             thumb.style.height = item.thumbH + "px";
             thumb.title = (item.header || "snapshot") + " — " + new Date(item.ts).toLocaleTimeString();
+            // Thumbnail image
             const img = document.createElement("img");
             img.src = item.dataUrl;
-            img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;";
             thumb.appendChild(img);
-            thumb.onclick = () => _restoreHistory(i);
+            // Hover action overlay
+            const actions = document.createElement("div");
+            actions.className = "history-thumb-actions";
+            actions.innerHTML =
+              '<button class="history-thumb-btn" title="Restore this color scheme">↩ Restore</button>' +
+              '<button class="history-thumb-btn" title="Preview in panel">🔍 Preview</button>' +
+              '<button class="history-thumb-btn send" title="Send to PostPilot Scheduler">📤 Schedule</button>';
+            // Restore button
+            actions.children[0].addEventListener('click', (e) => {
+              e.stopPropagation();
+              _restoreHistory(i);
+            });
+            // Preview button — restore then open preview panel
+            actions.children[1].addEventListener('click', (e) => {
+              e.stopPropagation();
+              _restoreHistory(i);
+              setTimeout(() => {
+                if (typeof togglePreview === 'function') {
+                  if (!previewOpen) togglePreview();
+                  else if (typeof renderPreview === 'function') renderPreview();
+                }
+              }, 80);
+            });
+            // Send to PostPilot — restore then open PostFlow picker for template 0
+            actions.children[2].addEventListener('click', (e) => {
+              e.stopPropagation();
+              _restoreHistory(i);
+              setTimeout(() => {
+                if (typeof openPfPicker === 'function') openPfPicker(0, actions.children[2]);
+              }, 120);
+            });
+            thumb.appendChild(actions);
+            // Clicking the thumb itself (outside buttons) also restores
+            thumb.addEventListener('click', (e) => {
+              if (!e.target.closest('.history-thumb-btn')) _restoreHistory(i);
+            });
             container.appendChild(thumb);
           } else {
             const empty = document.createElement("div");

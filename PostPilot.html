@@ -2581,7 +2581,7 @@
   /* ── Holiday & Events Panel ─────────────────────────────────── */
   #cal-holiday-bar {
     margin: 0 14px 14px;
-    padding-right: 180px; /* clearance for the fixed FAB button */
+    padding-right: 0; /* removed fixed FAB clearance — handled by card scroll instead */
     border: 1px solid var(--border-light);
     border-radius: 10px;
     background: var(--bg-card);
@@ -2602,10 +2602,21 @@
     padding: 8px;
     gap: 6px;
     align-items: stretch;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    /* thin scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-light) transparent;
   }
+  .cal-hol-cards::-webkit-scrollbar { height: 4px; }
+  .cal-hol-cards::-webkit-scrollbar-track { background: transparent; }
+  .cal-hol-cards::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
   .cal-hol-card {
-    flex: 1 1 0;
-    min-width: 0;
+    flex: 0 0 auto;           /* don't shrink — fixed width so they scroll */
+    width: clamp(160px, 22%, 240px);
+    scroll-snap-align: start;
     height: 140px;
     background: var(--bg-elevated);
     border: 1px solid var(--border);
@@ -11293,7 +11304,10 @@ let tourActive = false;
 let tourDirection = 1; // 1=forward, -1=backward
 
 function isTourSeen() {
-  try { return localStorage.getItem(TOUR_STORAGE_KEY) === '1'; } catch(e) { return false; }
+  try {
+    return localStorage.getItem(TOUR_STORAGE_KEY) === '1'
+        || localStorage.getItem('postpilot_tour_seen_v1') === '1'; // respect old key
+  } catch(e) { return false; }
 }
 function markTourSeen() {
   try { localStorage.setItem(TOUR_STORAGE_KEY, '1'); } catch(e) {} 
