@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-10T06:53:01.281Z",
+  "lastSaved": "2026-05-10T07:12:27.699Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -1299,6 +1299,17 @@
         "uploadedAt": "2026-05-10T06:12:19.412Z",
         "fromBrandCreator": true,
         "templateName": "Bold Overlay",
+        "format": "png",
+        "dimensions": "1080×1080"
+      },
+      {
+        "id": 1778397144625.6216,
+        "platform": "instagram",
+        "imageName": "Three-types-of-business-coverage-every-california-small-business-owner-needs-and-most-do-not-have_0063_instagram.png",
+        "notes": "Three Types of Business Coverage Every California Small Business Owner Needs and Most Do Not Have · Running a small business in California comes with real risks that most owners do not think about unt",
+        "uploadedAt": "2026-05-10T07:12:24.625Z",
+        "fromBrandCreator": true,
+        "templateName": "Split Quote",
         "format": "png",
         "dimensions": "1080×1080"
       }
