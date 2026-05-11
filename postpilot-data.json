@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-11T20:10:34.239Z",
+  "lastSaved": "2026-05-11T20:12:53.935Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -321,8 +321,8 @@
         "scheduledDate": "2026-05-11",
         "scheduledTime": "09:00",
         "timezone": "America/Los_Angeles",
-        "publishStatus": "scheduled",
-        "publishError": "",
+        "publishStatus": "failed",
+        "publishError": "No Pinterest API key saved.",
         "publishedAt": null,
         "imageName": "3-coverage-types-every-califonia-small-business-needs_0063_pinterest.png",
         "_imageDims": "1000×1500",
