@@ -61,8 +61,10 @@
     </div>
     <div id="frames">
       <div class="loader" id="loader"><div class="spinner"></div><span>Loading…</span></div>
-      <iframe id="frame-creator"   src="" class="visible" onload="onFrameLoad('creator')"></iframe>
-      <iframe id="frame-scheduler" src=""                  onload="onFrameLoad('scheduler')"></iframe>
+      <iframe id="frame-creator"   src="" class="visible" onload="onFrameLoad('creator')"
+              allow="clipboard-read; clipboard-write"></iframe>
+      <iframe id="frame-scheduler" src=""                  onload="onFrameLoad('scheduler')"
+              allow="clipboard-read; clipboard-write"></iframe>
     </div>
   </div>
 

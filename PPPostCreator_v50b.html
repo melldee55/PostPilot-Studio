@@ -6899,16 +6899,28 @@ Your message, caption, or call to action goes right here.</textarea
           const canvas = await renderToCanvasHiDpi(idx);
           canvas.toBlob(async (blob) => {
             try {
+              // Check clipboard API availability
+              if (!navigator.clipboard || !window.ClipboardItem) {
+                throw new Error('Clipboard API not available');
+              }
               await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
               btn.textContent = "✓";
               btn.classList.add("copied");
-              setTimeout(() => {
-                btn.textContent = "⎘";
-                btn.classList.remove("copied");
-              }, 1800);
+              setTimeout(() => { btn.textContent = "⎘"; btn.classList.remove("copied"); }, 1800);
             } catch (e) {
               btn.textContent = "⎘";
-              alert("Clipboard write failed — try right-clicking the preview to copy instead.");
+              // Fallback: open as data URL in new tab — user can right-click → Copy Image
+              try {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const win = window.open('', '_blank');
+                  if (win) {
+                    win.document.write(`<html><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;height:100vh"><img src="${reader.result}" style="max-width:100%;max-height:100vh;object-fit:contain"><p style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);color:#fff;font-family:sans-serif;font-size:13px;background:rgba(0,0,0,.6);padding:6px 14px;border-radius:6px">Right-click the image → Copy Image</p></body></html>`);
+                    win.document.close();
+                  }
+                };
+                reader.readAsDataURL(blob);
+              } catch {}
             }
           }, "image/png");
         } catch (e) {
@@ -8010,11 +8022,41 @@ Your message, caption, or call to action goes right here.</textarea
         grid.style.cssText = `display:flex;flex-wrap:wrap;gap:${GAP}px;align-content:center;justify-content:center;width:100%;height:100%;`;
 
         const pal = PAL();
+        // Cache for blob URLs — enables drag-to-desktop with filename
+        const _pvBlobCache = {};
+
+        async function _cachePreviewBlob(idx) {
+          if (_pvBlobCache[idx]) return;
+          try {
+            const canvas = await renderToCanvasHiDpi(idx);
+            _pvBlobCache[idx] = await new Promise(res => canvas.toBlob(b => res(b ? URL.createObjectURL(b) : null), 'image/png'));
+          } catch {}
+        }
+
         indices.forEach((idx) => {
           const wrap = document.createElement("div");
           wrap.className = "preview-item";
           wrap.style.cssText = `width:${itemW}px;height:${itemH}px;cursor:pointer;position:relative;`;
           wrap.title = `Click to remove template ${idx + 1} from preview`;
+          wrap.draggable = true;
+
+          // Pre-render to blob in background for drag support
+          _cachePreviewBlob(idx);
+
+          wrap.addEventListener('dragstart', async (e) => {
+            e.stopPropagation();
+            const pl   = PLATS[S.platform] || PLATS['pinterest'];
+            const name = buildFilename ? buildFilename(idx) : `BrandPost_${String(idx+1).padStart(4,'0')}_${S.platform}.png`;
+            if (_pvBlobCache[idx]) {
+              e.dataTransfer.setData('DownloadURL', `image/png:${name}:${_pvBlobCache[idx]}`);
+              e.dataTransfer.effectAllowed = 'copy';
+            } else {
+              // Not cached yet — block drag briefly and render
+              e.preventDefault();
+              showPfToast('Preparing image for drag, try again in a moment…');
+              _cachePreviewBlob(idx);
+            }
+          });
 
           const inner = document.createElement("div");
           inner.className = "preview-item-inner";

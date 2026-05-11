@@ -11419,6 +11419,70 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// ── Paste images directly into the scheduler ─────────────────────────────────
+// Works in the composer (sets the post image) and in the Drafts view (adds a draft)
+document.addEventListener('paste', async (e) => {
+  // Let text paste work normally in input fields
+  const tag = (document.activeElement || {}).tagName || '';
+  if (['INPUT', 'TEXTAREA'].includes(tag.toUpperCase())) return;
+
+  const imgItem = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+  if (!imgItem) return;
+
+  e.preventDefault();
+  const file = imgItem.getAsFile();
+  if (!file) return;
+
+  const ext  = file.type.split('/')[1] || 'png';
+  const name = `pasted-image.${ext}`;
+
+  // Case 1 — composer is open → set the pasted image on the post
+  if (state.showComposer && state.form) {
+    showToast('📋 Pasting image…');
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      let dataUrl = ev.target.result;
+      state.form.imageName = name;
+      state.form.isVideo   = false;
+      state.form.isGif     = file.type === 'image/gif';
+      if (ghImgReady()) {
+        try {
+          const fname = ghImgFilename(name);
+          dataUrl = await uploadImageToGitHub(dataUrl, fname);
+          showToast('✅ Image pasted and uploaded to GitHub');
+        } catch { showToast('📋 Image pasted (saved locally)'); }
+      } else {
+        showToast('📋 Image pasted!');
+      }
+      state.form.image         = dataUrl;
+      state.form.imageOriginal = dataUrl;
+      state.form.imageId         = null;
+      state.form.imageOriginalId = null;
+      const sizeLabel = await getImageSizeLabel(dataUrl);
+      state.form._imageDims = sizeLabel;
+      render();
+    };
+    reader.readAsDataURL(file);
+    return;
+  }
+
+  // Case 2 — Drafts view is open → add as a new draft
+  if (state.activeView === 'drafts') {
+    showToast('Adding pasted image to drafts…');
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      await handleDraftUpload({ target: { files: dt.files } });
+    } catch {
+      showToast('Paste failed — try uploading the file directly.', 'error');
+    }
+    return;
+  }
+
+  // Case 3 — neither context open → guide the user
+  showToast('Switch to Drafts or open + New Post, then paste your image', 'success');
+});
+
 document.addEventListener('click', e => {
   const pop = document.getElementById('cal-day-popover');
   if (pop && pop.classList.contains('visible') && !pop.contains(e.target)) {
