@@ -2095,11 +2095,10 @@
       }
 
       #download-area {
-        position: absolute;
+        position: fixed;
         left: -99999px;
-        top: 0;
+        top: -99999px;
         pointer-events: none;
-        visibility: hidden;
       }
 
       /* SVG alignment buttons */
@@ -6957,12 +6956,6 @@ Your message, caption, or call to action goes right here.</textarea
           allowTaint: true,
           backgroundColor: null,
           logging: false,
-          x: 0,
-          y: 0,
-          scrollX: 0,
-          scrollY: 0,
-          windowWidth: fw,
-          windowHeight: fh,
         });
         area.innerHTML = "";
         return canvas;
@@ -9294,12 +9287,6 @@ Your message, caption, or call to action goes right here.</textarea
               allowTaint: true,
               backgroundColor: null,
               logging: false,
-              x: 0,
-              y: 0,
-              scrollX: 0,
-              scrollY: 0,
-              windowWidth: fw,
-              windowHeight: fh,
             });
             area.innerHTML = "";
             // Scale down to a sharp thumbnail using a 2D canvas
@@ -10469,12 +10456,6 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
           allowTaint: true,
           backgroundColor: null,
           logging: false,
-          x: 0,
-          y: 0,
-          scrollX: 0,
-          scrollY: 0,
-          windowWidth: fw,
-          windowHeight: fh,
         });
         area.innerHTML = "";
         return canvas;
@@ -10508,12 +10489,6 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
           allowTaint: true,
           backgroundColor: null,
           logging: false,
-          x: 0,
-          y: 0,
-          scrollX: 0,
-          scrollY: 0,
-          windowWidth: fw,
-          windowHeight: fh,
         });
         area.innerHTML = "";
         return canvas;
