@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-11T20:02:53.778Z",
+  "lastSaved": "2026-05-11T20:08:07.356Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -1376,9 +1376,32 @@
         "templateName": "Split Quote",
         "format": "png",
         "dimensions": "1080×1080"
+      },
+      {
+        "id": 1778530084226.8345,
+        "platform": "instagram",
+        "imageName": "3-coverage-types-every-califonia-small-business-needs_0063_instagram.png",
+        "notes": "3 Coverage Types Every Califonia Small Business Needs · Most business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
+        "uploadedAt": "2026-05-11T20:08:04.226Z",
+        "fromBrandCreator": true,
+        "templateName": "Split Quote",
+        "format": "png",
+        "dimensions": "1080×1080"
       }
     ],
-    "google": [],
+    "google": [
+      {
+        "id": 1778530084226.5166,
+        "platform": "google",
+        "imageName": "3-coverage-types-every-califonia-small-business-needs_0063_google.png",
+        "notes": "3 Coverage Types Every Califonia Small Business Needs · Most business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
+        "uploadedAt": "2026-05-11T20:08:04.226Z",
+        "fromBrandCreator": true,
+        "templateName": "Split Quote",
+        "format": "png",
+        "dimensions": "1200×900"
+      }
+    ],
     "linkedin": [
       {
         "id": 1778367740541.3425,
@@ -1410,6 +1433,17 @@
         "uploadedAt": "2026-05-10T06:12:19.412Z",
         "fromBrandCreator": true,
         "templateName": "Bold Overlay",
+        "format": "png",
+        "dimensions": "1000×1500"
+      },
+      {
+        "id": 1778530084226.2942,
+        "platform": "linkedin",
+        "imageName": "3-coverage-types-every-califonia-small-business-needs_0063_linkedin.png",
+        "notes": "3 Coverage Types Every Califonia Small Business Needs · Most business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
+        "uploadedAt": "2026-05-11T20:08:04.226Z",
+        "fromBrandCreator": true,
+        "templateName": "Split Quote",
         "format": "png",
         "dimensions": "1000×1500"
       }
