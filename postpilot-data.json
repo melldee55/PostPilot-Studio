@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-11T05:57:16.144Z",
+  "lastSaved": "2026-05-11T05:58:29.882Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -511,58 +511,6 @@
           "motorcycle"
         ],
         "_imageDims": "540×540"
-      },
-      {
-        "id": 1778395757908,
-        "platform": "instagram",
-        "scheduledDate": "2026-05-10",
-        "scheduledTime": "09:00",
-        "timezone": "America/Los_Angeles",
-        "publishStatus": "scheduled",
-        "publishError": "",
-        "publishedAt": null,
-        "imageName": "The-most-meaningful-gift-you-can-give-mom-this-mothers-day-is-knowing-she-is-protected_0032_instagram.png",
-        "_imageDims": "1080×1080",
-        "title": "",
-        "description": "The Most Meaningful Gift You Can Give Mom This Mother's Day Is Knowing She Is Protected · This Mother's Day, show the most important woman in your life that her future is secure. \n\nGet a free quote to",
-        "board": "",
-        "boardId": "",
-        "destinationUrl": "",
-        "hashtags": "",
-        "caption": " For the Mom Who Gives Everything, Give Her the One Thing That Truly Lasts 🌸\nShe remembers every appointment, every permission slip, and every birthday. She puts everyone else first without thinking twice. This Mother's Day, it is time to think about her.\nLife coverage is one of the most meaningful ways to protect a California mom and everything she has worked so hard to build. Whether she is raising little ones, supporting a growing family, or planning for the years ahead, the right life policy makes sure the people she loves are always taken care of.\nAt Farmers Insurance Young Douglas, we help California mothers and families find life coverage that truly fits their lives.\nThis Mother's Day, give her peace of mind that lasts all year long. Visit YoungDouglasInsurance.com to get started. 💛\n#MothersDay #LifeCoverage #CaliforniaMoms #ProtectYourFamily #YoungDouglasInsurance #MomLife #GiftOfProtection #CaliforniaFamilies #LifeProtection #HappyMothersDay\nGet a free quote to",
-        "location": "",
-        "altText": "This Mother's Day, show the most important woman in your life that her future is secure. Get a free quote today at YoungDouglasInsurance.com.",
-        "postType": "What's New",
-        "content": "The Most Meaningful Gift You Can Give Mom This Mother's Day Is Knowing She Is Protected · This Mother's Day, show the most important woman in your life that her future is secure. \n\nGet a free quote to",
-        "ctaType": "None",
-        "ctaUrl": "",
-        "eventTitle": "",
-        "eventStart": "",
-        "eventEnd": "",
-        "couponCode": "",
-        "redemptionUrl": "",
-        "offerTerms": "",
-        "liText": "",
-        "liVisibility": "PUBLIC",
-        "liAuthorType": "person",
-        "liPageId": "",
-        "liPageName": "",
-        "liArticleUrl": "",
-        "shopifyText": "",
-        "shopifyUrl": "",
-        "bskyText": "",
-        "bskyUrl": "",
-        "tiktokText": "",
-        "tiktokDriveUrl": "",
-        "tiktokLiveUrl": "",
-        "ytText": "",
-        "ytDriveUrl": "",
-        "ytLiveUrl": "",
-        "tags": [
-          "Life",
-          "Spring"
-        ],
-        "liveUrl": ""
       },
       {
         "id": 1776849677023,
@@ -1422,19 +1370,7 @@
         "dimensions": "1080×1080"
       }
     ],
-    "google": [
-      {
-        "id": 1778393539412.7747,
-        "platform": "google",
-        "imageName": "The-most-meaningful-gift-you-can-give-mom-this-mothers-day-is-knowing-she-is-protected_0032_google.png",
-        "notes": "The Most Meaningful Gift You Can Give Mom This Mother's Day Is Knowing She Is Protected · This Mother's Day, show the most important woman in your life that her future is secure. \n\nGet a free quote to",
-        "uploadedAt": "2026-05-10T06:12:19.412Z",
-        "fromBrandCreator": true,
-        "templateName": "Bold Overlay",
-        "format": "png",
-        "dimensions": "1200×900"
-      }
-    ],
+    "google": [],
     "linkedin": [
       {
         "id": 1778367740541.3425,
