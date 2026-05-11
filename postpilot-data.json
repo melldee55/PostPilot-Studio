@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-11T05:55:54.691Z",
+  "lastSaved": "2026-05-11T05:57:16.144Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -265,7 +265,7 @@
       {
         "id": 1778397309291,
         "platform": "pinterest",
-        "scheduledDate": "2026-05-10",
+        "scheduledDate": "2026-05-11",
         "scheduledTime": "08:00",
         "timezone": "America/Los_Angeles",
         "publishStatus": "failed",
@@ -902,7 +902,7 @@
       {
         "id": 1778478951655,
         "platform": "google",
-        "scheduledDate": "2026-05-11",
+        "scheduledDate": "2026-05-10",
         "scheduledTime": "09:00",
         "timezone": "America/Los_Angeles",
         "publishStatus": "published",
@@ -1500,7 +1500,7 @@
     },
     "google": {
       "count": 1,
-      "lastDate": "2026-05-11",
+      "lastDate": "2026-05-10",
       "lastMilestone": 1,
       "freezeTokens": 0,
       "trophies": 0,
