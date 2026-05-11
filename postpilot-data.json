@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-11T05:53:15.043Z",
+  "lastSaved": "2026-05-11T05:55:54.691Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -898,6 +898,59 @@
           "Summer"
         ],
         "_imageDims": "600×450"
+      },
+      {
+        "id": 1778478951655,
+        "platform": "google",
+        "scheduledDate": "2026-05-11",
+        "scheduledTime": "09:00",
+        "timezone": "America/Los_Angeles",
+        "publishStatus": "published",
+        "publishError": "",
+        "publishedAt": "2026-05-11T16:00:00.000Z",
+        "imageName": "The-most-meaningful-gift-you-can-give-mom-this-mothers-day-is-knowing-she-is-protected_0032_google.png",
+        "_imageDims": "1200×900",
+        "title": "",
+        "description": "The Most Meaningful Gift You Can Give Mom This Mother's Day Is Knowing She Is Protected · This Mother's Day, show the most important woman in your life that her future is secure. \n\nGet a free quote to",
+        "board": "",
+        "boardId": "",
+        "destinationUrl": "",
+        "hashtags": "",
+        "caption": "The Most Meaningful Gift You Can Give Mom This Mother's Day Is Knowing She Is Protected · This Mother's Day, show the most important woman in your life that her future is secure. \n\nGet a free quote to",
+        "location": "",
+        "altText": "",
+        "postType": "What's New",
+        "content": "This Mother's Day, Give California Moms the One Gift That Truly Lasts: Life Coverage and Peace of Mind\n\nMother's Day is a time to celebrate the women who hold everything together. The ones who show up every single day, who put their family first without hesitation, and who somehow make it all look effortless. This year, beyond the flowers and the brunches, there is a gift worth thinking about that no store carries. The gift of knowing she is protected.\nLife coverage is one of the most overlooked and most important ways to take care of the mothers in your life. For California moms who are raising families, managing households, and in many cases building careers at the same time, having the right life policy in place means that no matter what happens, the people she loves most will be taken care of.\nAnd for the mothers who are thinking about their own future, life coverage is also a way to build something lasting. Certain life policy options even grow cash value over time, creating a financial foundation that benefits the whole family while she is still here to enjoy it.\nAt Farmers Insurance Young Douglas, we help California mothers and their families find life coverage that fits their real lives and their real needs. This Mother's Day, give her something that truly lasts.\nClick the link below to read more.",
+        "ctaType": "Learn More",
+        "ctaUrl": "https://youngdouglasinsurance.com/pages/whole-life-insurance-quote-california",
+        "eventTitle": "",
+        "eventStart": "",
+        "eventEnd": "",
+        "couponCode": "",
+        "redemptionUrl": "",
+        "offerTerms": "",
+        "liText": "",
+        "liVisibility": "PUBLIC",
+        "liAuthorType": "person",
+        "liPageId": "",
+        "liPageName": "",
+        "liArticleUrl": "",
+        "shopifyText": "",
+        "shopifyUrl": "",
+        "bskyText": "",
+        "bskyUrl": "",
+        "tiktokText": "",
+        "tiktokDriveUrl": "",
+        "tiktokLiveUrl": "",
+        "ytText": "",
+        "ytDriveUrl": "",
+        "ytLiveUrl": "",
+        "tags": [
+          "Life"
+        ],
+        "liveUrl": "https://share.google/DxXQ4JvpgRsRr5Bj4",
+        "manualUpload": true,
+        "postLink": ""
       }
     ],
     "linkedin": [
@@ -1446,9 +1499,9 @@
       "missedDayPending": null
     },
     "google": {
-      "count": 0,
-      "lastDate": "",
-      "lastMilestone": 0,
+      "count": 1,
+      "lastDate": "2026-05-11",
+      "lastMilestone": 1,
       "freezeTokens": 0,
       "trophies": 0,
       "frozenDates": [],
@@ -1579,7 +1632,9 @@
     "Holiday",
     "Milestone",
     "Event",
-    "boat and watercraft"
+    "boat and watercraft",
+    "ATV",
+    "motorcycle"
   ],
   "hiddenPlatforms": [
     "tiktok",
