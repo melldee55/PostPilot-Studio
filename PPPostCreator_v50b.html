@@ -2095,9 +2095,9 @@
       }
 
       #download-area {
-        position: absolute;
-        left: -99999px;
-        top: 0;
+        position: fixed;
+        top: -99999px;
+        left: 0;
         pointer-events: none;
         visibility: hidden;
       }
@@ -6960,9 +6960,9 @@ Your message, caption, or call to action goes right here.</textarea
           x: 0,
           y: 0,
           scrollX: 0,
-          scrollY: 0,
-          windowWidth: fw,
-          windowHeight: fh,
+          scrollY: -99999,
+          windowWidth: Math.max(fw, window.innerWidth || fw),
+          windowHeight: Math.max(fh, window.innerHeight || fh),
         });
         area.innerHTML = "";
         return canvas;
@@ -9297,9 +9297,9 @@ Your message, caption, or call to action goes right here.</textarea
               x: 0,
               y: 0,
               scrollX: 0,
-              scrollY: 0,
-              windowWidth: fw,
-              windowHeight: fh,
+              scrollY: -99999,
+              windowWidth: Math.max(fw, window.innerWidth || fw),
+              windowHeight: Math.max(fh, window.innerHeight || fh),
             });
             area.innerHTML = "";
             // Scale down to a sharp thumbnail using a 2D canvas
@@ -10472,9 +10472,9 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
           x: 0,
           y: 0,
           scrollX: 0,
-          scrollY: 0,
-          windowWidth: fw,
-          windowHeight: fh,
+          scrollY: -99999,
+          windowWidth: Math.max(fw, window.innerWidth || fw),
+          windowHeight: Math.max(fh, window.innerHeight || fh),
         });
         area.innerHTML = "";
         return canvas;
@@ -10511,9 +10511,9 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
           x: 0,
           y: 0,
           scrollX: 0,
-          scrollY: 0,
-          windowWidth: fw,
-          windowHeight: fh,
+          scrollY: -99999,
+          windowWidth: Math.max(fw, window.innerWidth || fw),
+          windowHeight: Math.max(fh, window.innerHeight || fh),
         });
         area.innerHTML = "";
         return canvas;
