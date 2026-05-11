@@ -4029,18 +4029,57 @@ function addCustomTagsBatch(rawInput, skipRender = false) {
   return names; // return ALL names (including existing) so callers can toggle them
 }
 
-// In-place update of the settings tag pills — no full render needed
+// In-place update of the settings tag pills with drag-to-reorder
 function rebuildSettingsTagPills() {
   const container = document.getElementById('tag-mgmt-pills');
   if (!container) return;
-  container.innerHTML = POST_TAGS.map(tag => {
+
+  container.innerHTML = POST_TAGS.map((tag, i) => {
     const isDefault = DEFAULT_POST_TAGS.includes(tag);
-    return `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;border:1px solid ${isDefault ? 'var(--border-light)' : '#5a3e6a'};background:${isDefault ? 'var(--bg-elevated)' : '#2a1a3a'};font-size:11.5px;color:${isDefault ? 'var(--text-secondary)' : '#c084fc'}">
+    return `<span
+      data-tag-idx="${i}"
+      draggable="true"
+      style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;border:1px solid ${isDefault ? 'var(--border-light)' : '#5a3e6a'};background:${isDefault ? 'var(--bg-elevated)' : '#2a1a3a'};font-size:11.5px;color:${isDefault ? 'var(--text-secondary)' : '#c084fc'};cursor:grab;transition:opacity .15s,transform .1s;user-select:none"
+      title="Drag to reorder">
+      <span style="opacity:.4;font-size:9px;margin-right:1px">⠿</span>
       ${isDefault ? '<span style="opacity:.5;font-size:9px">•</span>' : ''}
       ${escapeHtml(tag)}
       ${!isDefault ? `<button onclick="deleteCustomTagSafe('${escapeHtml(tag)}')" style="background:none;border:none;color:#c084fc;cursor:pointer;font-size:13px;line-height:1;padding:0;margin-left:2px;opacity:.7" title="Delete tag">×</button>` : ''}
     </span>`;
   }).join('');
+
+  // Wire up drag-to-reorder
+  let _dragIdx = null;
+  container.querySelectorAll('[data-tag-idx]').forEach(pill => {
+    pill.addEventListener('dragstart', e => {
+      _dragIdx = +pill.dataset.tagIdx;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => pill.style.opacity = '0.4', 0);
+    });
+    pill.addEventListener('dragend', () => {
+      pill.style.opacity = '1';
+      _dragIdx = null;
+    });
+    pill.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      pill.style.transform = 'scale(1.05)';
+    });
+    pill.addEventListener('dragleave', () => {
+      pill.style.transform = '';
+    });
+    pill.addEventListener('drop', e => {
+      e.stopPropagation();
+      pill.style.transform = '';
+      const dstIdx = +pill.dataset.tagIdx;
+      if (_dragIdx === null || _dragIdx === dstIdx) return;
+      const moved = POST_TAGS.splice(_dragIdx, 1)[0];
+      POST_TAGS.splice(dstIdx, 0, moved);
+      _dragIdx = null;
+      savePostTags();
+      rebuildSettingsTagPills();
+    });
+  });
 }
 
 // In-place rebuild of the tag filter chips bar (main post list) — no full render
@@ -4184,6 +4223,7 @@ let state = {
   drafts: { pinterest: [], instagram: [], google: [], linkedin: [], shopify: [], bluesky: [], tiktok: [], youtube: [], twitter: [], kofi: [], facebook: [], tumblr: [], patreon: [] },
   showComposer: false,
   editingPostId: null,
+  deleteConfirmInComposer: false,
   form: null,
   deleteConfirmId: null,
   checkDate: new Date().toISOString().split('T')[0],
@@ -8263,6 +8303,13 @@ function renderStreakBar(platformId) {
 }
 
 function render() {
+  // ── Preserve scroll positions across re-renders ──────────────────────────
+  const _scrollSave = {};
+  ['sidebar', 'content', 'composer-body', 'settings-modal-body'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) _scrollSave[id] = el.scrollTop;
+  });
+
   // Check missed day for active platform on every render
   if (state.streaks && state.activePlatform) checkMissedDay(state.activePlatform);
   const platform = PLATFORMS[state.activePlatform];
@@ -8755,6 +8802,14 @@ function render() {
   `;
 
   bindComposerEvents();
+
+  // ── Restore scroll positions ─────────────────────────────────────────────
+  requestAnimationFrame(() => {
+    Object.entries(_scrollSave).forEach(([id, top]) => {
+      const el = document.getElementById(id);
+      if (el && top > 0) el.scrollTop = top;
+    });
+  });
 }
 
 // ─── COMPOSER MODAL ─────────────────────────────────────────────────────────
@@ -8935,6 +8990,15 @@ function renderComposerModal(platform) {
         <div class="modal-footer" style="justify-content:space-between">
           <div style="display:flex;gap:8px;align-items:center">
             <button class="btn-cancel" onclick="closeComposer()">Cancel</button>
+            ${isEdit ? `
+              ${state.deleteConfirmInComposer
+                ? `<span style="display:flex;align-items:center;gap:6px">
+                    <span style="font-size:12px;color:var(--text-danger);white-space:nowrap">Delete this post?</span>
+                    <button onclick="confirmDeleteFromComposer()" style="padding:6px 12px;border-radius:var(--radius-sm);border:none;background:#ef4444;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Yes, delete</button>
+                    <button onclick="state.deleteConfirmInComposer=false;render()" style="padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-light);background:var(--bg-elevated);color:var(--text-secondary);font-size:12px;cursor:pointer;font-family:inherit">Keep it</button>
+                  </span>`
+                : `<button onclick="state.deleteConfirmInComposer=true;render()" style="padding:6px 12px;border-radius:var(--radius-sm);border:1px solid #7f1d1d;background:rgba(239,68,68,0.08);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s" onmouseenter="this.style.background='rgba(239,68,68,0.18)'" onmouseleave="this.style.background='rgba(239,68,68,0.08)'">🗑 Delete Post</button>`
+              }` : ''}
           </div>
           <div style="display:flex;gap:10px;align-items:center">
             <button class="btn-draft" style="background:#0f2d1a;border-color:#1a5c35;color:#4ade80" onclick="sendComposerToCalendar()" title="Skip the queue — mark as manually uploaded and add directly to the calendar">⬆ Send to Calendar</button>
@@ -9541,16 +9605,46 @@ function renderSettingsModal() {
           <!-- GITHUB SYNC -->
           ${renderGithubSyncSection()}
 
-          <!-- HASHTAG SETS -->
+          <!-- TAG MANAGEMENT + HASHTAG SETS (consolidated) -->
           <details open style="border:1px solid var(--border-light);border-radius:var(--radius-md);overflow:hidden;margin-bottom:18px">
             <summary onclick="void 0" style="cursor:pointer;padding:12px 16px;background:var(--bg-elevated);display:flex;align-items:center;gap:10px;list-style:none;user-select:none" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='var(--bg-elevated)'">
-              <span style="font-size:16px">#️⃣</span>
-              <span style="font-size:13px;font-weight:700;color:var(--text-primary)">Hashtag Sets</span>
-              <span style="font-size:11px;color:var(--text-muted);font-weight:400">${state.hashtagSets.length} saved — insert into any post with one click</span>
+              <span style="font-size:16px">🏷️</span>
+              <span style="font-size:13px;font-weight:700;color:var(--text-primary)">Tags &amp; Hashtag Sets</span>
+              <span style="font-size:11px;color:var(--text-muted);font-weight:400">${POST_TAGS.length} tags · ${state.hashtagSets.length} hashtag sets</span>
               <span style="margin-left:auto;font-size:11px;color:var(--text-muted);font-weight:400">click to expand</span>
             </summary>
             <div style="padding:16px;border-top:1px solid var(--border-light)">
-              ${renderHashtagSetsManager()}
+
+              <!-- Tag Management -->
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:8px">🏷️ Tag Management</div>
+              <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:12px">Add or remove tags. <span style="opacity:.7">Drag to reorder.</span> Default tags (marked with •) cannot be deleted.</div>
+              <div id="tag-mgmt-pills" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+                ${POST_TAGS.map((tag, i) => {
+                  const isDefault = DEFAULT_POST_TAGS.includes(tag);
+                  return `<span data-tag-idx="${i}" draggable="true"
+                    style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;border:1px solid ${isDefault ? 'var(--border-light)' : '#5a3e6a'};background:${isDefault ? 'var(--bg-elevated)' : '#2a1a3a'};font-size:11.5px;color:${isDefault ? 'var(--text-secondary)' : '#c084fc'};cursor:grab;user-select:none">
+                    <span style="opacity:.4;font-size:9px">⠿</span>
+                    ${isDefault ? '<span style="opacity:.5;font-size:9px">•</span>' : ''}
+                    ${escapeHtml(tag)}
+                    ${!isDefault ? `<button onclick="deleteCustomTagSafe('${escapeHtml(tag)}')" style="background:none;border:none;color:#c084fc;cursor:pointer;font-size:13px;line-height:1;padding:0;margin-left:2px;opacity:.7" title="Delete tag">×</button>` : ''}
+                  </span>`;
+                }).join('')}
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="text" id="new-tag-input" placeholder="Auto, Home, Life…" maxlength="120"
+                  style="flex:1;padding:7px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-light);background:var(--bg-input);color:var(--text-primary);font-size:12.5px;font-family:inherit;outline:none"
+                  onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='var(--border-light)'"
+                  onkeydown="if(event.key==='Enter')addTagFromSettings()"/>
+                <button onclick="addTagFromSettings()" style="padding:7px 14px;border-radius:var(--radius-sm);border:1px solid #7e22ce;background:#3b0764;color:#d8b4fe;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s" onmouseenter="this.style.background='#4c0877'" onmouseleave="this.style.background='#3b0764'">+ Add Tag</button>
+              </div>
+              <div id="tag-mgmt-msg" style="font-size:11.5px;margin-top:6px;min-height:16px;color:var(--text-success)"></div>
+
+              <!-- Hashtag Sets -->
+              <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:12px">#️⃣ Hashtag Sets</div>
+                ${renderHashtagSetsManager()}
+              </div>
+
             </div>
           </details>
 
@@ -9627,29 +9721,6 @@ function renderSettingsModal() {
               </button>`;
             }).join('')}
           </div>
-        </div>
-
-        <div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--bg-elevated)">
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:12px">🏷️ Tag Management</div>
-          <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:12px">Add or remove tags. Default tags (marked with •) cannot be deleted.</div>
-          <div id="tag-mgmt-pills" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
-            ${POST_TAGS.map(tag => {
-              const isDefault = DEFAULT_POST_TAGS.includes(tag);
-              return `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;border:1px solid ${isDefault ? 'var(--border-light)' : '#5a3e6a'};background:${isDefault ? 'var(--bg-elevated)' : '#2a1a3a'};font-size:11.5px;color:${isDefault ? 'var(--text-secondary)' : '#c084fc'}">
-                ${isDefault ? '<span style="opacity:.5;font-size:9px">•</span>' : ''}
-                ${escapeHtml(tag)}
-                ${!isDefault ? `<button onclick="deleteCustomTagSafe('${escapeHtml(tag)}')" style="background:none;border:none;color:#c084fc;cursor:pointer;font-size:13px;line-height:1;padding:0;margin-left:2px;opacity:.7" title="Delete tag">×</button>` : ''}
-              </span>`;
-            }).join('')}
-          </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="text" id="new-tag-input" placeholder="Auto, Home, Life…" maxlength="120"
-              style="flex:1;padding:7px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-light);background:var(--bg-input);color:var(--text-primary);font-size:12.5px;font-family:inherit;outline:none"
-              onfocus="this.style.borderColor='#a855f7'" onblur="this.style.borderColor='var(--border-light)'"
-              onkeydown="if(event.key==='Enter')addTagFromSettings()"/>
-            <button onclick="addTagFromSettings()" style="padding:7px 14px;border-radius:var(--radius-sm);border:1px solid #7e22ce;background:#3b0764;color:#d8b4fe;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s" onmouseenter="this.style.background='#4c0877'" onmouseleave="this.style.background='#3b0764'">+ Add Tag</button>
-          </div>
-          <div id="tag-mgmt-msg" style="font-size:11.5px;margin-top:6px;min-height:16px;color:var(--text-success)"></div>
         </div>
 
         <div style="padding:16px 20px;border-top:1px solid var(--border);background:var(--bg-elevated)">
@@ -10444,9 +10515,21 @@ function openComposer(postId) {
   }
 }
 
+function confirmDeleteFromComposer() {
+  const postId   = state.editingPostId;
+  const platform = state.activePlatform;
+  if (!postId) { closeComposer(); return; }
+  state.posts[platform] = (state.posts[platform] || []).filter(p => String(p.id) !== String(postId));
+  savePosts(state.posts);
+  state.deleteConfirmInComposer = false;
+  closeComposer();
+  showToast('Post deleted.');
+}
+
 function closeComposer() {
   state.showComposer = false;
   state.editingPostId = null;
+  state.deleteConfirmInComposer = false;
   state.form = null;
   setTimeout(() => recalcStreak(state.activePlatform), 120);
   render();
@@ -12906,55 +12989,48 @@ function renderGithubSyncSection() {
         Disable sync
       </button>` : ''}
 
-    </div>
-  </details>
-
-  <!-- ─── GITHUB IMAGE STORAGE ─────────────────────────────────────── -->
-  <details class="settings-details" ${gh.imageStorageEnabled ? 'open' : ''}>
-    <summary class="settings-summary">
-      <span class="section-header-icon">🖼️</span>GitHub Image Storage
-      ${gh.imageStorageEnabled
-        ? '<span style="font-size:10px;background:#166534;color:#86efac;padding:1px 7px;border-radius:10px;margin-left:8px">Active</span>'
-        : '<span style="font-size:10px;color:var(--text-muted);margin-left:8px">Off</span>'}
-    </summary>
-    <div class="settings-section">
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.6">
-        Store post and draft images directly in a GitHub repo so they load on <strong>any device</strong> just from your token — no size limits on localStorage, no re-uploading.<br><br>
-        <strong>Requires GitHub Sync to be set up first.</strong> Uses the same token and username.
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Image Repo
-          <span style="font-size:10px;color:var(--text-muted);font-weight:400;margin-left:6px">leave blank to use the same repo as Sync</span>
-        </label>
-        <input type="text" id="gh-img-repo"
-          placeholder="${escapeHtml(gh.repo || 'PostPilot-Studio')}"
-          value="${escapeHtml(gh.imageRepo || '')}"
-          oninput="updateGithubSyncField('imageRepo', this.value)"
-          style="font-family:'DM Sans',sans-serif"/>
-        ${gh.username && (gh.imageRepo || gh.repo) ? `
-        <div style="font-size:10.5px;color:var(--text-muted);margin-top:4px">
-          Images will be stored at:<br>
-          <code style="color:#7aa3c8">raw.githubusercontent.com/${escapeHtml(gh.username)}/${escapeHtml(gh.imageRepo||gh.repo)}/${escapeHtml(gh.branch||'main')}/images/</code>
+      <!-- ── Image Storage (inline, same section) ── -->
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:8px">
+          🖼️ Image Storage
+          ${gh.imageStorageEnabled
+            ? '<span style="font-size:10px;background:#166534;color:#86efac;padding:1px 7px;border-radius:10px;margin-left:6px">Active</span>'
+            : ''}
+        </div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px;line-height:1.5">
+          Store images in GitHub so they sync across every device. Uses the same token and repo.
+        </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label class="form-label">Image Repo
+            <span style="font-size:10px;color:var(--text-muted);font-weight:400;margin-left:6px">blank = same as sync repo</span>
+          </label>
+          <input type="text" id="gh-img-repo"
+            placeholder="${escapeHtml(gh.repo || 'PostPilot-Studio')}"
+            value="${escapeHtml(gh.imageRepo || '')}"
+            oninput="updateGithubSyncField('imageRepo', this.value)"
+            style="font-family:'DM Sans',sans-serif"/>
+          ${gh.username && (gh.imageRepo || gh.repo) ? `
+          <div style="font-size:10px;color:var(--text-muted);margin-top:3px">
+            <code style="color:#7aa3c8">…/${escapeHtml(gh.username)}/${escapeHtml(gh.imageRepo||gh.repo)}/images/</code>
+          </div>` : ''}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="testGithubImageStorage()" class="btn-cancel" style="flex:1;min-width:120px"
+            ${!gh.enabled ? 'disabled title="Enable Sync first"' : ''}>
+            🔍 Test Upload
+          </button>
+          <button onclick="updateGithubSyncField('imageStorageEnabled', ${!gh.imageStorageEnabled});saveGithubConfig();render()"
+            class="btn-save" style="flex:1;min-width:140px"
+            ${!gh.enabled ? 'disabled title="Enable Sync first"' : ''}>
+            ${gh.imageStorageEnabled ? '⏹ Disable Image Storage' : '✅ Enable Image Storage'}
+          </button>
+        </div>
+        ${gh.imageStorageEnabled ? `
+        <div style="margin-top:8px;padding:8px 10px;background:rgba(134,239,172,0.07);border:1px solid #166534;border-radius:7px;font-size:11px;color:#86efac;line-height:1.5">
+          ✅ Images auto-upload to GitHub and sync across all devices.
         </div>` : ''}
       </div>
 
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
-        <button onclick="testGithubImageStorage()" class="btn-cancel" style="flex:1;min-width:140px"
-          ${!gh.enabled ? 'disabled title="Set up GitHub Sync first"' : ''}>
-          🔍 Test Image Upload
-        </button>
-        <button onclick="updateGithubSyncField('imageStorageEnabled', ${!gh.imageStorageEnabled});saveGithubConfig();render()"
-          class="btn-save" style="flex:1;min-width:140px"
-          ${!gh.enabled ? 'disabled title="Set up GitHub Sync first"' : ''}>
-          ${gh.imageStorageEnabled ? '⏹ Disable Image Storage' : '✅ Enable Image Storage'}
-        </button>
-      </div>
-
-      ${gh.imageStorageEnabled ? `
-      <div style="margin-top:10px;padding:10px;background:rgba(134,239,172,0.07);border:1px solid #166534;border-radius:8px;font-size:11.5px;color:#86efac;line-height:1.6">
-        ✅ <strong>Image storage is active.</strong> New images you attach to posts and upload to drafts will be automatically saved to GitHub and will sync across all your devices.
-      </div>` : ''}
     </div>
   </details>`;
 }
