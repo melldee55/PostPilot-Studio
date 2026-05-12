@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-12T19:20:25.072Z",
+  "lastSaved": "2026-05-12T19:22:52.963Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -1294,6 +1294,17 @@
         "isGif": false,
         "notes": "",
         "uploadedAt": "2026-05-11T20:20:46.700Z"
+      },
+      {
+        "id": 1778613637713.375,
+        "platform": "google",
+        "imageName": "The-most-meaningful-gift-you-can-give-mom-this-mothers-day-is-knowing-she-is-protected_0063_google.png",
+        "notes": "The Most Meaningful Gift You Can Give Mom This Mother's Day Is Knowing She Is Protected · This Mother's Day, show the most important woman in your life that her future is secure. Get a free quote toda",
+        "uploadedAt": "2026-05-12T19:20:37.713Z",
+        "fromBrandCreator": true,
+        "templateName": "Split Quote",
+        "format": "png",
+        "dimensions": "1200×900"
       }
     ],
     "linkedin": [],
