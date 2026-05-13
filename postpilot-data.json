@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-13T05:15:01.857Z",
+  "lastSaved": "2026-05-13T05:16:04.258Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -1380,7 +1380,73 @@
         "dimensions": "1200×900"
       }
     ],
-    "linkedin": [],
+    "linkedin": [
+      {
+        "id": 1778649314187.6575,
+        "platform": "linkedin",
+        "imageFull": "https://raw.githubusercontent.com/melldee55/PostPilot-Studio/main/images/1778649267444-nyfa6n.jpg",
+        "imageThumb": "https://raw.githubusercontent.com/melldee55/PostPilot-Studio/main/images/1778649267444-nyfa6n.jpg",
+        "imageName": "photo-1669840797922-f03e9d838ee2.avif",
+        "notes": "What Is an IUL and Why More Californians Are Choosing It for Life Coverage  · Think of an IUL like a piggy bank attached to life coverage. When the market goes up, your money grows. When the market go",
+        "uploadedAt": "2026-05-13T05:15:14.187Z",
+        "tags": [
+          "Life",
+          "IUL",
+          "Info/edu"
+        ],
+        "formSnapshot": {
+          "id": 1776854669628,
+          "platform": "linkedin",
+          "scheduledDate": "2026-04-28",
+          "scheduledTime": "09:00",
+          "publishStatus": "failed",
+          "publishError": "No LinkedIn token saved.",
+          "publishedAt": null,
+          "imageName": "photo-1669840797922-f03e9d838ee2.avif",
+          "title": "",
+          "description": "What Is an IUL and Why More Californians Are Choosing It for Life Coverage  · Think of an IUL like a piggy bank attached to life coverage. When the market goes up, your money grows. When the market go",
+          "board": "",
+          "boardId": "",
+          "destinationUrl": "",
+          "hashtags": "",
+          "caption": "What Is an IUL and Why More Californians Are Choosing It for Life Coverage  · Think of an IUL like a piggy bank attached to life coverage. When the market goes up, your money grows. When the market go",
+          "location": "",
+          "altText": "",
+          "postType": "What's New",
+          "content": "What Is an IUL and Why More Californians Are Choosing It for Life Coverage  · Think of an IUL like a piggy bank attached to life coverage. When the market goes up, your money grows. When the market go",
+          "ctaType": "None",
+          "ctaUrl": "",
+          "eventTitle": "",
+          "eventStart": "",
+          "eventEnd": "",
+          "couponCode": "",
+          "redemptionUrl": "",
+          "offerTerms": "",
+          "liText": "Beyond Basic Life Coverage: Understanding the IUL and Why Your Policy Options Matter More Than You Think\nWhen most people think about life coverage, they picture a straightforward financial safety net. You pay a monthly amount, and if something happens to you, your family is protected. That understanding is correct, but it is far from complete.\nThere is a category of permanent life coverage that goes a step further, and most working adults in California have never heard of it. It is called an Indexed Universal Life policy, or IUL, and the concept is simpler than it sounds.\nThink of it like a piggy bank attached to the stock market. When the market performs well, the cash value inside your policy grows. When the market drops, your balance does not go down with it. There is a built-in floor that protects what you have already accumulated. Over time, that cash value becomes a real financial asset that you can borrow against, use for retirement income, or tap into for major life expenses while you are still living.\nWhat makes the IUL particularly relevant for professionals and business owners in California is its flexibility. Premiums can be adjusted over time, and the policy can serve multiple financial goals at once, providing a death benefit for your family while also functioning as a long term savings and growth vehicle.\nThat said, an IUL is not the right fit for every person or every situation. Term life, whole life, and traditional universal life coverage all have their place depending on your age, your financial goals, your family structure, and your income. The most important thing any Californian can do is understand all of their life coverage options before committing to a single path.\nAt Farmers Insurance Young Douglas, we believe informed clients make the best decisions. We are here to walk you through every option clearly and without pressure, so your coverage actually reflects the life you are building.\nVisit YoungDouglasInsurance.com to start the conversation.",
+          "liVisibility": "PUBLIC",
+          "liAuthorType": "person",
+          "liPageId": "",
+          "liPageName": "",
+          "liArticleUrl": "https://youngdouglasinsurance.com/pages/get-a-free-insurance-quote-california#",
+          "tags": [
+            "Life",
+            "IUL",
+            "Info/edu"
+          ],
+          "_imageDims": "687×1031",
+          "image": "https://raw.githubusercontent.com/melldee55/PostPilot-Studio/main/images/1778649267444-nyfa6n.jpg",
+          "imageOriginal": "https://raw.githubusercontent.com/melldee55/PostPilot-Studio/main/images/1778649267444-nyfa6n.jpg",
+          "imageId": null,
+          "imageOriginalId": null,
+          "imageThumb": null,
+          "imageThumbId": null,
+          "isVideo": false,
+          "isGif": false,
+          "timezone": "America/Los_Angeles",
+          "liveUrl": ""
+        }
+      }
+    ],
     "shopify": [],
     "bluesky": [],
     "tiktok": [],
