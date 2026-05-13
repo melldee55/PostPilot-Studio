@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-13T05:29:15.141Z",
+  "lastSaved": "2026-05-13T05:30:23.176Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -1237,19 +1237,7 @@
   },
   "drafts": {
     "pinterest": [],
-    "instagram": [
-      {
-        "id": 1778649095230.127,
-        "platform": "instagram",
-        "imageName": "3-coverage-types-every-califonia-small-business-needs_0070_instagram.png",
-        "notes": "3 Coverage Types Every Califonia Small Business Needs · Most business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
-        "uploadedAt": "2026-05-13T05:11:35.230Z",
-        "fromBrandCreator": true,
-        "templateName": "Duotone Photo",
-        "format": "png",
-        "dimensions": "1080×1080"
-      }
-    ],
+    "instagram": [],
     "google": [],
     "linkedin": [],
     "shopify": [],
