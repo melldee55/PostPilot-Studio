@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-13T05:12:49.835Z",
+  "lastSaved": "2026-05-13T05:15:01.857Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -1143,7 +1143,7 @@
         "publishStatus": "failed",
         "publishError": "No LinkedIn token saved.",
         "publishedAt": null,
-        "imageName": "What Is an IUL and Why More Californians Are Choosing It for Life Coverage.png",
+        "imageName": "photo-1669840797922-f03e9d838ee2.avif",
         "title": "",
         "description": "What Is an IUL and Why More Californians Are Choosing It for Life Coverage  · Think of an IUL like a piggy bank attached to life coverage. When the market goes up, your money grows. When the market go",
         "board": "",
@@ -1174,7 +1174,13 @@
           "IUL",
           "Info/edu"
         ],
-        "_imageDims": "500×750"
+        "_imageDims": "687×1031",
+        "image": "https://raw.githubusercontent.com/melldee55/PostPilot-Studio/main/images/1778649267444-nyfa6n.jpg",
+        "imageOriginal": "https://raw.githubusercontent.com/melldee55/PostPilot-Studio/main/images/1778649267444-nyfa6n.jpg",
+        "isVideo": false,
+        "isGif": false,
+        "timezone": "America/Los_Angeles",
+        "liveUrl": ""
       },
       {
         "id": 1778395646449,
@@ -1290,7 +1296,7 @@
         "publishStatus": "failed",
         "publishError": "No LinkedIn token saved.",
         "publishedAt": null,
-        "imageName": "BrandPost_0031_linkedin.png",
+        "imageName": "photo-1634109725557-d2b8ac9f6c5c.avif",
         "title": "",
         "description": "What Every California Driver Should Know Before Hitting the Road This Summer · Summer road trips in California are unforgettable until something goes wrong without the right auto coverage in place. Vi",
         "board": "",
@@ -1320,7 +1326,13 @@
           "Auto",
           "Summer"
         ],
-        "_imageDims": "500×750"
+        "_imageDims": "687×1031",
+        "image": "https://raw.githubusercontent.com/melldee55/PostPilot-Studio/main/images/1778649200496-cm9eel.jpg",
+        "imageOriginal": "https://raw.githubusercontent.com/melldee55/PostPilot-Studio/main/images/1778649200496-cm9eel.jpg",
+        "isVideo": false,
+        "isGif": false,
+        "timezone": "America/Los_Angeles",
+        "liveUrl": ""
       }
     ],
     "shopify": [],
