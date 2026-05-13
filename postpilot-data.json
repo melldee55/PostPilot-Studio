@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-13T05:11:29.065Z",
+  "lastSaved": "2026-05-13T05:12:49.835Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -1229,6 +1229,60 @@
         "liveUrl": ""
       },
       {
+        "id": 1778649166774,
+        "platform": "linkedin",
+        "scheduledDate": "2026-05-13",
+        "scheduledTime": "09:00",
+        "timezone": "America/Los_Angeles",
+        "publishStatus": "scheduled",
+        "publishError": "",
+        "publishedAt": null,
+        "imageName": "3-coverage-types-every-califonia-small-business-needs_0070_linkedin.png",
+        "_imageDims": "",
+        "title": "3 Coverage Types Every Califonia Small Business Needs",
+        "description": "Most business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
+        "board": "",
+        "boardId": "",
+        "destinationUrl": "",
+        "hashtags": "",
+        "caption": "3 Coverage Types Every Califonia Small Business Needs\nMost business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
+        "location": "",
+        "altText": "",
+        "postType": "What's New",
+        "content": "Most business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
+        "ctaType": "None",
+        "ctaUrl": "",
+        "eventTitle": "",
+        "eventStart": "",
+        "eventEnd": "",
+        "couponCode": "",
+        "redemptionUrl": "",
+        "offerTerms": "",
+        "liText": "California is one of the most dynamic small business environments in the world. From tech startups in the Bay Area to family owned restaurants in the Central Valley, small businesses are the backbone of this state. But for all the energy that goes into building a business here, far too many small business owners are operating without the foundational coverage that keeps everything from falling apart when something goes wrong.\nThere are three areas of protection that come up again and again as the most critical and most overlooked for California small businesses.\nWorkers compensation coverage is the first. In California, businesses with even one employee are generally required by law to carry workers comp. It covers medical costs and lost income for employees injured on the job, and it shields the business from direct financial liability in those situations. The cost of not having it, both legally and financially, far exceeds the cost of the coverage itself.\nGeneral liability coverage is the second. This protects your business when a client, customer, or third party experiences loss or injury connected to your business operations. For small businesses that interact with the public, work in client spaces, or sell products, liability exposure is a daily reality. One claim without coverage in place can be enough to threaten the entire operation.\nKey person coverage is the third and the one most frequently overlooked. In a small business, there is almost always one individual whose expertise, relationships, or leadership is central to the company's success. If that person is suddenly unable to work due to illness or death, the financial impact can be immediate and severe. Key person coverage provides a critical financial buffer that gives the business the time and resources it needs to stabilize and move forward.\nAt Farmers Insurance Young Douglas, we work directly with California small business owners to build coverage strategies that address all three of these areas in a way that fits their size, their industry, and their budget.\nIf you are a small business owner in California and want to make sure your business is truly protected, visit YoungDouglasInsurance.com to start the conversation.",
+        "liVisibility": "PUBLIC",
+        "liAuthorType": "person",
+        "liPageId": "",
+        "liPageName": "",
+        "liArticleUrl": "https://youngdouglasinsurance.com/pages/business-insurance-quote-california",
+        "shopifyText": "",
+        "shopifyUrl": "",
+        "bskyText": "",
+        "bskyUrl": "",
+        "tiktokText": "",
+        "tiktokDriveUrl": "",
+        "tiktokLiveUrl": "",
+        "ytText": "",
+        "ytDriveUrl": "",
+        "ytLiveUrl": "",
+        "tags": [
+          "Commercial",
+          "Business",
+          "WorkersComp",
+          "Liability"
+        ],
+        "liveUrl": ""
+      },
+      {
         "id": 1776849976031,
         "platform": "linkedin",
         "scheduledDate": "2026-05-22",
@@ -1275,9 +1329,45 @@
     "youtube": []
   },
   "drafts": {
-    "pinterest": [],
-    "instagram": [],
-    "google": [],
+    "pinterest": [
+      {
+        "id": 1778649095230.6147,
+        "platform": "pinterest",
+        "imageName": "3-coverage-types-every-califonia-small-business-needs_0070_pinterest.png",
+        "notes": "3 Coverage Types Every Califonia Small Business Needs · Most business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
+        "uploadedAt": "2026-05-13T05:11:35.230Z",
+        "fromBrandCreator": true,
+        "templateName": "Duotone Photo",
+        "format": "png",
+        "dimensions": "1000×1500"
+      }
+    ],
+    "instagram": [
+      {
+        "id": 1778649095230.127,
+        "platform": "instagram",
+        "imageName": "3-coverage-types-every-califonia-small-business-needs_0070_instagram.png",
+        "notes": "3 Coverage Types Every Califonia Small Business Needs · Most business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
+        "uploadedAt": "2026-05-13T05:11:35.230Z",
+        "fromBrandCreator": true,
+        "templateName": "Duotone Photo",
+        "format": "png",
+        "dimensions": "1080×1080"
+      }
+    ],
+    "google": [
+      {
+        "id": 1778649095231.8713,
+        "platform": "google",
+        "imageName": "3-coverage-types-every-califonia-small-business-needs_0070_google.png",
+        "notes": "3 Coverage Types Every Califonia Small Business Needs · Most business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
+        "uploadedAt": "2026-05-13T05:11:35.231Z",
+        "fromBrandCreator": true,
+        "templateName": "Duotone Photo",
+        "format": "png",
+        "dimensions": "1200×900"
+      }
+    ],
     "linkedin": [],
     "shopify": [],
     "bluesky": [],
