@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-05-13T05:20:59.711Z",
+  "lastSaved": "2026-05-13T05:22:18.077Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -1143,7 +1143,7 @@
         "publishStatus": "failed",
         "publishError": "No LinkedIn token saved.",
         "publishedAt": null,
-        "imageName": "What Is an IUL and Why More Californians Are Choosing It for Life Coverage.png",
+        "imageName": "photo-1669840797922-f03e9d838ee2.avif",
         "title": "",
         "description": "What Is an IUL and Why More Californians Are Choosing It for Life Coverage  · Think of an IUL like a piggy bank attached to life coverage. When the market goes up, your money grows. When the market go",
         "board": "",
@@ -1174,30 +1174,36 @@
           "IUL",
           "Info/edu"
         ],
-        "_imageDims": "500×750"
+        "_imageDims": "687×1031",
+        "image": "https://raw.githubusercontent.com/melldee55/PostPilot-Studio/main/images/1778649267444-nyfa6n.jpg",
+        "imageOriginal": "https://raw.githubusercontent.com/melldee55/PostPilot-Studio/main/images/1778649267444-nyfa6n.jpg",
+        "isVideo": false,
+        "isGif": false,
+        "timezone": "America/Los_Angeles",
+        "liveUrl": ""
       },
       {
-        "id": 1778395646449,
+        "id": 1778649166774,
         "platform": "linkedin",
-        "scheduledDate": "2026-05-10",
+        "scheduledDate": "2026-05-13",
         "scheduledTime": "09:00",
         "timezone": "America/Los_Angeles",
-        "publishStatus": "failed",
-        "publishError": "No LinkedIn token saved.",
+        "publishStatus": "scheduled",
+        "publishError": "",
         "publishedAt": null,
-        "imageName": "The-most-meaningful-gift-you-can-give-mom-this-mothers-day-is-knowing-she-is-protected_0032_linkedin.png",
-        "_imageDims": "1200×627",
-        "title": "",
-        "description": "The Most Meaningful Gift You Can Give Mom This Mother's Day Is Knowing She Is Protected · This Mother's Day, show the most important woman in your life that her future is secure. \n\nGet a free quote to",
+        "imageName": "3-coverage-types-every-califonia-small-business-needs_0070_linkedin.png",
+        "_imageDims": "",
+        "title": "3 Coverage Types Every Califonia Small Business Needs",
+        "description": "Most business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
         "board": "",
         "boardId": "",
         "destinationUrl": "",
         "hashtags": "",
-        "caption": "The Most Meaningful Gift You Can Give Mom This Mother's Day Is Knowing She Is Protected · This Mother's Day, show the most important woman in your life that her future is secure. \n\nGet a free quote to",
+        "caption": "3 Coverage Types Every Califonia Small Business Needs\nMost business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
         "location": "",
         "altText": "",
         "postType": "What's New",
-        "content": "The Most Meaningful Gift You Can Give Mom This Mother's Day Is Knowing She Is Protected · This Mother's Day, show the most important woman in your life that her future is secure. \n\nGet a free quote to",
+        "content": "Most business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
         "ctaType": "None",
         "ctaUrl": "",
         "eventTitle": "",
@@ -1206,12 +1212,12 @@
         "couponCode": "",
         "redemptionUrl": "",
         "offerTerms": "",
-        "liText": "This Mother's Day, the Most Important Thing You Can Do for the California Moms in Your Life Has Nothing to Do With Flowers\n\nThere is something every mother understands deeply. The weight of responsibility for the people she loves. She plans ahead, she prepares, and she protects in ways that often go unrecognized. This Mother's Day, there is a way to honor that instinct in the most meaningful way possible: making sure she is protected too.\nLife coverage is one of the most important financial decisions a family can make, and yet it is one that many California households continue to put off. For mothers who are the primary caregivers, the primary earners, or both, a life policy is not just a financial product. It is a guarantee that the life she has built for her family will continue to stand even if she is no longer there to hold it up.\nBeyond the traditional safety net, many life coverage options available today also offer living benefits, including policies that build real cash value over time and can be accessed during her lifetime for retirement, emergencies, or major milestones. These options are especially meaningful for California mothers who are thinking not just about today but about the decades ahead.\nAt Farmers Insurance Young Douglas, we work with California families to find life protection that fits the real shape of their lives. This Mother's Day is a meaningful reminder that the best thing we can do for the women who give everything is make sure everything they have built is protected.\nVisit YoungDouglasInsurance.com to explore life coverage options for your family.",
+        "liText": "California is one of the most dynamic small business environments in the world. From tech startups in the Bay Area to family owned restaurants in the Central Valley, small businesses are the backbone of this state. But for all the energy that goes into building a business here, far too many small business owners are operating without the foundational coverage that keeps everything from falling apart when something goes wrong.\nThere are three areas of protection that come up again and again as the most critical and most overlooked for California small businesses.\nWorkers compensation coverage is the first. In California, businesses with even one employee are generally required by law to carry workers comp. It covers medical costs and lost income for employees injured on the job, and it shields the business from direct financial liability in those situations. The cost of not having it, both legally and financially, far exceeds the cost of the coverage itself.\nGeneral liability coverage is the second. This protects your business when a client, customer, or third party experiences loss or injury connected to your business operations. For small businesses that interact with the public, work in client spaces, or sell products, liability exposure is a daily reality. One claim without coverage in place can be enough to threaten the entire operation.\nKey person coverage is the third and the one most frequently overlooked. In a small business, there is almost always one individual whose expertise, relationships, or leadership is central to the company's success. If that person is suddenly unable to work due to illness or death, the financial impact can be immediate and severe. Key person coverage provides a critical financial buffer that gives the business the time and resources it needs to stabilize and move forward.\nAt Farmers Insurance Young Douglas, we work directly with California small business owners to build coverage strategies that address all three of these areas in a way that fits their size, their industry, and their budget.\nIf you are a small business owner in California and want to make sure your business is truly protected, visit YoungDouglasInsurance.com to start the conversation.",
         "liVisibility": "PUBLIC",
         "liAuthorType": "person",
         "liPageId": "",
         "liPageName": "",
-        "liArticleUrl": "https://youngdouglasinsurance.com/pages/whole-life-insurance-quote-california",
+        "liArticleUrl": "https://youngdouglasinsurance.com/pages/business-insurance-quote-california",
         "shopifyText": "",
         "shopifyUrl": "",
         "bskyText": "",
@@ -1223,8 +1229,10 @@
         "ytDriveUrl": "",
         "ytLiveUrl": "",
         "tags": [
-          "Life",
-          "Spring"
+          "Commercial",
+          "Business",
+          "WorkersComp",
+          "Liability"
         ],
         "liveUrl": ""
       },
@@ -1236,7 +1244,7 @@
         "publishStatus": "failed",
         "publishError": "No LinkedIn token saved.",
         "publishedAt": null,
-        "imageName": "BrandPost_0031_linkedin.png",
+        "imageName": "photo-1634109725557-d2b8ac9f6c5c.avif",
         "title": "",
         "description": "What Every California Driver Should Know Before Hitting the Road This Summer · Summer road trips in California are unforgettable until something goes wrong without the right auto coverage in place. Vi",
         "board": "",
@@ -1266,7 +1274,13 @@
           "Auto",
           "Summer"
         ],
-        "_imageDims": "500×750"
+        "_imageDims": "687×1031",
+        "image": "https://raw.githubusercontent.com/melldee55/PostPilot-Studio/main/images/1778649200496-cm9eel.jpg",
+        "imageOriginal": "https://raw.githubusercontent.com/melldee55/PostPilot-Studio/main/images/1778649200496-cm9eel.jpg",
+        "isVideo": false,
+        "isGif": false,
+        "timezone": "America/Los_Angeles",
+        "liveUrl": ""
       }
     ],
     "shopify": [],
@@ -1277,11 +1291,11 @@
   "drafts": {
     "pinterest": [
       {
-        "id": 1778649068402.3367,
+        "id": 1778649095230.6147,
         "platform": "pinterest",
         "imageName": "3-coverage-types-every-califonia-small-business-needs_0070_pinterest.png",
         "notes": "3 Coverage Types Every Califonia Small Business Needs · Most business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
-        "uploadedAt": "2026-05-13T05:11:08.402Z",
+        "uploadedAt": "2026-05-13T05:11:35.230Z",
         "fromBrandCreator": true,
         "templateName": "Duotone Photo",
         "format": "png",
@@ -1290,11 +1304,11 @@
     ],
     "instagram": [
       {
-        "id": 1778649068401.3008,
+        "id": 1778649095230.127,
         "platform": "instagram",
         "imageName": "3-coverage-types-every-califonia-small-business-needs_0070_instagram.png",
         "notes": "3 Coverage Types Every Califonia Small Business Needs · Most business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
-        "uploadedAt": "2026-05-13T05:11:08.401Z",
+        "uploadedAt": "2026-05-13T05:11:35.230Z",
         "fromBrandCreator": true,
         "templateName": "Duotone Photo",
         "format": "png",
@@ -1303,11 +1317,11 @@
     ],
     "google": [
       {
-        "id": 1778649068403.1904,
+        "id": 1778649095231.8713,
         "platform": "google",
         "imageName": "3-coverage-types-every-califonia-small-business-needs_0070_google.png",
         "notes": "3 Coverage Types Every Califonia Small Business Needs · Most business owners are one incident away from a major loss.\n\nGet a free quote today at YoungDouglasInsurance.com.",
-        "uploadedAt": "2026-05-13T05:11:08.403Z",
+        "uploadedAt": "2026-05-13T05:11:35.231Z",
         "fromBrandCreator": true,
         "templateName": "Duotone Photo",
         "format": "png",
