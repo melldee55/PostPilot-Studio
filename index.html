@@ -3343,7 +3343,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v58</span>
+              <span class="sb-version">v59</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -3620,6 +3620,7 @@
           </div>
         </div>
 
+        <button type="button" class="us-open-btn" onclick="usOpen('bg')">🔍 Search free photos on Unsplash</button>
         <!-- Extra images + GIF — collapsible sub-section -->
         <div id="extra-media-section">
         <div class="sec-label collapsible" id="extra-media-label" onclick="toggleSubSection('extra-media-section')" style="margin-top:6px;">
@@ -3644,6 +3645,10 @@
               <div>Image 3</div>
             </div>
           </div>
+        </div>
+        <div class="us-open-row">
+          <button type="button" class="us-open-btn" onclick="usOpen('bg2')">🔍 Unsplash → Image 2</button>
+          <button type="button" class="us-open-btn" onclick="usOpen('bg3')">🔍 Unsplash → Image 3</button>
         </div>
         <div class="sl-row">
           <label>Image Scale</label>
@@ -4930,6 +4935,7 @@ Your message, caption, or call to action goes right here.</textarea
         cAuto: true,
         platFormats: {},
         platforms: [],
+        photoCredits: {},
         showZones: false,
         bgInfo: null,
         bg2Info: null,
@@ -6242,6 +6248,7 @@ Your message, caption, or call to action goes right here.</textarea
             cAuto: S.cAuto,
             platFormats: S.platFormats,
             platforms: S.platforms,
+            photoCredits: S.photoCredits,
             showZones: S.showZones,
             bgInfo: S.bgInfo,
             bg2Info: S.bg2Info,
@@ -6356,6 +6363,7 @@ Your message, caption, or call to action goes right here.</textarea
       function sanitizeImage(s) {
         if (!s) return null;
         if (typeof s === 'string' && s.startsWith('https://raw.githubusercontent.com/')) return s;
+        if (typeof s === 'string' && s.startsWith('https://images.unsplash.com/')) return s; // Unsplash photos (hotlinked)
         return (typeof isValidImageDataUrl === "function" && isValidImageDataUrl(s)) ? s : null;
       }
 
@@ -6435,9 +6443,9 @@ Your message, caption, or call to action goes right here.</textarea
           lastSaved:   new Date().toISOString(),
           settings:    _stripSecrets(JSON.parse(localStorage.getItem(LS_S) || '{}')),
           // Only include images stored on GitHub (URLs) — skip local base64 blobs
-          bgUrl:       isGhUrl(S.bg)    ? S.bg    : null,
-          bg2Url:      isGhUrl(S.bg2)   ? S.bg2   : null,
-          bg3Url:      isGhUrl(S.bg3)   ? S.bg3   : null,
+          bgUrl:       (isGhUrl(S.bg) || _usIsUnsplashUrl(S.bg))    ? S.bg    : null,
+          bg2Url:      (isGhUrl(S.bg2) || _usIsUnsplashUrl(S.bg2))   ? S.bg2   : null,
+          bg3Url:      (isGhUrl(S.bg3) || _usIsUnsplashUrl(S.bg3))   ? S.bg3   : null,
           logoUrl:     isGhUrl(S.logo)  ? S.logo  : null,
         };
 
@@ -8746,6 +8754,417 @@ Your message, caption, or call to action goes right here.</textarea
           #mp-toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
           #mp-toast a { color: var(--hi); font-weight: 700; }
           @media (prefers-reduced-motion: reduce) { #mp-toast { transition: none; } }
+        `;
+        document.head.appendChild(st);
+      })();
+      // ══════════════════════════════════════════
+      // UNSPLASH PHOTO SEARCH (v59)
+      // Search free Unsplash photos with your own Access Key and put them in any image
+      // slot (Background, Image 2, Image 3). Follows Unsplash's API rules: photos are
+      // shown and used straight from Unsplash's servers (hotlinked), every photo you use
+      // is reported to Unsplash as a download, and photographers are credited.
+      // ══════════════════════════════════════════
+      const US_KEY_STORE = "bpc_unsplash_key"; // this browser only; never saved to settings or synced
+      const US_SLOTS = [
+        { key: "bg", label: "Background", short: "BG" },
+        { key: "bg2", label: "Image 2", short: "2" },
+        { key: "bg3", label: "Image 3", short: "3" },
+      ];
+      const _us = { q: "", page: 0, totalPages: 0, results: [], active: "bg", busy: false, editKey: false, opener: null };
+      const _usA = (s) =>
+        String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      function _usKey() {
+        try {
+          return localStorage.getItem(US_KEY_STORE) || "";
+        } catch (e) {
+          return "";
+        }
+      }
+      function _usSetKey(k) {
+        try {
+          if (k) localStorage.setItem(US_KEY_STORE, k);
+          else localStorage.removeItem(US_KEY_STORE);
+        } catch (e) {}
+      }
+      // Unsplash asks for these referral tags on every link back to them
+      function _usRef(url) {
+        return url + (url.includes("?") ? "&" : "?") + "utm_source=postpilot_studio&utm_medium=referral";
+      }
+      // Unsplash photo links are safe to keep and sync (short public web addresses)
+      function _usIsUnsplashUrl(s) {
+        return typeof s === "string" && s.startsWith("https://images.unsplash.com/");
+      }
+      const _usLabel = (k) => (US_SLOTS.find((s) => s.key === k) || { label: k }).label;
+      // A slot's credit only counts while that slot still holds the Unsplash photo
+      function _usCreditFor(key) {
+        const c = S.photoCredits && S.photoCredits[key];
+        return c && c.src && S[key] === c.src ? c : null;
+      }
+      function _usStatus(html) {
+        const el = document.getElementById("us-status");
+        if (el) el.innerHTML = html;
+      }
+
+      function usOpen(slot) {
+        _usBuild();
+        if (slot && US_SLOTS.some((s) => s.key === slot)) _us.active = slot;
+        _us.opener = document.activeElement;
+        document.getElementById("us-overlay").style.display = "flex";
+        _usRenderKeyRow();
+        _usRenderSlots();
+        if (!_us.results.length) _usRenderResults(0);
+        else _usMarkResults();
+        setTimeout(() => {
+          const f = _usKey() && !_us.editKey ? document.getElementById("us-q") : document.getElementById("us-key");
+          if (f) f.focus();
+        }, 30);
+      }
+      function usClose() {
+        const ov = document.getElementById("us-overlay");
+        if (ov) ov.style.display = "none";
+        if (_us.opener && _us.opener.focus) {
+          try {
+            _us.opener.focus();
+          } catch (e) {}
+        }
+      }
+      function _usBuild() {
+        if (document.getElementById("us-overlay")) return;
+        const ov = document.createElement("div");
+        ov.id = "us-overlay";
+        ov.className = "us-overlay";
+        ov.setAttribute("role", "dialog");
+        ov.setAttribute("aria-modal", "true");
+        ov.setAttribute("aria-labelledby", "us-title");
+        ov.innerHTML = `
+          <div class="us-modal">
+            <div class="us-head">
+              <div class="us-title" id="us-title">Free photos from Unsplash</div>
+              <button type="button" class="us-x" aria-label="Close" onclick="usClose()">✕</button>
+            </div>
+            <div class="us-keyrow" id="us-keyrow"></div>
+            <div class="us-search">
+              <input id="us-q" type="search" placeholder="Search photos, e.g. happy family new home" aria-label="Search Unsplash photos" />
+              <select id="us-orient" aria-label="Photo shape">
+                <option value="">Any shape</option>
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+                <option value="squarish">Square</option>
+              </select>
+              <button type="button" class="us-go" id="us-go">Search</button>
+            </div>
+            <div class="us-slots" id="us-slots" role="radiogroup" aria-label="Slot to fill"></div>
+            <div class="us-hint">Click a photo to put it in the highlighted slot; the highlight then moves to the next empty slot. Or use a photo's own <b>BG</b> · <b>2</b> · <b>3</b> buttons.</div>
+            <div class="us-results" id="us-results"></div>
+            <div class="us-foot">
+              <button type="button" class="us-more" id="us-more" hidden>Load more</button>
+              <span class="us-status" id="us-status" role="status" aria-live="polite"></span>
+              <a class="us-brand" href="${_usA(_usRef("https://unsplash.com/"))}" target="_blank" rel="noopener">Photos from Unsplash</a>
+            </div>
+          </div>`;
+        document.body.appendChild(ov);
+        // Only a click that starts and ends on the dark backdrop closes it
+        ov.addEventListener("mousedown", (e) => (ov._down = e.target === ov));
+        ov.addEventListener("click", (e) => {
+          if (e.target === ov && ov._down) usClose();
+          ov._down = false;
+        });
+        ov.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            usClose();
+          }
+        });
+        document.getElementById("us-q").addEventListener("keydown", (e) => {
+          if (e.key === "Enter") usSearch(false);
+        });
+        document.getElementById("us-go").addEventListener("click", () => usSearch(false));
+        document.getElementById("us-more").addEventListener("click", () => usSearch(true));
+        document.getElementById("us-orient").addEventListener("change", () => {
+          if (_us.q) usSearch(false);
+        });
+      }
+      function _usRenderKeyRow() {
+        const row = document.getElementById("us-keyrow");
+        if (!row) return;
+        if (_usKey() && !_us.editKey) {
+          row.innerHTML = `<span class="us-keyok">🔑 Your Unsplash key is saved in this browser.</span> <button type="button" class="us-link" id="us-change-key">Change key</button>`;
+          document.getElementById("us-change-key").addEventListener("click", () => {
+            _us.editKey = true;
+            _usRenderKeyRow();
+            document.getElementById("us-key").focus();
+          });
+          return;
+        }
+        row.innerHTML = `
+          <label class="us-keylabel" for="us-key">Your Unsplash Access Key</label>
+          <div class="us-keyinput">
+            <input id="us-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your Access Key (not the Secret Key)" />
+            <button type="button" class="us-go" id="us-key-save">Save key</button>
+          </div>
+          <div class="us-note">It stays in this browser only and is never uploaded or synced. No key yet? Create a free app at
+            <a href="https://unsplash.com/oauth/applications" target="_blank" rel="noopener">unsplash.com/oauth/applications</a> and copy its Access Key.</div>`;
+        const inp = document.getElementById("us-key");
+        inp.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") usSaveKey();
+        });
+        document.getElementById("us-key-save").addEventListener("click", usSaveKey);
+      }
+      function usSaveKey() {
+        const inp = document.getElementById("us-key");
+        const v = ((inp && inp.value) || "").trim();
+        if (!v) {
+          _usStatus("Paste your Access Key first.");
+          if (inp) inp.focus();
+          return;
+        }
+        _usSetKey(v);
+        _us.editKey = false;
+        _usRenderKeyRow();
+        _usStatus("Key saved.");
+        document.getElementById("us-q").focus();
+        if ((document.getElementById("us-q").value || "").trim()) usSearch(false);
+      }
+      function _usRenderSlots() {
+        const box = document.getElementById("us-slots");
+        if (!box) return;
+        box.innerHTML = US_SLOTS.map((s) => {
+          const on = s.key === _us.active;
+          const c = _usCreditFor(s.key);
+          const thumb = S[s.key] ? `<img src="${_usA(S[s.key])}" alt="">` : `<span class="us-slot-empty">Empty</span>`;
+          return `<button type="button" role="radio" aria-checked="${on}" class="us-slot${on ? " on" : ""}" data-slot="${s.key}">
+              <span class="us-slot-thumb">${thumb}</span>
+              <span class="us-slot-text"><span>${s.label}</span><span class="us-slot-by">${c ? "by " + _usA(c.name) : S[s.key] ? "Your image" : "Click to choose"}</span></span></button>`;
+        }).join("");
+        box.querySelectorAll(".us-slot").forEach((b) =>
+          b.addEventListener("click", () => {
+            _us.active = b.dataset.slot;
+            _usRenderSlots();
+            _usMarkResults();
+          }),
+        );
+      }
+
+      async function usSearch(more) {
+        const key = _usKey();
+        const qEl = document.getElementById("us-q");
+        if (!key) {
+          _us.editKey = true;
+          _usRenderKeyRow();
+          _usStatus("Add your Unsplash Access Key to search.");
+          document.getElementById("us-key").focus();
+          return;
+        }
+        const q = more ? _us.q : (qEl.value || "").trim();
+        if (!q) {
+          _usStatus("Type what you're looking for.");
+          qEl.focus();
+          return;
+        }
+        if (_us.busy) return;
+        const orient = document.getElementById("us-orient").value;
+        const page = more ? _us.page + 1 : 1;
+        _us.busy = true;
+        _usStatus(more ? "Loading more…" : "Searching…");
+        try {
+          const url =
+            "https://api.unsplash.com/search/photos?query=" + encodeURIComponent(q) + "&page=" + page + "&per_page=24&content_filter=high" + (orient ? "&orientation=" + orient : "");
+          const res = await fetch(url, { headers: { Authorization: "Client-ID " + key, "Accept-Version": "v1" } });
+          if (res.status === 401) throw new Error("key");
+          if (res.status === 403 || res.status === 429) throw new Error("limit");
+          if (!res.ok) throw new Error("http");
+          const data = await res.json();
+          const got = Array.isArray(data.results) ? data.results.filter((p) => p && p.urls && p.urls.raw) : [];
+          const from = more ? _us.results.length : 0;
+          if (!more) {
+            _us.results = [];
+            _us.q = q;
+          }
+          _us.page = page;
+          _us.totalPages = data.total_pages || 0;
+          _us.results = _us.results.concat(got);
+          _usRenderResults(from);
+          const left = res.headers.get("X-Ratelimit-Remaining");
+          const total = data.total || 0;
+          _usStatus(
+            total
+              ? `${total.toLocaleString()} photos for “${_usA(q)}”${left != null ? ` · ${_usA(left)} requests left this hour` : ""}`
+              : `No photos found for “${_usA(q)}”. Try different words.`,
+          );
+        } catch (e) {
+          if (e.message === "key") {
+            _usStatus("Unsplash didn't accept that key. Make sure you copied the <b>Access Key</b>, not the Secret Key.");
+            _us.editKey = true;
+            _usRenderKeyRow();
+          } else if (e.message === "limit") {
+            _usStatus("This hour's Unsplash requests are used up (new keys get 50 an hour). Try again a little later.");
+          } else {
+            _usStatus("Couldn't reach Unsplash. Check your connection and try again.");
+          }
+        } finally {
+          _us.busy = false;
+          document.getElementById("us-more").hidden = !(_us.page < _us.totalPages);
+        }
+      }
+      function _usRenderResults(from) {
+        const box = document.getElementById("us-results");
+        if (!box) return;
+        if (!from) {
+          box.innerHTML = _us.results.length ? "" : `<div class="us-empty">Search for a photo to get started.</div>`;
+          box.scrollTop = 0;
+        }
+        _us.results.slice(from).forEach((p, j) => {
+          const i = from + j;
+          const el = document.createElement("div");
+          el.className = "us-item";
+          el.dataset.i = i;
+          const alt = p.alt_description || p.description || "Unsplash photo";
+          const name = (p.user && p.user.name) || "Unsplash photographer";
+          const prof = _usRef((p.user && p.user.links && p.user.links.html) || "https://unsplash.com/");
+          el.innerHTML = `
+            <button type="button" class="us-pick" style="background:${_usA(p.color || "#222")}"><img src="${_usA(p.urls.small)}" alt="${_usA(alt)}" loading="lazy" /></button>
+            <div class="us-item-slots" role="group" aria-label="Put this photo in a slot">${US_SLOTS.map(
+              (s) => `<button type="button" data-slot="${s.key}" title="Put in ${s.label}" aria-label="Put in ${s.label}">${s.short}</button>`,
+            ).join("")}</div>
+            <div class="us-by">by <a href="${_usA(prof)}" target="_blank" rel="noopener">${_usA(name)}</a></div>`;
+          el.querySelector(".us-pick").addEventListener("click", () => usUsePhoto(i, _us.active, true));
+          el.querySelectorAll(".us-item-slots button").forEach((b) => b.addEventListener("click", () => usUsePhoto(i, b.dataset.slot, false)));
+          box.appendChild(el);
+        });
+        _usMarkResults();
+      }
+      function _usMarkResults() {
+        document.querySelectorAll("#us-results .us-item").forEach((el) => {
+          const p = _us.results[+el.dataset.i];
+          if (!p) return;
+          const inSlots = US_SLOTS.filter((s) => {
+            const c = _usCreditFor(s.key);
+            return c && c.id === p.id;
+          }).map((s) => s.label);
+          el.classList.toggle("used", inSlots.length > 0);
+          el.dataset.used = inSlots.join(" & ");
+          const pick = el.querySelector(".us-pick");
+          pick.title = (inSlots.length ? `In ${inSlots.join(" & ")}. ` : "") + `Click to put it in ${_usLabel(_us.active)}`;
+          pick.setAttribute("aria-label", pick.title);
+        });
+      }
+      function usUsePhoto(i, slot, advance) {
+        const p = _us.results[i];
+        if (!p || !US_SLOTS.some((s) => s.key === slot)) return;
+        // Unsplash asks apps to report every photo that gets used
+        if (p.links && p.links.download_location) {
+          fetch(p.links.download_location, { headers: { Authorization: "Client-ID " + _usKey(), "Accept-Version": "v1" } }).catch(() => {});
+        }
+        // Used straight from Unsplash's servers, sized for sharp exports
+        const src = p.urls.raw + (p.urls.raw.includes("?") ? "&" : "?") + "w=2400&h=2400&fit=max&q=82&fm=jpg";
+        S[slot] = src;
+        S.photoCredits = Object.assign({}, S.photoCredits || {}, {
+          [slot]: { id: p.id, src, name: (p.user && p.user.name) || "", link: (p.user && p.user.links && p.user.links.html) || "", page: (p.links && p.links.html) || "" },
+        });
+        _smartPending[slot] = true;
+        S[slot + "Info"] = null;
+        updateZonePreview(slot);
+        render();
+        debounceSave();
+        _usStatus(`Added to <b>${_usLabel(slot)}</b>. Photo by ${_usA((p.user && p.user.name) || "Unsplash")}.`);
+        if (advance) {
+          const at = US_SLOTS.findIndex((s) => s.key === slot);
+          const order = US_SLOTS.slice(at + 1).concat(US_SLOTS.slice(0, at));
+          const next = order.find((s) => !S[s.key]) || order[0];
+          if (next) _us.active = next.key;
+        }
+        _usRenderSlots();
+        _usMarkResults();
+      }
+
+      // ── Sidebar: credit the photographer on each slot that holds an Unsplash photo ──
+      function _usShowCredit(key) {
+        if (!US_SLOTS.some((s) => s.key === key)) return;
+        const zone = document.getElementById(key + "-zone");
+        if (!zone) return;
+        let chip = zone.querySelector(".us-zone-credit");
+        const c = _usCreditFor(key);
+        if (!c) {
+          if (chip) chip.remove();
+          return;
+        }
+        if (!chip) {
+          chip = document.createElement("div");
+          chip.className = "us-zone-credit";
+          chip.addEventListener("click", (e) => e.stopPropagation());
+          zone.appendChild(chip);
+        }
+        chip.innerHTML = `📷 <a href="${_usA(_usRef(c.link || "https://unsplash.com/"))}" target="_blank" rel="noopener" title="Photo by ${_usA(c.name)} on Unsplash">${_usA(c.name || "Unsplash")}</a>`;
+      }
+      const _usOrigZonePreview = updateZonePreview;
+      updateZonePreview = function (key) {
+        const r = _usOrigZonePreview.apply(this, arguments);
+        _usShowCredit(key);
+        return r;
+      };
+      const _usOrigClearSlot = clearBgSlot;
+      clearBgSlot = function (key) {
+        const r = _usOrigClearSlot.apply(this, arguments);
+        _usShowCredit(key);
+        return r;
+      };
+
+      (function _usStyles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          .us-open-btn { width: 100%; margin-top: 7px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 10px; border-radius: 7px; border: 1px dashed var(--border); background: transparent; color: var(--text); font: 600 11.5px "DM Sans", sans-serif; cursor: pointer; transition: border-color .15s, color .15s; }
+          .us-open-btn:hover { border-color: var(--hi); color: var(--hi); }
+          .us-open-row { display: flex; gap: 6px; margin: 7px 0 4px; }
+          .us-open-row .us-open-btn { margin-top: 0; font-size: 10.5px; padding: 6px 4px; }
+          .us-zone-credit { position: absolute; left: 4px; bottom: 4px; z-index: 5; max-width: calc(100% - 34px); background: rgba(0,0,0,.72); color: #fff; font-size: 9.5px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .us-zone-credit a { color: #fff; text-decoration: underline; }
+          .us-overlay { position: fixed; inset: 0; z-index: 9995; background: rgba(5,4,15,.74); display: none; align-items: center; justify-content: center; padding: 20px; }
+          .us-modal { width: min(1000px, 100%); max-height: calc(100vh - 40px); display: flex; flex-direction: column; background: var(--sb); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.6); overflow: hidden; font-family: "DM Sans", sans-serif; }
+          .us-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 8px; }
+          .us-title { font-weight: 700; font-size: 16px; color: var(--text); }
+          .us-x { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 8px; width: 30px; height: 30px; cursor: pointer; font-size: 13px; }
+          .us-x:hover { color: var(--text); }
+          .us-keyrow { padding: 0 18px 10px; font-size: 12px; color: var(--muted); }
+          .us-keylabel { display: block; font-weight: 700; color: var(--text); margin-bottom: 5px; }
+          .us-keyinput, .us-search { display: flex; gap: 6px; }
+          .us-search { padding: 0 18px 10px; }
+          .us-keyinput input, .us-search input, .us-search select { flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font: 13px "DM Sans", sans-serif; padding: 9px 11px; outline: none; }
+          .us-search input { flex: 1 1 auto; width: auto; }
+          .us-search select { flex: 0 0 auto; width: auto; max-width: 150px; }
+          .us-search .us-go, .us-keyinput .us-go { flex: 0 0 auto; width: auto; }
+          .us-keyinput input:focus, .us-search input:focus, .us-search select:focus { border-color: var(--hi); }
+          .us-note { margin-top: 6px; font-size: 11px; line-height: 1.45; }
+          .us-note a, .us-link { color: var(--hi); }
+          .us-link { background: none; border: none; cursor: pointer; font: inherit; text-decoration: underline; padding: 0; }
+          .us-go { background: var(--hi); color: #1a1206; border: none; border-radius: 8px; font: 700 13px "DM Sans", sans-serif; padding: 9px 16px; cursor: pointer; white-space: nowrap; }
+          .us-slots { display: flex; gap: 8px; padding: 0 18px 8px; }
+          .us-slot { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 6px; cursor: pointer; color: var(--muted); font: 600 12px "DM Sans", sans-serif; text-align: left; }
+          .us-slot.on { border-color: var(--hi); color: var(--text); box-shadow: 0 0 0 2px var(--hi-dim); }
+          .us-slot-thumb { width: 44px; height: 44px; border-radius: 7px; overflow: hidden; background: rgba(255,255,255,.05); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+          .us-slot-thumb img { width: 100%; height: 100%; object-fit: cover; }
+          .us-slot-empty { font-size: 9.5px; color: var(--muted); }
+          .us-slot-text { display: flex; flex-direction: column; min-width: 0; }
+          .us-slot-by { font-weight: 500; font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .us-hint { padding: 0 18px 10px; font-size: 11px; color: var(--muted); }
+          .us-results { flex: 1; overflow-y: auto; padding: 2px 18px 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 12px; align-content: start; min-height: 220px; }
+          .us-empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 50px 0; font-size: 13px; }
+          .us-item { position: relative; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+          .us-pick { display: block; width: 100%; aspect-ratio: 4 / 3; border: 2px solid transparent; border-radius: 9px; overflow: hidden; padding: 0; cursor: pointer; }
+          .us-pick img { width: 100%; height: 100%; object-fit: cover; display: block; }
+          .us-pick:hover, .us-pick:focus-visible { border-color: var(--hi); outline: none; }
+          .us-item.used .us-pick { border-color: var(--acc); }
+          .us-item.used::before { content: "✓ " attr(data-used); position: absolute; top: 6px; left: 6px; z-index: 2; background: var(--acc); color: #fff; font: 700 10px "DM Sans", sans-serif; padding: 2px 7px; border-radius: 999px; pointer-events: none; }
+          .us-item-slots { display: flex; gap: 4px; }
+          .us-item-slots button { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font: 600 10.5px "DM Sans", sans-serif; padding: 4px 0; cursor: pointer; }
+          .us-item-slots button:hover { border-color: var(--hi); color: var(--hi); }
+          .us-by { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .us-by a { color: var(--text); }
+          .us-foot { display: flex; align-items: center; gap: 12px; padding: 10px 18px 14px; border-top: 1px solid var(--border); }
+          .us-more { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 7px 14px; font: 600 12px "DM Sans", sans-serif; cursor: pointer; }
+          .us-status { flex: 1; font-size: 12px; color: var(--muted); }
+          .us-brand { font-size: 11px; color: var(--muted); }
+          .us-open-btn:focus-visible, .us-x:focus-visible, .us-go:focus-visible, .us-slot:focus-visible, .us-item-slots button:focus-visible, .us-more:focus-visible, .us-link:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+          @media (max-width: 640px) { .us-slots { flex-direction: column; } .us-search { flex-wrap: wrap; } }
         `;
         document.head.appendChild(st);
       })();
