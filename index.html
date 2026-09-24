@@ -3343,7 +3343,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v61</span>
+              <span class="sb-version">v62</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -3425,7 +3425,7 @@
             </button>
           </div>
         </div>
-        <button type="button" class="pc-brief-btn" onclick="pcOpenBrief()">📋 Paste a post brief</button>
+        <button type="button" class="pc-brief-btn" onclick="pcOpenBrief()" title="Or press Ctrl+V anywhere in the Post Creator">📋 Paste post content</button>
         <div class="mp-hint">Pick every platform this post is for</div>
         <div class="mp-chips" id="mp-chips" role="group" aria-label="Platforms for this post"></div>
         <div class="mp-view" id="mp-view" style="display: none">
@@ -4953,6 +4953,8 @@ Your message, caption, or call to action goes right here.</textarea
         postLink: "",
         altText: "",
         photoIdea: "",
+        links: {},
+        alts: {},
         showZones: false,
         bgInfo: null,
         bg2Info: null,
@@ -6271,6 +6273,8 @@ Your message, caption, or call to action goes right here.</textarea
             postLink: S.postLink,
             altText: S.altText,
             photoIdea: S.photoIdea,
+            links: S.links,
+            alts: S.alts,
             showZones: S.showZones,
             bgInfo: S.bgInfo,
             bg2Info: S.bg2Info,
@@ -8637,8 +8641,10 @@ Your message, caption, or call to action goes right here.</textarea
         return r;
       };
       // "Send to PostPilot" starts with the platforms chosen for this post
+      // Platforms the Scheduler can hold (Facebook, X and Threads use Open ↗ and 📋 Caption instead)
+      const MP_SCHEDULER = new Set(["pinterest", "instagram", "google", "linkedin", "shopify", "bluesky", "tiktok", "youtube"]);
       function _mpPfDefaults() {
-        const ok = (p) => PF_PLATFORMS.some((x) => x.id === p);
+        const ok = (p) => MP_SCHEDULER.has(p) && PF_PLATFORMS.some((x) => x.id === p);
         return [S.platform].concat(mpList().filter((p) => p !== S.platform)).filter(ok);
       }
 
@@ -9642,6 +9648,7 @@ Your message, caption, or call to action goes right here.</textarea
       // ══════════════════════════════════════════
       const PC_LIMITS = { instagram: 2200, linkedin: 3000, pinterest: 500, google: 1500, twitter: 280, threads: 500, bluesky: 300 };
       const PC_PIN_TITLE_LIMIT = 100;
+      const PC_LINKED = new Set(["pinterest", "google", "linkedin", "bluesky", "shopify"]);
       const PC_TAGGY = new Set(["instagram", "facebook", "linkedin", "pinterest", "tiktok", "twitter", "threads", "bluesky"]);
       const PC_PLAT = {
         instagram: "instagram", ig: "instagram", insta: "instagram", facebook: "facebook", fb: "facebook", meta: "facebook",
@@ -9663,23 +9670,45 @@ Your message, caption, or call to action goes right here.</textarea
         hashtags: "hashtags",
         notes: "ignore", note: "ignore", template: "ignore", date: "ignore", schedule: "ignore", time: "ignore",
       };
-      const PC_INSTRUCTIONS = `When a post is final, end your reply with a PostPilot brief in exactly this format:
-
-=== POSTPILOT BRIEF ===
-Headline: (short, for the image, under 60 characters)
-Body: (1 or 2 short sentences for the image)
-Platforms: Instagram, Facebook, Pinterest, Google Business
-Photo: (3 to 6 words to search Unsplash for)
-Link: (the page this post points to)
-Alt text: (one sentence describing the image)
-Pin title: (up to 100 characters)
-Caption (Instagram): (full caption, hashtags at the end)
-Caption (Facebook): (full caption)
-Caption (Pinterest): (pin description, up to 500 characters)
-Caption (Google Business): (up to 1,500 characters, no hashtags)
-=== END BRIEF ===
-
-Only list the platforms this post is for, with one caption line per platform. A caption can run over several lines.`;
+      const PC_INSTRUCTIONS = `Image text: [15-word summary]
+SEO headline: [headline]
+SEO summary: [summary]
+Link:[blog URL]
+──────────────────────────────
+Instagram ([count] characters)
+Caption:
+[caption, ending with blog CTA and hashtags]
+──────────────────────────────
+Facebook ([count] characters)
+Post:
+[post, with the blog URL near the end, then hashtags]
+──────────────────────────────
+LinkedIn ([count] characters)
+Link: [blog URL]
+Post:
+[LinkedIn SEO headline as the first line]
+[post body and hashtags]
+──────────────────────────────
+Pinterest (title [count], description [count] characters)
+Link: [blog URL]
+Pin (SEO RICH) title: [SEO-rich title with emoji]
+Description: [description with emoji after the CTA, then hashtags]
+SEO summary which will serve as Alt Text: [summary]
+──────────────────────────────
+Google Business ([count] characters)
+Link: [blog URL]
+Post:
+[Google Business SEO headline as the first line]
+[post body ending with "Learn More by clicking the button below!"]
+──────────────────────────────
+X ([count] of 280 characters, with the link counted as 23)
+Post:
+[post, link, hashtags]
+──────────────────────────────
+Bluesky ([count] of 300 characters)
+Link: [blog URL]
+Post:
+[post and hashtag]`;
 
       function _pcNorm(s) {
         return String(s || "").toLowerCase().replace(/[*_`#]/g, "").replace(/-/g, " ").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
@@ -9712,7 +9741,29 @@ Only list the platforms this post is for, with one caption line per platform. A 
         }
         return null;
       }
-      // Read a pasted brief into its parts (unknown lines stay with the field above them)
+      // Separator lines (──────, ----, ====, ____) and platform headings like "Instagram (2,150 characters)"
+      const _PC_SEP = /^\s*([─━—–\-_=*·•])\1{2,}\s*$/;
+      const _PC_EMOJI = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu;
+      const _PC_COUNTED = /\(\s*[^)]*\d[^)]*characters?[^)]*\)\s*$/i;
+      function _pcHeading(line) {
+        const s = String(line || "").replace(/[*_`#>]/g, "").replace(_PC_EMOJI, "").trim();
+        if (!s) return null;
+        const head = s.replace(/\s*\(.*$/, "").replace(/\s*[:：]\s*$/, "").trim();
+        if (!head || head.length > 30 || /[:：]/.test(head)) return null;
+        const p = _pcPlat(head);
+        return p && p !== "all" ? p : null;
+      }
+      const _PC_RX = {
+        caption: /^(?:caption|post|text|copy)\s*[:：]\s*(.*)$/i,
+        desc: /^description\s*[:：]\s*(.*)$/i,
+        link: /^(?:link|url|blog url|blog link|destination (?:link|url))\s*[:：]\s*(.*)$/i,
+        pintitle: /^(?:pin\b[^:：]*\btitle|pinterest\b[^:：]*\btitle|title)\s*[:：]\s*(.*)$/i,
+        alt: /^(?:seo summary[^:：]*alt[- ]?text|alt[- ]?text)\s*[:：]\s*(.*)$/i,
+        imgtext: /^image text\s*[:：]\s*(.*)$/i,
+        headline: /^(?:seo headline|image headline|headline)\s*[:：]\s*(.*)$/i,
+        summary: /^seo summary\s*[:：]\s*(.*)$/i,
+      };
+      // Read pasted post content into its parts
       function pcParseBrief(text) {
         let t = String(text || "").replace(/\r\n?/g, "\n");
         const start = t.search(/=+\s*postpilot brief\s*=+/i);
@@ -9721,28 +9772,104 @@ Only list the platforms this post is for, with one caption line per platform. A 
           const end = t.search(/=+\s*end(\s+brief)?\s*=+/i);
           if (end >= 0) t = t.slice(0, end);
         }
-        const out = { captions: {} };
-        let cur = null;
-        t.split("\n").forEach((line) => {
-          const m = _PC_LINE.exec(line);
-          const key = m ? _pcKey(m[1], m[2]) : null;
-          if (key) {
-            cur = key;
-            if (key.field === "ignore") return;
-            if (key.field === "caption") out.captions[key.plat] = m[3] || "";
-            else out[key.field] = m[3] || "";
-            return;
+        const out = { captions: {}, links: {}, alts: {} };
+        let sec = null, // platform section we're in
+          cap = null, // platform whose caption we're collecting
+          hdr = null, // header / older-style field we're collecting
+          afterSep = true,
+          blanks = 0;
+        const addTo = (obj, key, line, sep) => (obj[key] = obj[key] ? obj[key] + sep + line : line);
+        for (const raw of t.split("\n")) {
+          const line = raw.replace(/\s+$/, "");
+          if (!line.trim()) {
+            blanks++;
+            // Two blank lines end a caption and its section (so a closing remark isn't picked up)
+            if (blanks >= 2) {
+              if (cap) sec = null;
+              cap = null;
+              if (hdr && hdr.field === "caption") hdr = null;
+            }
+            if (cap && out.captions[cap] != null) out.captions[cap] += "\n";
+            else if (hdr && hdr.field === "caption" && out.captions[hdr.plat] != null) out.captions[hdr.plat] += "\n";
+            continue;
           }
-          if (!cur || cur.field === "ignore") return;
-          if (cur.field === "caption") out.captions[cur.plat] = (out.captions[cur.plat] != null ? out.captions[cur.plat] + "\n" : "") + line;
-          else out[cur.field] = (out[cur.field] != null ? out[cur.field] + "\n" : "") + line;
-        });
+          blanks = 0;
+          if (_PC_SEP.test(line)) {
+            sec = cap = hdr = null;
+            afterSep = true;
+            continue;
+          }
+          const L = line.replace(/\*\*|__/g, "").replace(/^\s*[-*•>]\s+/, "").trim();
+          const hp = _pcHeading(L);
+          if (hp && !_PC_RX.caption.test(L) && (afterSep || !cap || _PC_COUNTED.test(L))) {
+            sec = hp;
+            cap = hdr = null;
+            afterSep = false;
+            continue;
+          }
+          afterSep = false;
+          let m;
+          if (sec) {
+            if (cap) {
+              // A caption runs to the end of its section, except for these labels
+              if ((m = _PC_RX.alt.exec(L))) {
+                out.alts[sec] = m[1].trim();
+                cap = null;
+              } else if (sec === "pinterest" && (m = _PC_RX.pintitle.exec(L))) {
+                out.pintitle = m[1].trim();
+                cap = null;
+              } else addTo(out.captions, cap, line, "\n");
+              continue;
+            }
+            if ((m = _PC_RX.caption.exec(L)) || (m = _PC_RX.desc.exec(L))) {
+              cap = sec;
+              out.captions[sec] = m[1] || "";
+            } else if ((m = _PC_RX.link.exec(L))) out.links[sec] = m[1].trim();
+            else if ((m = _PC_RX.pintitle.exec(L))) {
+              if (sec === "pinterest") out.pintitle = m[1].trim();
+            } else if ((m = _PC_RX.alt.exec(L))) out.alts[sec] = m[1].trim();
+            else if (out.captions[sec] == null) {
+              cap = sec; // text right under a heading is that platform's caption
+              out.captions[sec] = line;
+            }
+            continue;
+          }
+          // Header block (and older "Key: value" briefs)
+          if ((m = _PC_RX.imgtext.exec(L))) {
+            out.body = m[1];
+            hdr = { field: "body" };
+            continue;
+          }
+          if ((m = _PC_RX.headline.exec(L))) {
+            out.headline = m[1];
+            hdr = { field: "headline" };
+            continue;
+          }
+          if ((m = _PC_RX.summary.exec(L))) {
+            out.summary = m[1];
+            hdr = { field: "summary" };
+            continue;
+          }
+          const km = _PC_LINE.exec(line);
+          const key = km ? _pcKey(km[1], km[2]) : null;
+          if (key) {
+            hdr = key;
+            if (key.field === "ignore") continue;
+            if (key.field === "caption") out.captions[key.plat] = km[3] || "";
+            else out[key.field] = km[3] || "";
+            continue;
+          }
+          if (!hdr || hdr.field === "ignore") continue;
+          if (hdr.field === "caption") addTo(out.captions, hdr.plat, line, "\n");
+          else addTo(out, hdr.field, line, "\n");
+        }
         const tidy = (v) => String(v || "").replace(/^\s+|\s+$/g, "").replace(/\n{3,}/g, "\n\n");
-        ["headline", "body", "platforms", "photo", "link", "alt", "pintitle", "hashtags"].forEach((k) => {
+        ["headline", "body", "summary", "platforms", "photo", "link", "alt", "pintitle", "hashtags"].forEach((k) => {
           if (out[k] != null) out[k] = tidy(out[k]).replace(/\s*\n\s*/g, k === "body" ? "\n" : " ");
         });
         Object.keys(out.captions).forEach((p) => (out.captions[p] = tidy(out.captions[p])));
-        // Which platforms: the Platforms line, or else the ones that have captions
+        Object.keys(out.links).forEach((p) => (out.links[p] = tidy(out.links[p])));
+        Object.keys(out.alts).forEach((p) => (out.alts[p] = tidy(out.alts[p])));
         const unknown = [];
         let plats = [];
         if (out.platforms) {
@@ -9753,16 +9880,26 @@ Only list the platforms this post is for, with one caption line per platform. A 
             } else unknown.push(s);
           });
         }
-        if (!plats.length) plats = Object.keys(out.captions).filter((p) => p !== "all" && PLATS[p]);
+        if (!plats.length) plats = MP_ORDER.filter((p) => PLATS[p] && (out.captions[p] || out.links[p]));
         out.plats = plats;
         out.unknown = unknown;
-        // A separate Hashtags line goes at the end of captions that don't have hashtags yet
         if (out.hashtags) {
           Object.keys(out.captions).forEach((p) => {
             if (PC_TAGGY.has(p) && out.captions[p] && !/(^|\s)#\w/.test(out.captions[p])) out.captions[p] += "\n\n" + out.hashtags;
           });
         }
         return out;
+      }
+      // Does pasted text look like post content? (used for Ctrl+V anywhere)
+      function pcLooksLikeBrief(t) {
+        if (!t || t.length < 40) return false;
+        let score = 0;
+        if (/^\W*image text\W*\s*[:：]/im.test(t)) score++;
+        if (/^\W*seo headline\W*\s*[:：]/im.test(t)) score++;
+        if (/^\W*seo summary\W*\s*[:：]/im.test(t)) score++;
+        if (/=+\s*postpilot brief\s*=+/i.test(t)) score += 2;
+        if (t.split(/\r?\n/).filter((l) => _pcHeading(l.replace(/\*\*|__/g, "").trim()) && _PC_COUNTED.test(l)).length >= 2) score++;
+        return score >= 2;
       }
       // Fill everything from a brief. Text fields get "typed" so the rest of the app (including
       // the automatic file name) reacts exactly as it does to typing.
@@ -9783,15 +9920,18 @@ Only list the platforms this post is for, with one caption line per platform. A 
           filled.push("Body");
         }
         // A brief is a new post: replace the previous post's captions and extras
-        typeInto("originalPostText", b.captions.all || "");
-        if (b.captions.all) filled.push("Original Post (main caption)");
+        const main = b.captions.all || b.summary || "";
+        typeInto("originalPostText", main);
+        if (main) filled.push(b.captions.all ? "Original Post (main caption)" : "Original Post (from the SEO summary)");
         S.captions = {};
         Object.keys(b.captions).forEach((p) => {
           if (p !== "all" && b.captions[p]) S.captions[p] = b.captions[p];
         });
         S.pinTitle = b.pintitle || "";
-        S.postLink = b.link || "";
-        S.altText = b.alt || "";
+        S.links = Object.assign({}, b.links || {});
+        S.alts = Object.assign({}, b.alts || {});
+        S.postLink = b.link || Object.values(S.links)[0] || "";
+        S.altText = b.alt || b.summary || "";
         S.photoIdea = b.photo || "";
         if (b.plats.length) {
           _mpSet(b.plats);
@@ -9804,8 +9944,8 @@ Only list the platforms this post is for, with one caption line per platform. A 
         const capPlats = Object.keys(S.captions);
         if (capPlats.length) filled.push("Captions for " + capPlats.map(_mpName).join(", "));
         if (S.pinTitle) filled.push("Pinterest title");
-        if (S.postLink) filled.push("Link");
-        if (S.altText) filled.push("Alt text");
+        if (S.postLink) filled.push("Link" + (Object.keys(S.links).length ? ` (and ${Object.keys(S.links).map(_mpName).join(", ")})` : ""));
+        if (S.altText) filled.push("Alt text" + (Object.keys(S.alts).length ? ` (plus ${Object.keys(S.alts).map(_mpName).join(", ")}'s own)` : ""));
         return filled;
       }
 
@@ -9813,9 +9953,14 @@ Only list the platforms this post is for, with one caption line per platform. A 
       function pcCaptionFor(pid) {
         return (S.captions && S.captions[pid]) || S.originalPost || [S.header, S.content].filter(Boolean).join("\n");
       }
+      // How the platform counts: X counts every link as 23 characters
+      function pcLen(pid, text) {
+        text = String(text || "");
+        return pid === "twitter" ? text.replace(/https?:\/\/\S+/gi, "x".repeat(23)).length : text.length;
+      }
       function pcOver(pid) {
         const lim = PC_LIMITS[pid];
-        return !!lim && pcCaptionFor(pid).length > lim;
+        return !!lim && pcLen(pid, pcCaptionFor(pid)) > lim;
       }
       function pcCaptionsForSend() {
         const o = {};
@@ -9854,7 +9999,7 @@ Only list the platforms this post is for, with one caption line per platform. A 
         const lim = PC_LIMITS[pid];
         _mpToast(
           ok
-            ? `${_mpName(pid)} caption copied (${text.length.toLocaleString()} characters).` + (lim && text.length > lim ? ` <b>It's over ${_mpName(pid)}'s ${lim.toLocaleString()}-character limit.</b>` : "")
+            ? `${_mpName(pid)} caption copied (${pcLen(pid, text).toLocaleString()} characters).` + (lim && pcLen(pid, text) > lim ? ` <b>It's over ${_mpName(pid)}'s ${lim.toLocaleString()}-character limit.</b>` : "")
             : "Couldn't copy the caption. Select it in the sidebar and copy it there.",
         );
         if (ok && btn) {
@@ -9877,7 +10022,7 @@ Only list the platforms this post is for, with one caption line per platform. A 
       function _pcCount(pid) {
         const row = document.querySelector(`#pc-captions .pc-cap[data-p="${pid}"]`);
         if (!row) return;
-        const n = pcCaptionFor(pid).length,
+        const n = pcLen(pid, pcCaptionFor(pid)),
           lim = PC_LIMITS[pid];
         const c = row.querySelector(".pc-count");
         c.textContent = lim ? `${n.toLocaleString()} / ${lim.toLocaleString()}` : `${n.toLocaleString()} characters`;
@@ -9915,6 +10060,8 @@ Only list the platforms this post is for, with one caption line per platform. A 
                 <button type="button" class="pc-copy" title="Copy the ${_mpName(p)} caption">📋 Copy</button></div>
               ${p === "pinterest" ? `<div class="pc-pinrow"><input type="text" class="pc-pintitle" placeholder="Pin title (up to ${PC_PIN_TITLE_LIMIT} characters)" aria-label="Pinterest title" /><span class="pc-tcount"></span><button type="button" class="pc-copy pc-copy-title" title="Copy the Pinterest title">📋</button></div>` : ""}
               <textarea class="pc-text" rows="3" placeholder="Leave empty to use your Original Post${lim ? ` (limit ${lim.toLocaleString()})` : ""}" aria-label="${_mpName(p)} caption"></textarea>
+              ${PC_LINKED.has(p) ? `<input type="text" inputmode="url" class="pc-plink" placeholder="${_mpName(p)} link (empty = main Link)" aria-label="${_mpName(p)} link" />` : ""}
+              ${p === "pinterest" ? `<input type="text" class="pc-palt" placeholder="Pinterest alt text (empty = main Alt text)" aria-label="Pinterest alt text" />` : ""}
             </div>`;
           })
           .join("");
@@ -9931,6 +10078,26 @@ Only list the platforms this post is for, with one caption line per platform. A 
             debounceSave();
           });
           row.querySelector(".pc-copy:not(.pc-copy-title)").addEventListener("click", (e) => pcCopyCaption(p, e.currentTarget));
+          const pl = row.querySelector(".pc-plink");
+          if (pl) {
+            pl.value = (S.links && S.links[p]) || "";
+            pl.addEventListener("input", () => {
+              S.links = Object.assign({}, S.links || {});
+              if (pl.value.trim()) S.links[p] = pl.value.trim();
+              else delete S.links[p];
+              debounceSave();
+            });
+          }
+          const pa = row.querySelector(".pc-palt");
+          if (pa) {
+            pa.value = (S.alts && S.alts[p]) || "";
+            pa.addEventListener("input", () => {
+              S.alts = Object.assign({}, S.alts || {});
+              if (pa.value.trim()) S.alts[p] = pa.value.trim();
+              else delete S.alts[p];
+              debounceSave();
+            });
+          }
           const pt = row.querySelector(".pc-pintitle");
           if (pt) {
             pt.value = S.pinTitle || "";
@@ -9986,6 +10153,23 @@ Only list the platforms this post is for, with one caption line per platform. A 
         }
       }
 
+      // Ctrl+V anywhere (outside a text box) with your post content fills everything at once
+      window.addEventListener(
+        "paste",
+        (e) => {
+          const el = e.target;
+          if (el && el.closest && el.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']")) return;
+          if (document.getElementById("studio-gate") && !document.body.classList.contains("unlocked")) return;
+          const text = e.clipboardData && e.clipboardData.getData("text/plain");
+          if (!pcLooksLikeBrief(text)) return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          pcOpenBrief();
+          document.getElementById("pc-brief-text").value = text;
+          pcFillFromBrief();
+        },
+        true,
+      );
       // ── The "Paste a post brief" window ──
       function pcOpenBrief() {
         let ov = document.getElementById("pc-brief-overlay");
@@ -9998,15 +10182,15 @@ Only list the platforms this post is for, with one caption line per platform. A 
           ov.setAttribute("aria-labelledby", "pc-brief-title");
           ov.innerHTML = `
             <div class="us-modal pc-modal">
-              <div class="us-head"><div class="us-title" id="pc-brief-title">Paste a post brief</div><button type="button" class="us-x" aria-label="Close" onclick="pcCloseBrief()">✕</button></div>
+              <div class="us-head"><div class="us-title" id="pc-brief-title">Paste your post content</div><button type="button" class="us-x" aria-label="Close" onclick="pcCloseBrief()">✕</button></div>
               <div class="pc-body">
-                <textarea id="pc-brief-text" spellcheck="false" placeholder="Paste the brief from your Claude project here: headline, body, platforms, photo, link, alt text and a caption for each platform."></textarea>
+                <textarea id="pc-brief-text" spellcheck="false" placeholder="Paste your post content here (Image text, SEO headline, SEO summary, Link, then a section per platform). Tip: you can also just press Ctrl+V anywhere in the Post Creator."></textarea>
                 <div class="pc-actions"><button type="button" class="us-go" id="pc-brief-go">Fill it in</button><span class="us-status" id="pc-brief-status" role="status" aria-live="polite"></span></div>
                 <div id="pc-brief-result"></div>
-                <details class="pc-how"><summary>How to get briefs from your Claude projects</summary>
-                  <p>Add these instructions to each Claude project you write posts in. Claude will then end every finished post with a brief you can paste here.</p>
+                <details class="pc-how"><summary>The format this reads</summary>
+                  <p>Your post template, shown below, fills both the Post Creator and the Scheduler. The older “Headline: / Caption (Instagram):” briefs still work too.</p>
                   <pre id="pc-instr"></pre>
-                  <button type="button" class="us-more" id="pc-instr-copy">📋 Copy these instructions</button>
+                  <button type="button" class="us-more" id="pc-instr-copy">📋 Copy the template</button>
                 </details>
               </div>
             </div>`;
@@ -10025,7 +10209,7 @@ Only list the platforms this post is for, with one caption line per platform. A 
           });
           ov.querySelector("#pc-brief-go").addEventListener("click", pcFillFromBrief);
           ov.querySelector("#pc-instr-copy").addEventListener("click", async () => {
-            if (await _pcCopyText(PC_INSTRUCTIONS)) _mpToast("Instructions copied. Paste them into your Claude project's instructions.");
+            if (await _pcCopyText(PC_INSTRUCTIONS)) _mpToast("Template copied.");
           });
         }
         ov.style.display = "flex";
@@ -10042,7 +10226,7 @@ Only list the platforms this post is for, with one caption line per platform. A 
         const b = pcParseBrief(txt);
         const status = document.getElementById("pc-brief-status");
         if (!b.headline && !b.body && !Object.keys(b.captions).length && !b.plats.length) {
-          status.textContent = "That doesn't look like a brief yet. It needs lines like “Headline:” and “Caption (Instagram):”.";
+          status.textContent = "That doesn't look like post content yet. It needs lines like “SEO headline:” and platform sections like “Instagram (… characters)”.";
           return;
         }
         const filled = pcApplyBrief(b);
@@ -10050,7 +10234,7 @@ Only list the platforms this post is for, with one caption line per platform. A 
         const warn = [];
         if (b.unknown.length) warn.push(`Skipped platform names I don't know: ${b.unknown.map(esc).join(", ")}`);
         Object.keys(S.captions).forEach((p) => {
-          if (pcOver(p)) warn.push(`${_mpName(p)} caption is ${pcCaptionFor(p).length.toLocaleString()} characters (limit ${PC_LIMITS[p].toLocaleString()})`);
+          if (pcOver(p)) warn.push(`${_mpName(p)} caption is ${pcLen(p, pcCaptionFor(p)).toLocaleString()} characters (limit ${PC_LIMITS[p].toLocaleString()})`);
         });
         if ((S.pinTitle || "").length > PC_PIN_TITLE_LIMIT) warn.push(`Pinterest title is over ${PC_PIN_TITLE_LIMIT} characters`);
         status.textContent = "Done.";
@@ -10059,6 +10243,7 @@ Only list the platforms this post is for, with one caption line per platform. A 
             <div class="pc-res-title">Filled in</div>
             <ul>${filled.map((f) => `<li>✓ ${esc(f)}</li>`).join("")}${b.plats.length ? `<li>✓ Platforms: ${b.plats.map((p) => esc(_mpName(p))).join(", ")}</li>` : ""}</ul>
             ${warn.length ? `<div class="pc-res-warn">${warn.map((w) => `⚠ ${w}`).join("<br>")}</div>` : ""}
+            <div class="pc-next">Next: pick a layout, then <b>Send to PostPilot</b> to schedule. Facebook and X use the <b>Open ↗</b> and <b>📋 Caption</b> buttons.</div>
             <div class="pc-res-actions">
               ${S.photoIdea ? `<button type="button" class="us-go" onclick="pcFindPhotos()">🔍 Find photos: “${esc(S.photoIdea)}”</button>` : ""}
               <button type="button" class="us-more" onclick="pcCloseBrief()">Done</button>
@@ -10080,6 +10265,8 @@ Only list the platforms this post is for, with one caption line per platform. A 
           .pc-res-title { font-weight: 700; margin-bottom: 4px; }
           .pc-result ul { margin: 0 0 8px; padding-left: 4px; list-style: none; line-height: 1.6; }
           .pc-res-warn { color: var(--coral); margin-bottom: 8px; line-height: 1.5; }
+          .pc-next { color: var(--muted); margin-bottom: 8px; line-height: 1.5; }
+          .pc-plink, .pc-palt { width: 100%; margin-top: 4px; font-size: 11px; }
           .pc-res-actions { display: flex; gap: 8px; flex-wrap: wrap; }
           .pc-how { font-size: 12px; color: var(--muted); }
           .pc-how summary { cursor: pointer; color: var(--hi); font-weight: 600; }
@@ -14902,7 +15089,9 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
               captions: pcCaptionsForSend(),
               pinTitle: S.pinTitle || "",
               link: S.postLink || "",
+              links: S.links || {},
               altText: S.altText || "",
+              alts: S.alts || {},
               format: gifDataUrl ? "gif" : "png",
               sentAt: new Date().toISOString(),
               accountId: _pfAccounts[_pfActiveAccount]?.id || "acct1",
@@ -22489,6 +22678,8 @@ async function autoSaveItemsToDrafts(wsId, items) {
           srcPinTitle: item.pinTitle || '',
           srcLink: item.link || '',
           srcAlt: item.altText || '',
+          srcLinks: item.links || null,
+          srcAlts: item.alts || null,
           uploadedAt: new Date().toISOString(),
           fromBrandCreator: true,
           autoImported: true,
@@ -22748,6 +22939,8 @@ async function confirmIncoming() {
           srcPinTitle: item.pinTitle || '',
           srcLink: item.link || '',
           srcAlt: item.altText || '',
+          srcLinks: item.links || null,
+          srcAlts: item.alts || null,
       uploadedAt: new Date().toISOString(),
       fromBrandCreator: true,
       templateName: item.templateName || '',
@@ -22800,6 +22993,8 @@ async function scheduleIncomingNow() {
           srcPinTitle: item.pinTitle || '',
           srcLink: item.link || '',
           srcAlt: item.altText || '',
+          srcLinks: item.links || null,
+          srcAlts: item.alts || null,
         uploadedAt: new Date().toISOString(),
         fromBrandCreator: true,
         templateName: item.templateName || '',
@@ -28319,21 +28514,23 @@ function _pcFieldsFor(pid, src) {
   src = src || {};
   const caps = src.captions || {};
   const cap = caps[pid] || caps.all || [src.header, src.content].filter(Boolean).join('\n');
+  const link = (src.links && src.links[pid]) || src.link || '';
+  const alt = (src.alts && src.alts[pid]) || src.altText || '';
   const out = {};
   if (pid === 'pinterest') {
     out.title = src.pinTitle || src.header || '';
     out.description = caps.pinterest || caps.all || src.content || '';
-    if (src.link) out.destinationUrl = src.link;
+    if (link) out.destinationUrl = link;
   } else if (pid === 'instagram') out.caption = cap;
   else if (pid === 'google') {
     out.content = caps.google || caps.all || src.content || '';
-    if (src.link) { out.ctaType = 'LEARN_MORE'; out.ctaUrl = src.link; }
-  } else if (pid === 'linkedin') out.liText = cap;
-  else if (pid === 'shopify') { out.shopifyText = cap; if (src.link) out.shopifyUrl = src.link; }
-  else if (pid === 'bluesky') { out.bskyText = cap; if (src.link) out.bskyUrl = src.link; }
+    if (link) { out.ctaType = 'LEARN_MORE'; out.ctaUrl = link; }
+  } else if (pid === 'linkedin') { out.liText = cap; if (link) out.liArticleUrl = link; }
+  else if (pid === 'shopify') { out.shopifyText = cap; if (link) out.shopifyUrl = link; }
+  else if (pid === 'bluesky') { out.bskyText = cap; if (link) out.bskyUrl = link; }
   else if (pid === 'tiktok') out.tiktokText = cap;
   else if (pid === 'youtube') out.ytText = cap;
-  if (src.altText) out.altText = src.altText;
+  if (alt) out.altText = alt;
   return out;
 }
 function _draftTextFields(draft) {
@@ -28352,7 +28549,7 @@ function _draftTextFields(draft) {
   const both = [header, content].filter(Boolean).join('\n');
   const base = { title: header, description: content, caption: both, content: content || header, liText: both };
   // Captions, Pinterest title, link and alt text from the Post Creator fill each platform's own fields
-  return Object.assign(base, _pcFieldsFor(draft.platform, { header, content, captions: draft.srcCaptions, pinTitle: draft.srcPinTitle, link: draft.srcLink, altText: draft.srcAlt }));
+  return Object.assign(base, _pcFieldsFor(draft.platform, { header, content, captions: draft.srcCaptions, pinTitle: draft.srcPinTitle, link: draft.srcLink, links: draft.srcLinks, altText: draft.srcAlt, alts: draft.srcAlts }));
 }
 
 // Card notes are "auto" when they are just a preview of the post text (not a note you typed)
