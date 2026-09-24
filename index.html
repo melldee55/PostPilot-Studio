@@ -3343,7 +3343,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v60</span>
+              <span class="sb-version">v61</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -3425,6 +3425,7 @@
             </button>
           </div>
         </div>
+        <button type="button" class="pc-brief-btn" onclick="pcOpenBrief()">📋 Paste a post brief</button>
         <div class="mp-hint">Pick every platform this post is for</div>
         <div class="mp-chips" id="mp-chips" role="group" aria-label="Platforms for this post"></div>
         <div class="mp-view" id="mp-view" style="display: none">
@@ -4081,6 +4082,16 @@
         ></div>
       </div>
 
+      <div class="sec sec-divider" id="pc-captions-section">
+        <div class="sec-label" style="display: flex; align-items: center; justify-content: space-between">
+          <span>Captions</span><span class="pc-sub">📋 copy · sent to the Scheduler</span>
+        </div>
+        <div id="pc-captions"></div>
+        <label class="pc-extra">Link (Pinterest, Google button, Bluesky, Shopify)
+          <input type="text" inputmode="url" id="pc-link" placeholder="https://" oninput="pcSetExtra('postLink', this.value)" /></label>
+        <label class="pc-extra">Alt text (describes the image)
+          <input type="text" id="pc-alt" placeholder="e.g. A pit bull sitting on a porch" oninput="pcSetExtra('altText', this.value)" /></label>
+      </div>
       <!-- ── MY FONTS ── -->
       <div class="sec sec-divider" id="my-fonts-section">
         <div class="sec-label" style="display: flex; align-items: center; justify-content: space-between">
@@ -4937,6 +4948,11 @@ Your message, caption, or call to action goes right here.</textarea
         platFormats: {},
         platforms: [],
         photoCredits: {},
+        captions: {},
+        pinTitle: "",
+        postLink: "",
+        altText: "",
+        photoIdea: "",
         showZones: false,
         bgInfo: null,
         bg2Info: null,
@@ -6250,6 +6266,11 @@ Your message, caption, or call to action goes right here.</textarea
             platFormats: S.platFormats,
             platforms: S.platforms,
             photoCredits: S.photoCredits,
+            captions: S.captions,
+            pinTitle: S.pinTitle,
+            postLink: S.postLink,
+            altText: S.altText,
+            photoIdea: S.photoIdea,
             showZones: S.showZones,
             bgInfo: S.bgInfo,
             bg2Info: S.bg2Info,
@@ -8537,7 +8558,7 @@ Your message, caption, or call to action goes right here.</textarea
         // Copy while this page still has focus (the new tab would take it away)
         let copied = false;
         const clipP =
-          navigator.clipboard && window.ClipboardItem
+          info.paste && navigator.clipboard && window.ClipboardItem
             ? navigator.clipboard.write([new ClipboardItem({ "image/png": blobP })]).then(
                 () => (copied = true),
                 () => {},
@@ -8556,6 +8577,12 @@ Your message, caption, or call to action goes right here.</textarea
         const file = _mpFileName(idx, pk);
         const saveIt = !info.paste || !copied;
         const saved = saveIt ? await xfSaveBlob(blob, file, false, true) : null;
+        // Sites that need a file upload: the image is saved, so put the caption on the clipboard
+        let capCopied = false;
+        if (saveIt) {
+          const cap = pcCaptionFor(pk);
+          if (cap && cap.trim()) capCopied = await _pcCopyText(cap);
+        }
         const w = info.url ? window.open(info.url, "_blank") : null;
         if (w) {
           try {
@@ -8563,9 +8590,10 @@ Your message, caption, or call to action goes right here.</textarea
           } catch (e) {}
         }
         let msg;
-        if (info.paste && copied) msg = `Image copied. Paste it into your ${nm} post with <b>Ctrl+V</b>.`;
-        else if (saved && saved.folder) msg = `<b>${escHtml(saved.name)}</b> is in your <b>${escHtml(saved.folder)}</b> folder. Upload it (or drag it in) on ${nm}.`;
-        else msg = `<b>${escHtml(file)}</b> is in your Downloads. Upload it (or drag it in) on ${nm}.`;
+        const then = capCopied ? `, then paste the caption with <b>Ctrl+V</b>.` : ".";
+        if (info.paste && copied) msg = `Image copied. Paste it into your ${nm} post with <b>Ctrl+V</b>, then use <b>📋 Caption</b> for the text.`;
+        else if (saved && saved.folder) msg = `<b>${escHtml(saved.name)}</b> is in your <b>${escHtml(saved.folder)}</b> folder. Upload it (or drag it in) on ${nm}${then}`;
+        else msg = `<b>${escHtml(file)}</b> is in your Downloads. Upload it (or drag it in) on ${nm}${then}`;
         if (!w && info.url) msg += ` Your browser blocked the new tab: <a href="${info.url}" target="_blank" rel="noopener">open ${nm}</a>.`;
         _mpToast(msg, 7000);
       }
@@ -8674,7 +8702,7 @@ Your message, caption, or call to action goes right here.</textarea
             item.appendChild(wrap);
             const btns = document.createElement("div");
             btns.className = "mp-pv-btns";
-            btns.innerHTML = `<button type="button" class="mp-pv-open" onclick="mpOpenPlatform(${idx},'${pk}',this)" title="Copies the image and opens ${_mpName(pk)}. Nothing is posted.">${platIcon(pk, 11)} Open ${_mpShort(pk)} ↗</button><button type="button" class="mp-pv-save" onclick="mpSavePlatform(${idx},'${pk}',this)" title="Download the ${_mpName(pk)} version">⬇ Save</button>`;
+            btns.innerHTML = `<button type="button" class="mp-pv-open" onclick="mpOpenPlatform(${idx},'${pk}',this)" title="${(MP_OPEN[pk] || {}).paste ? "Copies the image" : "Saves the image, copies the caption,"} and opens ${_mpName(pk)}. Nothing is posted.">${platIcon(pk, 11)} Open ${_mpShort(pk)} ↗</button><button type="button" class="mp-pv-save" onclick="mpSavePlatform(${idx},'${pk}',this)" title="Download the ${_mpName(pk)} version">⬇ Save</button><button type="button" class="mp-pv-cap${pcOver(pk) ? " over" : ""}" onclick="pcCopyCaption('${pk}', this)" title="Copy the ${_mpName(pk)} caption">📋 Caption</button>`;
             item.appendChild(btns);
             row.appendChild(item);
             inners.push(inner);
@@ -9601,6 +9629,479 @@ Your message, caption, or call to action goes right here.</textarea
           .xf-folder-x { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 2px 4px; }
           .xf-folder-x:hover { color: var(--text); }
           .xf-folder-btn:focus-visible, .xf-folder-x:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+        `;
+        document.head.appendChild(st);
+      })();
+      // ══════════════════════════════════════════
+      // POST BRIEF + CAPTIONS (v61)
+      // Paste one brief (from your Claude projects) to fill the headline, body, platforms,
+      // captions, Pinterest title, link and alt text at once. Captions then travel with the
+      // image: 📋 Caption buttons, the Open buttons, and Send to PostPilot.
+      // File names, file type and sizes are unchanged: the brief fills the headline exactly
+      // as if you typed it, so the automatic file name is the same.
+      // ══════════════════════════════════════════
+      const PC_LIMITS = { instagram: 2200, linkedin: 3000, pinterest: 500, google: 1500, twitter: 280, threads: 500, bluesky: 300 };
+      const PC_PIN_TITLE_LIMIT = 100;
+      const PC_TAGGY = new Set(["instagram", "facebook", "linkedin", "pinterest", "tiktok", "twitter", "threads", "bluesky"]);
+      const PC_PLAT = {
+        instagram: "instagram", ig: "instagram", insta: "instagram", facebook: "facebook", fb: "facebook", meta: "facebook",
+        linkedin: "linkedin", "linked in": "linkedin", pinterest: "pinterest", tiktok: "tiktok", "tik tok": "tiktok",
+        youtube: "youtube", yt: "youtube", google: "google", "google business": "google", "google my business": "google", gbp: "google", gmb: "google",
+        x: "twitter", twitter: "twitter", "x twitter": "twitter", threads: "threads", bluesky: "bluesky", bsky: "bluesky",
+        shopify: "shopify", tumblr: "tumblr", "ko fi": "kofi", kofi: "kofi", patreon: "patreon",
+        all: "all", "all platforms": "all", default: "all", general: "all", everywhere: "all",
+      };
+      const PC_KEYS = {
+        headline: "headline", "image headline": "headline", heading: "headline",
+        body: "body", "body text": "body", "image text": "body", subheadline: "body", subhead: "body",
+        platforms: "platforms", platform: "platforms",
+        photo: "photo", "photo idea": "photo", "photo search": "photo", "image search": "photo", unsplash: "photo", "unsplash search": "photo", image: "photo",
+        link: "link", url: "link", "destination link": "link", "destination url": "link",
+        "alt text": "alt", alt: "alt",
+        "pin title": "pintitle", "pinterest title": "pintitle",
+        caption: "caption", "main caption": "caption", "original post": "caption",
+        hashtags: "hashtags",
+        notes: "ignore", note: "ignore", template: "ignore", date: "ignore", schedule: "ignore", time: "ignore",
+      };
+      const PC_INSTRUCTIONS = `When a post is final, end your reply with a PostPilot brief in exactly this format:
+
+=== POSTPILOT BRIEF ===
+Headline: (short, for the image, under 60 characters)
+Body: (1 or 2 short sentences for the image)
+Platforms: Instagram, Facebook, Pinterest, Google Business
+Photo: (3 to 6 words to search Unsplash for)
+Link: (the page this post points to)
+Alt text: (one sentence describing the image)
+Pin title: (up to 100 characters)
+Caption (Instagram): (full caption, hashtags at the end)
+Caption (Facebook): (full caption)
+Caption (Pinterest): (pin description, up to 500 characters)
+Caption (Google Business): (up to 1,500 characters, no hashtags)
+=== END BRIEF ===
+
+Only list the platforms this post is for, with one caption line per platform. A caption can run over several lines.`;
+
+      function _pcNorm(s) {
+        return String(s || "").toLowerCase().replace(/[*_`#]/g, "").replace(/-/g, " ").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+      }
+      function _pcPlat(name) {
+        let n = _pcNorm(name);
+        if (PC_PLAT[n]) return PC_PLAT[n];
+        n = n.replace(/\b(profile|page|pages|post|posts|feed|pin|pins|reel|reels|story|stories)\b/g, "").replace(/\s+/g, " ").trim();
+        return PC_PLAT[n] || null;
+      }
+      const _PC_LINE = /^\s*(?:[-*•>]\s*)?(?:\*\*|__)?([A-Za-z][A-Za-z0-9 \-/&]{0,40}?)(?:\s*[([]\s*([^)\]]{1,40})\s*[)\]])?\s*(?:\*\*|__)?\s*[:：]\s*(?:\*\*|__)?\s*(.*)$/;
+      function _pcKey(label, paren) {
+        const k = _pcNorm(label);
+        if (paren) {
+          const p = _pcPlat(paren);
+          if (/^(caption|post|text|copy|description)$/.test(k)) return p ? { field: "caption", plat: p } : null;
+          if (/^(pin )?title$/.test(k)) return p === "pinterest" ? { field: "pintitle" } : null;
+          return null;
+        }
+        if (PC_KEYS[k]) return { field: PC_KEYS[k], plat: PC_KEYS[k] === "caption" ? "all" : undefined };
+        let m = /^(.+?) (caption|post|text|copy|description)$/.exec(k);
+        if (m) {
+          const p = _pcPlat(m[1]);
+          if (p) return { field: "caption", plat: p };
+        }
+        m = /^(caption|post|text|copy) for (.+)$/.exec(k);
+        if (m) {
+          const p = _pcPlat(m[2]);
+          if (p) return { field: "caption", plat: p };
+        }
+        return null;
+      }
+      // Read a pasted brief into its parts (unknown lines stay with the field above them)
+      function pcParseBrief(text) {
+        let t = String(text || "").replace(/\r\n?/g, "\n");
+        const start = t.search(/=+\s*postpilot brief\s*=+/i);
+        if (start >= 0) {
+          t = t.slice(start).replace(/^[^\n]*\n?/, "");
+          const end = t.search(/=+\s*end(\s+brief)?\s*=+/i);
+          if (end >= 0) t = t.slice(0, end);
+        }
+        const out = { captions: {} };
+        let cur = null;
+        t.split("\n").forEach((line) => {
+          const m = _PC_LINE.exec(line);
+          const key = m ? _pcKey(m[1], m[2]) : null;
+          if (key) {
+            cur = key;
+            if (key.field === "ignore") return;
+            if (key.field === "caption") out.captions[key.plat] = m[3] || "";
+            else out[key.field] = m[3] || "";
+            return;
+          }
+          if (!cur || cur.field === "ignore") return;
+          if (cur.field === "caption") out.captions[cur.plat] = (out.captions[cur.plat] != null ? out.captions[cur.plat] + "\n" : "") + line;
+          else out[cur.field] = (out[cur.field] != null ? out[cur.field] + "\n" : "") + line;
+        });
+        const tidy = (v) => String(v || "").replace(/^\s+|\s+$/g, "").replace(/\n{3,}/g, "\n\n");
+        ["headline", "body", "platforms", "photo", "link", "alt", "pintitle", "hashtags"].forEach((k) => {
+          if (out[k] != null) out[k] = tidy(out[k]).replace(/\s*\n\s*/g, k === "body" ? "\n" : " ");
+        });
+        Object.keys(out.captions).forEach((p) => (out.captions[p] = tidy(out.captions[p])));
+        // Which platforms: the Platforms line, or else the ones that have captions
+        const unknown = [];
+        let plats = [];
+        if (out.platforms) {
+          out.platforms.split(/,|;|\/|\||&|\band\b|\n/i).map((s) => s.trim()).filter(Boolean).forEach((s) => {
+            const p = _pcPlat(s);
+            if (p && p !== "all" && PLATS[p]) {
+              if (!plats.includes(p)) plats.push(p);
+            } else unknown.push(s);
+          });
+        }
+        if (!plats.length) plats = Object.keys(out.captions).filter((p) => p !== "all" && PLATS[p]);
+        out.plats = plats;
+        out.unknown = unknown;
+        // A separate Hashtags line goes at the end of captions that don't have hashtags yet
+        if (out.hashtags) {
+          Object.keys(out.captions).forEach((p) => {
+            if (PC_TAGGY.has(p) && out.captions[p] && !/(^|\s)#\w/.test(out.captions[p])) out.captions[p] += "\n\n" + out.hashtags;
+          });
+        }
+        return out;
+      }
+      // Fill everything from a brief. Text fields get "typed" so the rest of the app (including
+      // the automatic file name) reacts exactly as it does to typing.
+      function pcApplyBrief(b) {
+        const typeInto = (id, v) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.value = v;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        };
+        const filled = [];
+        if (b.headline) {
+          typeInto("headerText", b.headline);
+          filled.push("Headline");
+        }
+        if (b.body) {
+          typeInto("contentText", b.body);
+          filled.push("Body");
+        }
+        // A brief is a new post: replace the previous post's captions and extras
+        typeInto("originalPostText", b.captions.all || "");
+        if (b.captions.all) filled.push("Original Post (main caption)");
+        S.captions = {};
+        Object.keys(b.captions).forEach((p) => {
+          if (p !== "all" && b.captions[p]) S.captions[p] = b.captions[p];
+        });
+        S.pinTitle = b.pintitle || "";
+        S.postLink = b.link || "";
+        S.altText = b.alt || "";
+        S.photoIdea = b.photo || "";
+        if (b.plats.length) {
+          _mpSet(b.plats);
+          if (!b.plats.includes(S.platform)) choosePlatform(b.plats[0]);
+        }
+        _pcSyncUI(true);
+        mpSyncUI();
+        render();
+        debounceSave();
+        const capPlats = Object.keys(S.captions);
+        if (capPlats.length) filled.push("Captions for " + capPlats.map(_mpName).join(", "));
+        if (S.pinTitle) filled.push("Pinterest title");
+        if (S.postLink) filled.push("Link");
+        if (S.altText) filled.push("Alt text");
+        return filled;
+      }
+
+      // ── Captions ──
+      function pcCaptionFor(pid) {
+        return (S.captions && S.captions[pid]) || S.originalPost || [S.header, S.content].filter(Boolean).join("\n");
+      }
+      function pcOver(pid) {
+        const lim = PC_LIMITS[pid];
+        return !!lim && pcCaptionFor(pid).length > lim;
+      }
+      function pcCaptionsForSend() {
+        const o = {};
+        Object.keys(S.captions || {}).forEach((p) => {
+          if (S.captions[p]) o[p] = S.captions[p];
+        });
+        if (S.originalPost) o.all = S.originalPost;
+        return o;
+      }
+      async function _pcCopyText(text) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return true;
+        } catch (e) {
+          try {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.cssText = "position:fixed;left:-9999px;top:0;";
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand("copy");
+            ta.remove();
+            return ok;
+          } catch (e2) {
+            return false;
+          }
+        }
+      }
+      async function pcCopyCaption(pid, btn) {
+        const text = pcCaptionFor(pid);
+        if (!text.trim()) {
+          _mpToast("No caption yet. Add one under <b>Captions</b> in the sidebar.");
+          return;
+        }
+        const ok = await _pcCopyText(text);
+        const lim = PC_LIMITS[pid];
+        _mpToast(
+          ok
+            ? `${_mpName(pid)} caption copied (${text.length.toLocaleString()} characters).` + (lim && text.length > lim ? ` <b>It's over ${_mpName(pid)}'s ${lim.toLocaleString()}-character limit.</b>` : "")
+            : "Couldn't copy the caption. Select it in the sidebar and copy it there.",
+        );
+        if (ok && btn) {
+          btn.classList.add("pc-done");
+          setTimeout(() => btn.classList.remove("pc-done"), 1400);
+        }
+      }
+      async function pcCopyPinTitle(btn) {
+        const t = S.pinTitle || S.header || "";
+        if (!t) return;
+        if (await _pcCopyText(t)) {
+          _mpToast("Pinterest title copied.");
+          if (btn) {
+            btn.classList.add("pc-done");
+            setTimeout(() => btn.classList.remove("pc-done"), 1400);
+          }
+        }
+      }
+      let _pcSig = "";
+      function _pcCount(pid) {
+        const row = document.querySelector(`#pc-captions .pc-cap[data-p="${pid}"]`);
+        if (!row) return;
+        const n = pcCaptionFor(pid).length,
+          lim = PC_LIMITS[pid];
+        const c = row.querySelector(".pc-count");
+        c.textContent = lim ? `${n.toLocaleString()} / ${lim.toLocaleString()}` : `${n.toLocaleString()} characters`;
+        c.classList.toggle("over", !!lim && n > lim);
+        const own = !!(S.captions && S.captions[pid]);
+        row.querySelector(".pc-src").textContent = own ? "" : S.originalPost ? "using Original Post" : "using headline + body";
+        if (pid === "pinterest") {
+          const tc = row.querySelector(".pc-tcount");
+          const tn = (S.pinTitle || "").length;
+          if (tc) {
+            tc.textContent = `${tn} / ${PC_PIN_TITLE_LIMIT}`;
+            tc.classList.toggle("over", tn > PC_PIN_TITLE_LIMIT);
+          }
+        }
+      }
+      function _pcSyncUI(force) {
+        const box = document.getElementById("pc-captions");
+        if (!box) return;
+        const link = document.getElementById("pc-link"),
+          alt = document.getElementById("pc-alt");
+        if (link && document.activeElement !== link) link.value = S.postLink || "";
+        if (alt && document.activeElement !== alt) alt.value = S.altText || "";
+        const list = mpList();
+        const sig = list.join(",");
+        if (!force && sig === _pcSig) {
+          list.forEach(_pcCount);
+          return;
+        }
+        _pcSig = sig;
+        box.innerHTML = list
+          .map((p) => {
+            const lim = PC_LIMITS[p];
+            return `<div class="pc-cap" data-p="${p}">
+              <div class="pc-cap-head">${platIcon(p, 12)}<span class="pc-name">${_mpName(p)}</span><span class="pc-src"></span><span class="pc-count"></span>
+                <button type="button" class="pc-copy" title="Copy the ${_mpName(p)} caption">📋 Copy</button></div>
+              ${p === "pinterest" ? `<div class="pc-pinrow"><input type="text" class="pc-pintitle" placeholder="Pin title (up to ${PC_PIN_TITLE_LIMIT} characters)" aria-label="Pinterest title" /><span class="pc-tcount"></span><button type="button" class="pc-copy pc-copy-title" title="Copy the Pinterest title">📋</button></div>` : ""}
+              <textarea class="pc-text" rows="3" placeholder="Leave empty to use your Original Post${lim ? ` (limit ${lim.toLocaleString()})` : ""}" aria-label="${_mpName(p)} caption"></textarea>
+            </div>`;
+          })
+          .join("");
+        box.querySelectorAll(".pc-cap").forEach((row) => {
+          const p = row.dataset.p;
+          const ta = row.querySelector(".pc-text");
+          ta.value = (S.captions && S.captions[p]) || "";
+          ta.addEventListener("input", () => {
+            S.captions = Object.assign({}, S.captions || {});
+            if (ta.value) S.captions[p] = ta.value;
+            else delete S.captions[p];
+            _pcCount(p);
+            _pcRefreshPreviewWarnings();
+            debounceSave();
+          });
+          row.querySelector(".pc-copy:not(.pc-copy-title)").addEventListener("click", (e) => pcCopyCaption(p, e.currentTarget));
+          const pt = row.querySelector(".pc-pintitle");
+          if (pt) {
+            pt.value = S.pinTitle || "";
+            pt.addEventListener("input", () => {
+              S.pinTitle = pt.value;
+              _pcCount("pinterest");
+              debounceSave();
+            });
+            row.querySelector(".pc-copy-title").addEventListener("click", (e) => pcCopyPinTitle(e.currentTarget));
+          }
+          _pcCount(p);
+        });
+      }
+      function pcSetExtra(key, v) {
+        S[key] = v;
+        debounceSave();
+      }
+      function _pcRefreshPreviewWarnings() {
+        document.querySelectorAll("#preview-grid .mp-pv-item").forEach((item) => {
+          const b = item.querySelector(".mp-pv-cap");
+          if (!b) return;
+          const over = pcOver(item.dataset.pk);
+          b.classList.toggle("over", over);
+          b.title = over ? `This caption is over ${_mpName(item.dataset.pk)}'s limit` : `Copy the ${_mpName(item.dataset.pk)} caption`;
+        });
+      }
+      // The caption list follows the chosen platforms
+      const _pcOrigMpSync = mpSyncUI;
+      mpSyncUI = function () {
+        const r = _pcOrigMpSync.apply(this, arguments);
+        _pcSyncUI(false);
+        return r;
+      };
+      // Keep the counters right when the Original Post, headline or body change
+      document.addEventListener("input", (e) => {
+        if (e.target && /^(originalPostText|headerText|contentText)$/.test(e.target.id)) mpList().forEach(_pcCount);
+      });
+      // The photo idea from a brief pre-fills the Unsplash search
+      const _pcOrigUsOpen = usOpen;
+      usOpen = function (slot) {
+        const r = _pcOrigUsOpen.apply(this, arguments);
+        const q = document.getElementById("us-q");
+        if (q && !q.value && S.photoIdea) q.value = S.photoIdea;
+        return r;
+      };
+      function pcFindPhotos() {
+        pcCloseBrief();
+        usOpen("bg");
+        const q = document.getElementById("us-q");
+        if (q && S.photoIdea) {
+          q.value = S.photoIdea;
+          if (_usKey()) usSearch(false);
+        }
+      }
+
+      // ── The "Paste a post brief" window ──
+      function pcOpenBrief() {
+        let ov = document.getElementById("pc-brief-overlay");
+        if (!ov) {
+          ov = document.createElement("div");
+          ov.id = "pc-brief-overlay";
+          ov.className = "us-overlay";
+          ov.setAttribute("role", "dialog");
+          ov.setAttribute("aria-modal", "true");
+          ov.setAttribute("aria-labelledby", "pc-brief-title");
+          ov.innerHTML = `
+            <div class="us-modal pc-modal">
+              <div class="us-head"><div class="us-title" id="pc-brief-title">Paste a post brief</div><button type="button" class="us-x" aria-label="Close" onclick="pcCloseBrief()">✕</button></div>
+              <div class="pc-body">
+                <textarea id="pc-brief-text" spellcheck="false" placeholder="Paste the brief from your Claude project here: headline, body, platforms, photo, link, alt text and a caption for each platform."></textarea>
+                <div class="pc-actions"><button type="button" class="us-go" id="pc-brief-go">Fill it in</button><span class="us-status" id="pc-brief-status" role="status" aria-live="polite"></span></div>
+                <div id="pc-brief-result"></div>
+                <details class="pc-how"><summary>How to get briefs from your Claude projects</summary>
+                  <p>Add these instructions to each Claude project you write posts in. Claude will then end every finished post with a brief you can paste here.</p>
+                  <pre id="pc-instr"></pre>
+                  <button type="button" class="us-more" id="pc-instr-copy">📋 Copy these instructions</button>
+                </details>
+              </div>
+            </div>`;
+          document.body.appendChild(ov);
+          ov.querySelector("#pc-instr").textContent = PC_INSTRUCTIONS;
+          ov.addEventListener("mousedown", (e) => (ov._down = e.target === ov));
+          ov.addEventListener("click", (e) => {
+            if (e.target === ov && ov._down) pcCloseBrief();
+            ov._down = false;
+          });
+          ov.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              pcCloseBrief();
+            }
+          });
+          ov.querySelector("#pc-brief-go").addEventListener("click", pcFillFromBrief);
+          ov.querySelector("#pc-instr-copy").addEventListener("click", async () => {
+            if (await _pcCopyText(PC_INSTRUCTIONS)) _mpToast("Instructions copied. Paste them into your Claude project's instructions.");
+          });
+        }
+        ov.style.display = "flex";
+        document.getElementById("pc-brief-result").innerHTML = "";
+        document.getElementById("pc-brief-status").textContent = "";
+        setTimeout(() => document.getElementById("pc-brief-text").focus(), 30);
+      }
+      function pcCloseBrief() {
+        const ov = document.getElementById("pc-brief-overlay");
+        if (ov) ov.style.display = "none";
+      }
+      function pcFillFromBrief() {
+        const txt = document.getElementById("pc-brief-text").value;
+        const b = pcParseBrief(txt);
+        const status = document.getElementById("pc-brief-status");
+        if (!b.headline && !b.body && !Object.keys(b.captions).length && !b.plats.length) {
+          status.textContent = "That doesn't look like a brief yet. It needs lines like “Headline:” and “Caption (Instagram):”.";
+          return;
+        }
+        const filled = pcApplyBrief(b);
+        const esc = (s) => escHtml(String(s));
+        const warn = [];
+        if (b.unknown.length) warn.push(`Skipped platform names I don't know: ${b.unknown.map(esc).join(", ")}`);
+        Object.keys(S.captions).forEach((p) => {
+          if (pcOver(p)) warn.push(`${_mpName(p)} caption is ${pcCaptionFor(p).length.toLocaleString()} characters (limit ${PC_LIMITS[p].toLocaleString()})`);
+        });
+        if ((S.pinTitle || "").length > PC_PIN_TITLE_LIMIT) warn.push(`Pinterest title is over ${PC_PIN_TITLE_LIMIT} characters`);
+        status.textContent = "Done.";
+        document.getElementById("pc-brief-result").innerHTML = `
+          <div class="pc-result">
+            <div class="pc-res-title">Filled in</div>
+            <ul>${filled.map((f) => `<li>✓ ${esc(f)}</li>`).join("")}${b.plats.length ? `<li>✓ Platforms: ${b.plats.map((p) => esc(_mpName(p))).join(", ")}</li>` : ""}</ul>
+            ${warn.length ? `<div class="pc-res-warn">${warn.map((w) => `⚠ ${w}`).join("<br>")}</div>` : ""}
+            <div class="pc-res-actions">
+              ${S.photoIdea ? `<button type="button" class="us-go" onclick="pcFindPhotos()">🔍 Find photos: “${esc(S.photoIdea)}”</button>` : ""}
+              <button type="button" class="us-more" onclick="pcCloseBrief()">Done</button>
+            </div>
+          </div>`;
+      }
+
+      (function _pcStyles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          .pc-brief-btn { width: 100%; margin: 2px 0 10px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--hi); background: var(--hi-dim); color: var(--text); font: 700 12px "DM Sans", sans-serif; cursor: pointer; }
+          .pc-brief-btn:hover { background: var(--hi); color: #1a1206; }
+          .pc-modal { width: min(760px, 100%); }
+          .pc-body { padding: 0 18px 16px; overflow-y: auto; }
+          #pc-brief-text { width: 100%; min-height: 230px; background: var(--panel); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font: 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace; padding: 10px 12px; resize: vertical; outline: none; }
+          #pc-brief-text:focus { border-color: var(--hi); }
+          .pc-actions { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+          .pc-result { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; font-size: 12px; color: var(--text); }
+          .pc-res-title { font-weight: 700; margin-bottom: 4px; }
+          .pc-result ul { margin: 0 0 8px; padding-left: 4px; list-style: none; line-height: 1.6; }
+          .pc-res-warn { color: var(--coral); margin-bottom: 8px; line-height: 1.5; }
+          .pc-res-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+          .pc-how { font-size: 12px; color: var(--muted); }
+          .pc-how summary { cursor: pointer; color: var(--hi); font-weight: 600; }
+          .pc-how pre { white-space: pre-wrap; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px; color: var(--text); font-size: 11.5px; max-height: 220px; overflow-y: auto; }
+          .pc-sub { font-size: 9px; color: var(--muted); font-weight: 400; letter-spacing: 0; text-transform: none; }
+          .pc-cap { margin-bottom: 9px; }
+          .pc-cap-head { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+          .pc-src { font-weight: 400; font-size: 9.5px; color: var(--muted); }
+          .pc-count, .pc-tcount { margin-left: auto; font-weight: 500; font-size: 9.5px; color: var(--muted); }
+          .pc-tcount { margin-left: 0; }
+          .pc-count.over, .pc-tcount.over { color: var(--coral); font-weight: 700; }
+          .pc-copy { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font: 600 10px "DM Sans", sans-serif; padding: 3px 7px; cursor: pointer; }
+          .pc-copy:hover, .mp-pv-cap:hover { border-color: var(--hi); }
+          .pc-done { border-color: #3fb950 !important; color: #3fb950 !important; }
+          .pc-text { width: 100%; font-size: 11.5px; min-height: 52px; resize: vertical; }
+          .pc-pinrow { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; }
+          .pc-pinrow input { flex: 1; min-width: 0; font-size: 11.5px; }
+          .pc-extra { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; font-size: 10.5px; color: var(--muted); }
+          .pc-extra input { font-size: 11.5px; }
+          .mp-pv-cap { display: inline-flex; align-items: center; gap: 4px; border-radius: 7px; font: 600 11px "DM Sans", sans-serif; padding: 6px 10px; cursor: pointer; border: 1px solid var(--border); background: var(--panel); color: var(--text); }
+          .mp-pv-cap.over { border-color: var(--coral); color: var(--coral); }
+          .pc-brief-btn:focus-visible, .pc-copy:focus-visible, .mp-pv-cap:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
         `;
         document.head.appendChild(st);
       })();
@@ -14398,6 +14899,10 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
               templateName,
               header: S.header || "",
               content: S.originalPost || S.content || "",
+              captions: pcCaptionsForSend(),
+              pinTitle: S.pinTitle || "",
+              link: S.postLink || "",
+              altText: S.altText || "",
               format: gifDataUrl ? "gif" : "png",
               sentAt: new Date().toISOString(),
               accountId: _pfAccounts[_pfActiveAccount]?.id || "acct1",
@@ -21980,6 +22485,10 @@ async function autoSaveItemsToDrafts(wsId, items) {
           notes: [item.header, item.content].filter(Boolean).join(' · ').substring(0, 200),
           srcHeader: item.header || '',
           srcContent: item.content || '',
+          srcCaptions: item.captions || null,
+          srcPinTitle: item.pinTitle || '',
+          srcLink: item.link || '',
+          srcAlt: item.altText || '',
           uploadedAt: new Date().toISOString(),
           fromBrandCreator: true,
           autoImported: true,
@@ -22235,6 +22744,10 @@ async function confirmIncoming() {
       notes: [item.header, item.content].filter(Boolean).join(' · ').substring(0, 200),
           srcHeader: item.header || '',
           srcContent: item.content || '',
+          srcCaptions: item.captions || null,
+          srcPinTitle: item.pinTitle || '',
+          srcLink: item.link || '',
+          srcAlt: item.altText || '',
       uploadedAt: new Date().toISOString(),
       fromBrandCreator: true,
       templateName: item.templateName || '',
@@ -22283,6 +22796,10 @@ async function scheduleIncomingNow() {
         notes: [item.header, item.content].filter(Boolean).join(' · ').substring(0, 200),
           srcHeader: item.header || '',
           srcContent: item.content || '',
+          srcCaptions: item.captions || null,
+          srcPinTitle: item.pinTitle || '',
+          srcLink: item.link || '',
+          srcAlt: item.altText || '',
         uploadedAt: new Date().toISOString(),
         fromBrandCreator: true,
         templateName: item.templateName || '',
@@ -22310,6 +22827,7 @@ async function scheduleIncomingNow() {
     caption: [item.header, item.content].filter(Boolean).join('\n'),
     content: item.content || '',
     liText: [item.header, item.content].filter(Boolean).join('\n'),
+    ..._pcFieldsFor(firstPid, item),
   };
   state.editingDraftId = null;
   state.showComposer = true;
@@ -27796,6 +28314,28 @@ function _formSig(f) {
 function _markComposerOpened() { state._formOpenSig = _formSig(state.form); }
 
 // Text for a draft that has no saved form (sent from the Post Creator, or an uploaded image)
+// Per-platform text from the Post Creator (captions, Pinterest title, link, alt text)
+function _pcFieldsFor(pid, src) {
+  src = src || {};
+  const caps = src.captions || {};
+  const cap = caps[pid] || caps.all || [src.header, src.content].filter(Boolean).join('\n');
+  const out = {};
+  if (pid === 'pinterest') {
+    out.title = src.pinTitle || src.header || '';
+    out.description = caps.pinterest || caps.all || src.content || '';
+    if (src.link) out.destinationUrl = src.link;
+  } else if (pid === 'instagram') out.caption = cap;
+  else if (pid === 'google') {
+    out.content = caps.google || caps.all || src.content || '';
+    if (src.link) { out.ctaType = 'LEARN_MORE'; out.ctaUrl = src.link; }
+  } else if (pid === 'linkedin') out.liText = cap;
+  else if (pid === 'shopify') { out.shopifyText = cap; if (src.link) out.shopifyUrl = src.link; }
+  else if (pid === 'bluesky') { out.bskyText = cap; if (src.link) out.bskyUrl = src.link; }
+  else if (pid === 'tiktok') out.tiktokText = cap;
+  else if (pid === 'youtube') out.ytText = cap;
+  if (src.altText) out.altText = src.altText;
+  return out;
+}
 function _draftTextFields(draft) {
   let header = draft.srcHeader, content = draft.srcContent;
   if (header == null && content == null && draft.fromBrandCreator && draft.notes && draft.notes.includes(' · ')) {
@@ -27810,7 +28350,9 @@ function _draftTextFields(draft) {
   header = header || '';
   content = content || '';
   const both = [header, content].filter(Boolean).join('\n');
-  return { title: header, description: content, caption: both, content: content || header, liText: both };
+  const base = { title: header, description: content, caption: both, content: content || header, liText: both };
+  // Captions, Pinterest title, link and alt text from the Post Creator fill each platform's own fields
+  return Object.assign(base, _pcFieldsFor(draft.platform, { header, content, captions: draft.srcCaptions, pinTitle: draft.srcPinTitle, link: draft.srcLink, altText: draft.srcAlt }));
 }
 
 // Card notes are "auto" when they are just a preview of the post text (not a note you typed)
