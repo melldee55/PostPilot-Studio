@@ -3343,7 +3343,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v62</span>
+              <span class="sb-version">v64</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -3622,6 +3622,22 @@
         </div>
 
         <button type="button" class="us-open-btn" onclick="usOpen('bg')">🔍 Search free photos on Unsplash</button>
+        <div id="ip-panel" class="ip-panel" hidden>
+          <div class="ip-head"><span class="ip-title">Photo framing</span><div class="ip-tabs" id="ip-tabs" role="tablist" aria-label="Photo to frame"></div></div>
+          <div class="ip-pick" id="ip-pick" tabindex="0" role="slider" aria-label="Focus point: drag to choose what stays in view">
+            <img id="ip-img" alt="" draggable="false" />
+            <div class="ip-grid"></div>
+            <div class="ip-dot" id="ip-dot"></div>
+          </div>
+          <div class="ip-hint">Drag the dot (or use the arrow keys) to choose what stays in view</div>
+          <div class="ip-modes" role="group" aria-label="How the photo fits">
+            <button type="button" class="ip-mode" data-fit="cover">Fill the space</button>
+            <button type="button" class="ip-mode" data-fit="contain">Show whole photo</button>
+          </div>
+          <div class="ip-gap"><span>Fill empty space with</span><div class="ip-gap-sw" id="ip-gap-sw" role="radiogroup" aria-label="Palette color for empty space"></div></div>
+          <div class="sl-row ip-zoom"><label for="ip-zoom">Zoom</label><input type="range" id="ip-zoom" min="100" max="300" value="100" /><span class="sl-val" id="ip-zoomv">100%</span></div>
+          <div class="ip-btns"><button type="button" id="ip-auto">✨ Auto-frame</button><button type="button" id="ip-center">↺ Center</button></div>
+        </div>
         <!-- Extra images + GIF — collapsible sub-section -->
         <div id="extra-media-section">
         <div class="sec-label collapsible" id="extra-media-label" onclick="toggleSubSection('extra-media-section')" style="margin-top:6px;">
@@ -4955,6 +4971,12 @@ Your message, caption, or call to action goes right here.</textarea
         photoIdea: "",
         links: {},
         alts: {},
+        bgFit: "cover",
+        bg2Fit: "cover",
+        bg3Fit: "cover",
+        bg2Scale: 100,
+        bg3Scale: 100,
+        gapColor: "bg",
         showZones: false,
         bgInfo: null,
         bg2Info: null,
@@ -6275,6 +6297,12 @@ Your message, caption, or call to action goes right here.</textarea
             photoIdea: S.photoIdea,
             links: S.links,
             alts: S.alts,
+            bgFit: S.bgFit,
+            bg2Fit: S.bg2Fit,
+            bg3Fit: S.bg3Fit,
+            bg2Scale: S.bg2Scale,
+            bg3Scale: S.bg3Scale,
+            gapColor: S.gapColor,
             showZones: S.showZones,
             bgInfo: S.bgInfo,
             bg2Info: S.bg2Info,
@@ -10293,6 +10321,460 @@ Post:
         document.head.appendChild(st);
       })();
       // ══════════════════════════════════════════
+      // PHOTO FRAMING (v63)
+      // One panel under the Background image: drag the dot to choose what stays in view,
+      // pick "Fill the space" (the photo always covers its area) or "Show whole photo",
+      // and zoom, which now grows from your chosen spot and never leaves gaps when filling.
+      // Each photo slot (Background, Image 2, Image 3) has its own framing and zoom.
+      // ══════════════════════════════════════════
+      const IP_SLOTS = [
+        { key: "bg", label: "Background" },
+        { key: "bg2", label: "Image 2" },
+        { key: "bg3", label: "Image 3" },
+      ];
+      let _ipSlot = "bg";
+      const _ipArCache = new Map();
+      // The photo's shape (width ÷ height): from Smart Fit's analysis, or measured here
+      function _ipAr(key) {
+        const info = S[key + "Info"];
+        if (info && info.ar) return info.ar;
+        const src = S[key];
+        if (!src) return 0;
+        if (_ipArCache.has(src)) return _ipArCache.get(src) || 0;
+        _ipArCache.set(src, 0);
+        const im = new Image();
+        if (/^https?:/i.test(src)) im.crossOrigin = "anonymous";
+        im.onload = () => {
+          if (im.naturalWidth && im.naturalHeight) {
+            _ipArCache.set(src, im.naturalWidth / im.naturalHeight);
+            render();
+          }
+        };
+        im.src = src;
+        return 0;
+      }
+      // An empty Image 2/3 slot shows the Background photo as a stand-in: it follows the Background's framing
+      const _ipK = (key) => (key !== "bg" && !S[key] ? "bg" : key);
+      function _ipFit(key) {
+        return S[_ipK(key) + "Fit"] === "contain" ? "contain" : "cover";
+      }
+      function _ipScale(key) {
+        key = _ipK(key);
+        return key === "bg" ? S.bgScale || 100 : S[key + "Scale"] || 100;
+      }
+      // Zoom factor: from 100% up (a whole photo at 100% already shows everything)
+      function _ipZoom(key) {
+        return Math.max(1, _ipScale(key) / 100);
+      }
+      // ── No see-through areas (v64): empty space gets a palette color you choose ──
+      const GAP_ROLES = [["bg", "Background"], ["primary", "Primary"], ["accent", "Accent"], ["highlight", "Highlight"], ["shapes", "Shapes"]];
+      function gapColor() {
+        let p = {};
+        try {
+          p = PAL() || {};
+        } catch (e) {}
+        const c = p[S.gapColor || "bg"];
+        return /^(#|rgb|hsl)/i.test(String(c || "")) ? c : p.bg || "#000000";
+      }
+      // Any layout whose outer box paints nothing gets the empty-space color (screen and downloads alike)
+      function _gapRoot(html) {
+        const m = /^\s*<([a-z0-9]+)\b([^>]*)>/i.exec(html || "");
+        if (!m) return html;
+        const sm = /\bstyle\s*=\s*"([^"]*)"/i.exec(m[2]);
+        const style = sm ? sm[1] : "";
+        if (/background(-color|-image)?\s*:/i.test(style)) return html;
+        const add = `background-color:${gapColor()};`;
+        const attrs = sm ? m[2].replace(sm[0], `style="${style}${!style.trim() || /;\s*$/.test(style) ? "" : ";"}${add}"`) : `${m[2]} style="${add}"`;
+        return html.replace(m[0], `<${m[1]}${attrs}>`);
+      }
+      const _gapOrigOverlay = applyGifOverlay;
+      applyGifOverlay = function (html) {
+        return _gapOrigOverlay.call(this, _gapRoot(html));
+      };
+      const _ipX = (key) => S[_ipK(key) + "X"] ?? 50;
+      const _ipY = (key) => S[_ipK(key) + "Y"] ?? 50;
+      // For photos drawn as <img>: fill mode + focus point
+      function bgFitPos(key) {
+        const fit = _ipFit(key);
+        return `object-fit:${fit};object-position:${_ipX(key)}% ${_ipY(key)}%;` + (fit === "contain" ? `background-color:${gapColor()};` : "");
+      }
+      // For photos drawn as a tile background (Grid Mosaic): fill mode, focus point, empty-space color
+      function bgBoxFit(key) {
+        const fit = _ipFit(key);
+        return `background-size:${fit};background-repeat:no-repeat;background-position:${_ipX(key)}% ${_ipY(key)}%;` + (fit === "contain" ? `background-color:${gapColor()};` : "");
+      }
+      // Zoom that grows from the focus point (not the middle), so your framing stays put
+      function bgZoomCss(key) {
+        return `transform:scale(${_ipZoom(key)});transform-origin:${_ipX(key)}% ${_ipY(key)}%;`;
+      }
+      // For photos drawn as a background: exact fill/fit size × zoom, so zooming never leaves gaps
+      function _ipBgSize(key, W, H) {
+        const fit = _ipFit(key),
+          z = _ipZoom(key),
+          ar = _ipAr(key);
+        if (!ar || !W || !H) return fit;
+        const wider = ar > W / H;
+        let w, h;
+        if ((fit === "cover") === wider) {
+          h = H * z;
+          w = h * ar;
+        } else {
+          w = W * z;
+          h = w / ar;
+        }
+        return `${Math.round(w)}px ${Math.round(h)}px`;
+      }
+      bgDiv = function (W, H) {
+        if (!S.bg) return "background:#1a1a2e;";
+        return `background:url('${S.bg}') ${_ipX("bg")}% ${_ipY("bg")}%/${_ipBgSize("bg", W, H)} no-repeat${_ipFit("bg") === "contain" ? " " + gapColor() : ""};`;
+      };
+
+      // ── The framing panel ──
+      function _ipSlots() {
+        return IP_SLOTS.filter((s) => !!S[s.key]);
+      }
+      function _ipSync() {
+        const panel = document.getElementById("ip-panel");
+        if (!panel) return;
+        const slots = _ipSlots();
+        if (!slots.length) {
+          panel.hidden = true;
+          return;
+        }
+        panel.hidden = false;
+        if (!S[_ipSlot]) _ipSlot = slots[0].key;
+        const tabs = document.getElementById("ip-tabs");
+        const tabSig = slots.map((s) => s.key).join(",") + "|" + _ipSlot;
+        if (tabs.dataset.sig !== tabSig) {
+          tabs.dataset.sig = tabSig;
+          tabs.innerHTML =
+            slots.length > 1
+              ? slots.map((s) => `<button type="button" role="tab" class="ip-tab${s.key === _ipSlot ? " on" : ""}" aria-selected="${s.key === _ipSlot}" data-k="${s.key}">${s.label}</button>`).join("")
+              : "";
+          tabs.querySelectorAll(".ip-tab").forEach((b) =>
+            b.addEventListener("click", () => {
+              _ipSlot = b.dataset.k;
+              _ipSync();
+            }),
+          );
+        }
+        const key = _ipSlot;
+        const img = document.getElementById("ip-img");
+        if (img.getAttribute("src") !== S[key]) {
+          if (/^https?:/i.test(S[key])) img.crossOrigin = "anonymous";
+          img.src = S[key];
+        }
+        // Size the picker to the photo's shape so the dot lines up with the photo
+        const box = document.getElementById("ip-pick");
+        const ar = _ipAr(key) || 4 / 3;
+        const maxW = (box.parentElement && box.parentElement.clientWidth) || 260,
+          maxH = 170;
+        let w = maxW,
+          h = w / ar;
+        if (h > maxH) {
+          h = maxH;
+          w = h * ar;
+        }
+        box.style.width = Math.round(w) + "px";
+        box.style.height = Math.round(h) + "px";
+        _ipDot();
+        const fit = _ipFit(key);
+        document.querySelectorAll("#ip-panel .ip-mode").forEach((b) => {
+          const on = b.dataset.fit === fit;
+          b.classList.toggle("on", on);
+          b.setAttribute("aria-pressed", on);
+        });
+        const zoom = document.getElementById("ip-zoom");
+        zoom.min = 100;
+        _gapSwatches();
+        if (document.activeElement !== zoom) zoom.value = Math.round(_ipZoom(key) * 100);
+        document.getElementById("ip-zoomv").textContent = Math.round(_ipZoom(key) * 100) + "%";
+      }
+      function _gapSwatches() {
+        const box = document.getElementById("ip-gap-sw");
+        if (!box) return;
+        let p = {};
+        try {
+          p = PAL() || {};
+        } catch (e) {}
+        const cur = S.gapColor || "bg";
+        const sig = GAP_ROLES.map(([r]) => p[r]).join(",") + "|" + cur;
+        if (box.dataset.sig === sig) return;
+        box.dataset.sig = sig;
+        box.innerHTML = GAP_ROLES.filter(([r]) => p[r])
+          .map(([r, label]) => `<button type="button" role="radio" aria-checked="${r === cur}" class="ip-sw${r === cur ? " on" : ""}" data-r="${r}" title="${label} (${p[r]})" aria-label="${label}" style="background:${p[r]}"></button>`)
+          .join("");
+        box.querySelectorAll(".ip-sw").forEach((b) =>
+          b.addEventListener("click", () => {
+            S.gapColor = b.dataset.r;
+            _gapSwatches();
+            render();
+            debounceSave();
+          }),
+        );
+      }
+      function _ipDot() {
+        const key = _ipSlot,
+          dot = document.getElementById("ip-dot"),
+          box = document.getElementById("ip-pick");
+        if (!dot || !box) return;
+        dot.style.left = _ipX(key) + "%";
+        dot.style.top = _ipY(key) + "%";
+        box.setAttribute("aria-valuetext", `${Math.round(_ipX(key))}% across, ${Math.round(_ipY(key))}% down`);
+      }
+      let _ipTimer = null,
+        _ipLast = 0;
+      // Live updates while dragging: redraw about 10 times a second, then once more when you let go
+      function _ipRender(final) {
+        clearTimeout(_ipTimer);
+        if (final) {
+          render();
+          debounceSave();
+          return;
+        }
+        const wait = Math.max(0, 100 - (performance.now() - _ipLast));
+        _ipTimer = setTimeout(() => {
+          _ipLast = performance.now();
+          render();
+        }, wait);
+      }
+      // Once you position a photo yourself, Smart Fit's automatic framing leaves it alone
+      // (until a new photo goes in that slot, or you press Auto-frame)
+      const _ipManual = {};
+      const _ipOrigApplySmart = applySmartImage;
+      applySmartImage = function (key, info) {
+        if (_ipManual[key]) {
+          if (key === "bg") {
+            try {
+              const ov = _autoOverlay(info);
+              S.overlay = ov;
+              _setSlider("overlayOpacity", ov);
+            } catch (e) {}
+          }
+          return;
+        }
+        return _ipOrigApplySmart.apply(this, arguments);
+      };
+      function _ipSetFocus(x, y, final) {
+        const key = _ipSlot;
+        _ipManual[key] = true;
+        x = Math.round(Math.min(100, Math.max(0, x)));
+        y = Math.round(Math.min(100, Math.max(0, y)));
+        S[key + "X"] = x;
+        S[key + "Y"] = y;
+        // Keep the old (hidden) sliders in step, so nothing snaps back when other fields change
+        _setSlider(key + "X", x);
+        _setSlider(key + "Y", y);
+        _ipDot();
+        _ipRender(final);
+      }
+      function _ipWire() {
+        const box = document.getElementById("ip-pick");
+        if (!box || box.dataset.wired) return;
+        box.dataset.wired = "1";
+        let dragging = false;
+        const at = (e) => {
+          const r = box.getBoundingClientRect();
+          _ipSetFocus(((e.clientX - r.left) / r.width) * 100, ((e.clientY - r.top) / r.height) * 100, false);
+        };
+        box.addEventListener("pointerdown", (e) => {
+          dragging = true;
+          box.setPointerCapture && box.setPointerCapture(e.pointerId);
+          box.classList.add("dragging");
+          at(e);
+          e.preventDefault();
+        });
+        box.addEventListener("pointermove", (e) => {
+          if (dragging) at(e);
+        });
+        const end = () => {
+          if (!dragging) return;
+          dragging = false;
+          box.classList.remove("dragging");
+          _ipRender(true);
+        };
+        box.addEventListener("pointerup", end);
+        box.addEventListener("pointercancel", end);
+        box.addEventListener("keydown", (e) => {
+          const step = e.shiftKey ? 10 : 2;
+          const k = _ipSlot;
+          let x = _ipX(k),
+            y = _ipY(k);
+          if (e.key === "ArrowLeft") x -= step;
+          else if (e.key === "ArrowRight") x += step;
+          else if (e.key === "ArrowUp") y -= step;
+          else if (e.key === "ArrowDown") y += step;
+          else if (e.key === "Home") x = y = 50;
+          else return;
+          e.preventDefault();
+          _ipSetFocus(x, y, true);
+        });
+        document.querySelectorAll("#ip-panel .ip-mode").forEach((b) =>
+          b.addEventListener("click", () => {
+            S[_ipSlot + "Fit"] = b.dataset.fit;
+            if (_ipScale(_ipSlot) < 100) _ipSetZoom(100, false);
+            _ipSync();
+            _ipRender(true);
+          }),
+        );
+        const zoom = document.getElementById("ip-zoom");
+        zoom.addEventListener("input", () => {
+          _ipSetZoom(+zoom.value, false);
+          document.getElementById("ip-zoomv").textContent = zoom.value + "%";
+        });
+        zoom.addEventListener("change", () => _ipRender(true));
+        zoom.addEventListener("dblclick", () => {
+          _ipSetZoom(100, true);
+          _ipSync();
+        });
+        document.getElementById("ip-center").addEventListener("click", () => {
+          _ipSetZoom(100, false);
+          _ipSetFocus(50, 50, true);
+          _ipSync();
+        });
+        document.getElementById("ip-auto").addEventListener("click", ipAutoFrame);
+      }
+      function _ipSetZoom(v, final) {
+        const key = _ipSlot;
+        if (key === "bg") {
+          S.bgScale = v;
+          _setSlider("bgScale", v);
+        } else S[key + "Scale"] = v;
+        _ipRender(final);
+      }
+      // Frame the photo on its subject again (Smart Fit's analysis)
+      async function ipAutoFrame() {
+        const key = _ipSlot;
+        if (!S[key]) return;
+        let info = S[key + "Info"];
+        if (!info) {
+          try {
+            info = await analyzeImage(S[key]);
+            if (info) S[key + "Info"] = info;
+          } catch (e) {}
+        }
+        if (!info) {
+          _mpToast("Couldn't read this photo to frame it automatically.");
+          return;
+        }
+        _ipManual[key] = false;
+        applySmartImage(key, info);
+        _ipSync();
+        _ipRender(true);
+      }
+      // The panel follows every render (new photos, cleared slots, Smart Fit framing)
+      const _ipOrigRender = render;
+      render = function () {
+        const r = _ipOrigRender.apply(this, arguments);
+        try {
+          _ipWire();
+          _ipSync();
+        } catch (e) {}
+        return r;
+      };
+
+      // ══════════════════════════════════════════
+      // LOGO SLOTS: click an empty slot to upload a new logo into it
+      // (right-click still saves your current logo there; dropping an image file works too)
+      // ══════════════════════════════════════════
+      let _logoSlotTarget = null;
+      function uploadLogoToSlot(i, file) {
+        const go = (f) => {
+          if (!f || !/^image\//.test(f.type)) return;
+          _logoSlotTarget = i;
+          handleUpload({ files: [f] }, "logo");
+        };
+        if (file) return go(file);
+        const inp = document.createElement("input");
+        inp.type = "file";
+        inp.accept = "image/*";
+        inp.addEventListener("change", () => go(inp.files && inp.files[0]));
+        inp.click();
+      }
+      promptSaveSlot = function (i) {
+        uploadLogoToSlot(i);
+      };
+      const _ipOrigZone = updateZonePreview;
+      updateZonePreview = function (key) {
+        if (key === "bg" || key === "bg2" || key === "bg3") _ipManual[key] = false; // a new photo gets framed fresh
+        if (key === "logo" && _logoSlotTarget != null && S.logo) {
+          S.savedLogos[_logoSlotTarget] = S.logo;
+          _logoSlotTarget = null;
+          debounceSave();
+        }
+        return _ipOrigZone.apply(this, arguments);
+      };
+      const _ipOrigSlots = buildLogoSlots;
+      buildLogoSlots = function () {
+        const r = _ipOrigSlots.apply(this, arguments);
+        document.querySelectorAll("#logoSlots .logo-slot").forEach((slot, i) => {
+          if (slot.classList.contains("filled")) return;
+          slot.title = "Click to upload a logo here · Right-click to save your current logo here";
+          slot.setAttribute("role", "button");
+          slot.setAttribute("tabindex", "0");
+          slot.setAttribute("aria-label", `Empty logo slot ${i + 1}: upload a logo`);
+          slot.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              uploadLogoToSlot(i);
+            }
+          });
+          slot.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            slot.classList.add("drop");
+          });
+          slot.addEventListener("dragleave", () => slot.classList.remove("drop"));
+          slot.addEventListener("drop", (e) => {
+            e.preventDefault();
+            slot.classList.remove("drop");
+            const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (f) uploadLogoToSlot(i, f);
+          });
+        });
+        return r;
+      };
+
+      (function _ipStyles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          .sl-row:has(#bgScale), .sl-row:has(#bgX), .sl-row:has(#bgY) { display: none !important; }
+          #bg2-pos-sliders, #bg3-pos-sliders { display: none !important; }
+          .ip-panel { margin-top: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.02); }
+          .ip-panel[hidden] { display: none; }
+          .ip-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+          .ip-title { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+          .ip-tabs { display: flex; gap: 3px; }
+          .ip-tab { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; font: 600 10px "DM Sans", sans-serif; padding: 3px 7px; cursor: pointer; }
+          .ip-tab.on { color: var(--text); border-color: var(--hi); background: var(--hi-dim); }
+          .ip-pick { position: relative; margin: 0 auto; border-radius: 8px; overflow: hidden; cursor: crosshair; touch-action: none; background: #111; outline: none; }
+          .ip-pick:focus-visible { box-shadow: 0 0 0 2px var(--hi); }
+          .ip-pick img { width: 100%; height: 100%; object-fit: fill; display: block; pointer-events: none; user-select: none; }
+          .ip-grid { position: absolute; inset: 0; pointer-events: none; background:
+              linear-gradient(to right, transparent 33.1%, rgba(255,255,255,.25) 33.3%, transparent 33.5%, transparent 66.5%, rgba(255,255,255,.25) 66.7%, transparent 66.9%),
+              linear-gradient(to bottom, transparent 33.1%, rgba(255,255,255,.25) 33.3%, transparent 33.5%, transparent 66.5%, rgba(255,255,255,.25) 66.7%, transparent 66.9%); }
+          .ip-dot { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 2px solid #fff; background: var(--hi); box-shadow: 0 0 0 2px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.5); pointer-events: none; transition: left .05s, top .05s; }
+          .ip-pick.dragging .ip-dot { transform: scale(1.2); transition: none; }
+          .ip-hint { font-size: 10px; color: var(--muted); margin: 6px 0 8px; text-align: center; }
+          .ip-modes { display: flex; gap: 4px; margin-bottom: 8px; }
+          .ip-mode { flex: 1; background: var(--panel); border: 1px solid var(--border); color: var(--muted); border-radius: 7px; font: 600 10.5px "DM Sans", sans-serif; padding: 6px 4px; cursor: pointer; }
+          .ip-mode.on { color: var(--text); border-color: var(--hi); background: var(--hi-dim); }
+          .ip-zoom { margin-bottom: 6px; }
+          .ip-gap { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 10.5px; color: var(--muted); }
+          .ip-gap-sw { display: flex; gap: 5px; }
+          .ip-sw { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; padding: 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+          .ip-sw.on { border-color: var(--hi); box-shadow: 0 0 0 2px var(--hi-dim), inset 0 0 0 1px rgba(255,255,255,.2); }
+          .ip-sw:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+          .ip-btns { display: flex; gap: 4px; }
+          .ip-btns button { flex: 1; background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 7px; font: 600 10.5px "DM Sans", sans-serif; padding: 6px 4px; cursor: pointer; }
+          .ip-btns button:hover, .ip-mode:hover, .ip-tab:hover { border-color: var(--hi); }
+          .ip-tab:focus-visible, .ip-mode:focus-visible, .ip-btns button:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+          .logo-slot:not(.filled) { cursor: pointer; }
+          .logo-slot.drop { outline: 2px dashed var(--hi); outline-offset: 1px; }
+          .logo-slot:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+        `;
+        document.head.appendChild(st);
+      })();
+      // ══════════════════════════════════════════
       // COPY TO CLIPBOARD
       // ══════════════════════════════════════════
       async function copyCardToClipboard(idx, btn) {
@@ -10373,7 +10855,7 @@ Post:
             scale:  1,
             useCORS:      true,
             allowTaint:   true,
-            backgroundColor: null,
+            backgroundColor: gapColor(),
             logging:    false,
             x: 0, y: 0,
             scrollX: 0, scrollY: 0,
@@ -10408,7 +10890,7 @@ Post:
           scale:  1,
           useCORS:      true,
           allowTaint:   true,
-          backgroundColor: null,
+          backgroundColor: gapColor(),
           logging:    false,
           x: 0, y: 0,
           scrollX: 0, scrollY: 0,
@@ -11800,7 +12282,7 @@ Post:
             return `<div style="width:${W}px;height:${H}px;display:flex;flex-direction:column;position:relative;overflow:hidden;"><div style="height:${imgH}px;${bgDiv(W, H)}position:relative;flex-shrink:0;"></div><div style="flex:1;background:${p.bg};display:flex;flex-direction:column;justify-content:center;padding:${sp.left}px;box-sizing:border-box;">${logoHTML(W, H)}${aline(W, p.accent)}${hdr(W, p.text, fs)}<div style="margin-top:${H * 0.022}px;">${body(W, rgba(p.text, 0.8), fs * 0.9)}</div></div><div style="position:absolute;left:0;right:0;top:${imgH}px;height:${W * 0.005}px;background:${p.accent};z-index:2;"></div>${siteTag(W, H)}</div>`;
           }
           const textW = tpw(W, o === "wide" ? 0.45 : 0.5);
-          return `<div style="width:${W}px;height:${H}px;display:flex;position:relative;overflow:hidden;"><div style="width:${textW}px;background:${p.bg};display:flex;flex-direction:column;justify-content:center;padding:${sp.left}px;box-sizing:border-box;z-index:1;flex-shrink:0;">${logoHTML(W, H)}${aline(W, p.accent)}${hdr(W, p.text, fs * 0.8)}<div style="margin-top:${H * 0.025}px;">${body(W, rgba(p.text, 0.8), fs * 0.88)}</div></div><div style="flex:1;${bgDiv(W, H)}position:relative;"></div><div style="position:absolute;left:${textW}px;top:0;bottom:0;width:${W * 0.005}px;background:${p.accent};z-index:2;"></div>${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;display:flex;position:relative;overflow:hidden;"><div style="width:${textW}px;background:${p.bg};display:flex;flex-direction:column;justify-content:center;padding:${sp.left}px;box-sizing:border-box;z-index:1;flex-shrink:0;">${logoHTML(W, H)}${aline(W, p.accent)}${hdr(W, p.text, fs * 0.8)}<div style="margin-top:${H * 0.025}px;">${body(W, rgba(p.text, 0.8), fs * 0.88)}</div></div><div style="flex:1;${bgDiv(0, 0)}position:relative;"></div><div style="position:absolute;left:${textW}px;top:0;bottom:0;width:${W * 0.005}px;background:${p.accent};z-index:2;"></div>${siteTag(W, H)}</div>`;
         },
         // 3. Frame Story
         (p, W, H) => {
@@ -11833,7 +12315,7 @@ Post:
         (p, W, H) => {
           const r = (Math.min(W, H) * 0.34 * (S.imgSize || 100)) / 100;
           const tw = tpw(W, 1);
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 35%,${rgba(p.primary, 0.3)},transparent 65%);"></div><div style="position:absolute;top:${H * 0.14}px;left:50%;transform:translateX(-50%);width:${r * 2}px;height:${r * 2}px;border-radius:50%;overflow:hidden;border:${W * 0.007}px solid ${p.accent};box-shadow:0 0 ${W * 0.06}px ${rgba(p.accent, 0.45)};">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${p.primary};"></div>`}</div>${logoHTML(W, H)}${siteTag(W, H)}${tw > 0 ? `<div style="position:absolute;bottom:${Math.max(H * 0.06, tagSafe(W, H).b)}px;left:${(W - tw) / 2}px;width:${tw}px;text-align:center;overflow:hidden;"><div style="width:${W * 0.08}px;height:4px;background:${p.accent};margin:0 auto ${H * 0.02}px;border-radius:2px;"></div>${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(p.text, 0.8), fScale())}</div></div>` : ""}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 35%,${rgba(p.primary, 0.3)},transparent 65%);"></div><div style="position:absolute;top:${H * 0.14}px;left:50%;transform:translateX(-50%);width:${r * 2}px;height:${r * 2}px;border-radius:50%;overflow:hidden;border:${W * 0.007}px solid ${p.accent};box-shadow:0 0 ${W * 0.06}px ${rgba(p.accent, 0.45)};">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${p.primary};"></div>`}</div>${logoHTML(W, H)}${siteTag(W, H)}${tw > 0 ? `<div style="position:absolute;bottom:${Math.max(H * 0.06, tagSafe(W, H).b)}px;left:${(W - tw) / 2}px;width:${tw}px;text-align:center;overflow:hidden;"><div style="width:${W * 0.08}px;height:4px;background:${p.accent};margin:0 auto ${H * 0.02}px;border-radius:2px;"></div>${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(p.text, 0.8), fScale())}</div></div>` : ""}</div>`;
         },
         // 7. Corner Block
         (p, W, H) =>
@@ -11857,7 +12339,7 @@ Post:
             lw = Math.round(lh * 0.75);
           if (o === "wide") {
             // Wide: banner on left side, image fills right
-            return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};display:flex;">${bh > 0 ? `<div style="width:${bh}px;background:${p.bg};display:flex;flex-direction:column;justify-content:center;padding:${sp.left}px;box-sizing:border-box;z-index:2;gap:${H * 0.03}px;flex-shrink:0;">${S.logo ? `<div style="width:${lw}px;height:${lh}px;flex-shrink:0;opacity:${S.lOpacity / 100};display:flex;align-items:center;justify-content:center;margin-bottom:${H * 0.02}px;"><img src="${S.logo}" style="max-width:100%;max-height:100%;object-fit:contain;display:block;"></div>` : ""}<div style="font-family:${S.font};font-size:${effH() * fs * (W / 1080)}px;font-weight:800;color:${p.text};">${S.header}</div><div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.75), fs * 0.88)}</div></div>` : ""}<div style="flex:1;${bgDiv(W, H)}position:relative;"><div style="position:absolute;inset:0;background:linear-gradient(to right,${rgba(p.bg, 0.35)},transparent 40%);"></div></div>${siteTag(W, H)}</div>`;
+            return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};display:flex;">${bh > 0 ? `<div style="width:${bh}px;background:${p.bg};display:flex;flex-direction:column;justify-content:center;padding:${sp.left}px;box-sizing:border-box;z-index:2;gap:${H * 0.03}px;flex-shrink:0;">${S.logo ? `<div style="width:${lw}px;height:${lh}px;flex-shrink:0;opacity:${S.lOpacity / 100};display:flex;align-items:center;justify-content:center;margin-bottom:${H * 0.02}px;"><img src="${S.logo}" style="max-width:100%;max-height:100%;object-fit:contain;display:block;"></div>` : ""}<div style="font-family:${S.font};font-size:${effH() * fs * (W / 1080)}px;font-weight:800;color:${p.text};">${S.header}</div><div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.75), fs * 0.88)}</div></div>` : ""}<div style="flex:1;${bgDiv(0, 0)}position:relative;"><div style="position:absolute;inset:0;background:linear-gradient(to right,${rgba(p.bg, 0.35)},transparent 40%);"></div></div>${siteTag(W, H)}</div>`;
           }
           return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${bh > 0 ? `<div style="position:absolute;top:0;left:0;right:0;height:${bh}px;background:${p.bg};display:flex;align-items:center;padding:0 ${sp.left}px;box-sizing:border-box;z-index:2;gap:${W * 0.03}px;">${S.logo ? `<div style="width:${lw}px;height:${lh}px;flex-shrink:0;opacity:${S.lOpacity / 100};display:flex;align-items:center;justify-content:center;"><img src="${S.logo}" style="max-width:100%;max-height:100%;object-fit:contain;display:block;"></div>` : ""}<div style="font-family:${S.font};font-size:${effH() * fs * 0.82 * (W / 1080)}px;font-weight:800;color:${p.text};">${S.header}</div></div>` : ""}<div style="position:absolute;top:${bh}px;left:0;right:0;height:${H - bh}px;${bgDiv(W, H)}"><div style="position:absolute;bottom:0;left:0;right:0;height:${(H - bh) * 0.4}px;background:linear-gradient(to top,${rgba(p.bg, 0.8)},transparent);"></div><div style="position:absolute;bottom:${Math.max(sp.bot, tagSafe(W, H).b)}px;left:${sp.left}px;right:${sp.right}px;">${body(W, "#fff", fs)}</div></div>${siteTag(W, H)}</div>`;
         },
@@ -11869,7 +12351,7 @@ Post:
           if (o === "wide") {
             const imgW = Math.round(W * 0.58),
               cardW = W - imgW + Math.round(W * 0.02);
-            return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};display:flex;"><div style="flex:1;${bgDiv(W, H)}position:relative;">${logoHTML(W, H)}</div><div style="width:${cardW}px;flex-shrink:0;background:${p.bg};border-radius:${W * 0.025}px 0 0 ${W * 0.025}px;display:flex;flex-direction:column;justify-content:center;padding:${sp2.left}px;box-sizing:border-box;">${aline(W, p.accent)}${hdr(W, p.text, fs)}<div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.78), fs * 0.9)}</div></div>${siteTag(W, H)}</div>`;
+            return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};display:flex;"><div style="flex:1;${bgDiv(0, 0)}position:relative;">${logoHTML(W, H)}</div><div style="width:${cardW}px;flex-shrink:0;background:${p.bg};border-radius:${W * 0.025}px 0 0 ${W * 0.025}px;display:flex;flex-direction:column;justify-content:center;padding:${sp2.left}px;box-sizing:border-box;">${aline(W, p.accent)}${hdr(W, p.text, fs)}<div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.78), fs * 0.9)}</div></div>${siteTag(W, H)}</div>`;
           }
           const sp = tpw(H, 0.54);
           return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.primary};"><div style="position:absolute;top:0;left:0;right:0;height:${sp}px;${bgDiv(W, H)}">${logoHTML(W, H)}</div>${sp < H ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${H - sp + H * 0.025}px;background:${p.bg};border-radius:${W * 0.038}px ${W * 0.038}px 0 0;display:flex;flex-direction:column;justify-content:center;padding:${sp2.left}px;box-sizing:border-box;">${aline(W, p.accent)}${hdr(W, p.text, fs)}<div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.78), fs * 0.9)}</div></div>` : ""} ${siteTag(W, H)}</div>`;
@@ -11884,10 +12366,10 @@ Post:
         },
         // 14. Geo Blocks
         (p, W, H) =>
-          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:0;right:0;width:${W * 0.48}px;height:${H * 0.52}px;background:${rgba(p.primary, 0.65)};"></div><div style="position:absolute;bottom:0;left:0;width:${W * 0.6}px;height:${H * 0.35}px;background:${rgba(p.primary, 0.35)};"></div><div style="position:absolute;top:${H * 0.24}px;right:${W * 0.07}px;width:${W * 0.24}px;height:${W * 0.24}px;background:${p.highlight};"></div>${S.bg ? `<div style="position:absolute;top:${W > H ? H * 0.04 : H * 0.09}px;right:${W * 0.04}px;width:${W * (W > H ? 0.38 : 0.42)}px;height:${W > H ? H * 0.92 : H * 0.4}px;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;"></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${Math.max(H * 0.07, tagSafe(W, H).b)}px;left:${W * 0.06}px;width:${tpw(W, 0.58)}px;">${aline(W, p.accent)}${hdr(W, p.text, 0.88)}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(p.text, 0.78), 0.88)}</div></div></div>`,
+          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:0;right:0;width:${W * 0.48}px;height:${H * 0.52}px;background:${rgba(p.primary, 0.65)};"></div><div style="position:absolute;bottom:0;left:0;width:${W * 0.6}px;height:${H * 0.35}px;background:${rgba(p.primary, 0.35)};"></div><div style="position:absolute;top:${H * 0.24}px;right:${W * 0.07}px;width:${W * 0.24}px;height:${W * 0.24}px;background:${p.highlight};"></div>${S.bg ? `<div style="position:absolute;top:${W > H ? H * 0.04 : H * 0.09}px;right:${W * 0.04}px;width:${W * (W > H ? 0.38 : 0.42)}px;height:${W > H ? H * 0.92 : H * 0.4}px;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}"></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${Math.max(H * 0.07, tagSafe(W, H).b)}px;left:${W * 0.06}px;width:${tpw(W, 0.58)}px;">${aline(W, p.accent)}${hdr(W, p.text, 0.88)}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(p.text, 0.78), 0.88)}</div></div></div>`,
         // 15. Big Quote
         (p, W, H) =>
-          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${S.bg ? `<div style="position:absolute;inset:0;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;opacity:.14;"></div>` : ""}<div style="position:absolute;top:${H * 0.02}px;left:${W * 0.04}px;font-family:${S.font};font-size:${W * 0.38}px;font-weight:900;color:${p.accent};line-height:1;opacity:.45;">"</div>${logoHTML(W, H)}<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:${W * 0.12}px;"><div style="font-family:${S.font};font-size:${effH() * 1.05 * (W / 1080)}px;font-weight:700;font-style:italic;color:${p.text};line-height:1.22;${ts(W)}">${S.header}</div><div style="width:${W * 0.14}px;height:4px;background:${p.accent};margin:${H * 0.03}px auto;"></div>${body(W, rgba(p.text, 0.7), fScale())}</div>${siteTag(W, H)}</div>`,
+          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${S.bg ? `<div style="position:absolute;inset:0;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}opacity:.14;"></div>` : ""}<div style="position:absolute;top:${H * 0.02}px;left:${W * 0.04}px;font-family:${S.font};font-size:${W * 0.38}px;font-weight:900;color:${p.accent};line-height:1;opacity:.45;">"</div>${logoHTML(W, H)}<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:${W * 0.12}px;"><div style="font-family:${S.font};font-size:${effH() * 1.05 * (W / 1080)}px;font-weight:700;font-style:italic;color:${p.text};line-height:1.22;${ts(W)}">${S.header}</div><div style="width:${W * 0.14}px;height:4px;background:${p.accent};margin:${H * 0.03}px auto;"></div>${body(W, rgba(p.text, 0.7), fScale())}</div>${siteTag(W, H)}</div>`,
         // 16. Grid Mosaic
         (p, W, H) => {
           const g = W * 0.016,
@@ -11895,7 +12377,7 @@ Post:
             ch = (H - g * 3) / 2;
           const img1 = S.bg,
             img2 = S.bg2 || S.bg;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.accent};"><div style="position:absolute;inset:0;display:grid;grid-template-columns:${cw}px ${cw}px;grid-template-rows:${ch}px ${ch}px;gap:${g}px;padding:${g}px;box-sizing:border-box;"><div style="background:${p.bg};display:flex;flex-direction:column;justify-content:flex-end;padding:${W * 0.05}px;box-sizing:border-box;"><div style="width:${W * 0.05}px;height:3px;background:${p.accent};margin-bottom:${H * 0.015}px;border-radius:2px;"></div>${hdr(W, p.text, 0.62)}</div><div style="position:relative;overflow:hidden;">${img1 ? `<div style="width:100%;height:100%;background-image:url(${img1});background-size:cover;background-position:${S.bgX ?? 50}% ${S.bgY ?? 50}%;transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;"></div>` : `<div style="width:100%;height:100%;background:${p.primary};"></div>`}</div><div style="position:relative;overflow:hidden;">${img2 ? `<div style="width:100%;height:100%;background-image:url(${img2});background-size:cover;background-position:${S.bg2X ?? 50}% ${S.bg2Y ?? 50}%;transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;"></div>` : `<div style="width:100%;height:100%;background:${lighten(p.primary, 18)};"></div>`}</div><div style="background:${p.primary};display:flex;flex-direction:column;justify-content:center;padding:${W * 0.05}px;box-sizing:border-box;">${body(W, ctxt(p.primary), 0.78)}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.accent};"><div style="position:absolute;inset:0;display:grid;grid-template-columns:${cw}px ${cw}px;grid-template-rows:${ch}px ${ch}px;gap:${g}px;padding:${g}px;box-sizing:border-box;"><div style="background:${p.bg};display:flex;flex-direction:column;justify-content:flex-end;padding:${W * 0.05}px;box-sizing:border-box;"><div style="width:${W * 0.05}px;height:3px;background:${p.accent};margin-bottom:${H * 0.015}px;border-radius:2px;"></div>${hdr(W, p.text, 0.62)}</div><div style="position:relative;overflow:hidden;">${img1 ? `<div style="width:100%;height:100%;background-image:url(${img1});${bgBoxFit("bg")}${bgZoomCss("bg")}"></div>` : `<div style="width:100%;height:100%;background:${p.primary};"></div>`}</div><div style="position:relative;overflow:hidden;">${img2 ? `<div style="width:100%;height:100%;background-image:url(${img2});${bgBoxFit("bg2")}${bgZoomCss("bg2")}"></div>` : `<div style="width:100%;height:100%;background:${lighten(p.primary, 18)};"></div>`}</div><div style="background:${p.primary};display:flex;flex-direction:column;justify-content:center;padding:${W * 0.05}px;box-sizing:border-box;">${body(W, ctxt(p.primary), 0.78)}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
         // 17. Center Strip
         (p, W, H) => {
@@ -11911,11 +12393,11 @@ Post:
           const isc = (S.imgSize || 100) / 100,
             th = H * imgTopFrac() * isc;
           const platLabel = S.platform === "pinterest" ? "PINNED" : S.platform === "instagram" ? "POSTED" : "FEATURED";
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:0;left:0;right:0;height:${th}px;${bgDiv(W, H)}"><div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 45%,${p.bg} 100%);"></div>${logoHTML(W, H)}<div style="position:absolute;top:${sp.top}px;right:${sp.right}px;background:${p.accent};color:${ctxt(p.accent)};font-family:${S.font};font-size:${W * 0.011}px;font-weight:800;padding:${H * 0.008}px ${W * 0.022}px;text-transform:uppercase;letter-spacing:2.5px;">${platLabel}</div></div><div style="position:absolute;top:${th * 0.8}px;left:${sp.left}px;right:${sp.right}px;"><div style="font-family:${S.font};font-size:${W * 0.011}px;font-weight:700;color:${p.accent};letter-spacing:3px;text-transform:uppercase;margin-bottom:${H * 0.01}px;">✦ GET IN THE KNOW</div>${hdr(W, p.text, fs)}<div style="margin-top:${H * 0.018}px;">${body(W, rgba(p.text, 0.75), fs * 0.88)}</div></div>${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:0;left:0;right:0;height:${th}px;${bgDiv(W, th)}"><div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 45%,${p.bg} 100%);"></div>${logoHTML(W, H)}<div style="position:absolute;top:${sp.top}px;right:${sp.right}px;background:${p.accent};color:${ctxt(p.accent)};font-family:${S.font};font-size:${W * 0.011}px;font-weight:800;padding:${H * 0.008}px ${W * 0.022}px;text-transform:uppercase;letter-spacing:2.5px;">${platLabel}</div></div><div style="position:absolute;top:${th * 0.8}px;left:${sp.left}px;right:${sp.right}px;"><div style="font-family:${S.font};font-size:${W * 0.011}px;font-weight:700;color:${p.accent};letter-spacing:3px;text-transform:uppercase;margin-bottom:${H * 0.01}px;">✦ GET IN THE KNOW</div>${hdr(W, p.text, fs)}<div style="margin-top:${H * 0.018}px;">${body(W, rgba(p.text, 0.75), fs * 0.88)}</div></div>${siteTag(W, H)}</div>`;
         },
         // 19. Duotone Wash
         (p, W, H) =>
-          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${S.bg ? `<img src="${S.bg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;filter:grayscale(100%) contrast(1.15);pointer-events:none;">` : ""}<div style="position:absolute;inset:0;background:${rgba(p.bg, oa())};"></div><div style="position:absolute;inset:0;background:linear-gradient(135deg,${rgba(p.primary, 0.65)} 0%,${rgba(p.accent, 0.38)} 100%);"></div>${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:0;left:0;right:0;padding:${W * 0.07}px;padding-bottom:${Math.max(W * 0.07, tagSafe(W, H).b)}px;box-sizing:border-box;"><div style="width:${W * 0.055}px;height:4px;background:#fff;margin-bottom:${H * 0.025}px;border-radius:2px;opacity:.65;"></div>${hdr(W, "#fff", fScale())}<div style="margin-top:${H * 0.018}px;">${body(W, "rgba(255,255,255,.78)", fScale())}</div></div></div>`,
+          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${S.bg ? `<img src="${S.bg}" style="position:absolute;inset:0;width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}filter:grayscale(100%) contrast(1.15);pointer-events:none;">` : ""}<div style="position:absolute;inset:0;background:${rgba(p.bg, oa())};"></div><div style="position:absolute;inset:0;background:linear-gradient(135deg,${rgba(p.primary, 0.65)} 0%,${rgba(p.accent, 0.38)} 100%);"></div>${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:0;left:0;right:0;padding:${W * 0.07}px;padding-bottom:${Math.max(W * 0.07, tagSafe(W, H).b)}px;box-sizing:border-box;"><div style="width:${W * 0.055}px;height:4px;background:#fff;margin-bottom:${H * 0.025}px;border-radius:2px;opacity:.65;"></div>${hdr(W, "#fff", fScale())}<div style="margin-top:${H * 0.018}px;">${body(W, "rgba(255,255,255,.78)", fScale())}</div></div></div>`,
         // 20. Elegant Border
         (p, W, H) => {
           const pd = W * 0.055,
@@ -11938,11 +12420,11 @@ Post:
         // ── TAILWIND-STYLE TEMPLATES ─────────────────────────────────────
         // 21. Utility Card
         (p, W, H) =>
-          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${S.bg ? `<div style="position:absolute;inset:0;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;opacity:.14;"></div><div style="position:absolute;inset:0;background:linear-gradient(135deg,${rgba(p.bg, 0.92)} 40%,${rgba(p.bg, 0.6)} 100%);"></div>` : ""}<div style="position:absolute;top:0;left:0;right:0;height:${H * 0.009}px;background:${p.accent};"></div><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 80% 20%,${rgba(p.primary, 0.28)},transparent 58%);"></div>${logoHTML(W, H)}<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:${safePad(W, H).left}px;padding-top:${H * 0.08}px;box-sizing:border-box;"><div style="display:inline-flex;align-items:center;gap:${W * 0.012}px;background:${rgba(p.accent, 0.12)};border:1px solid ${rgba(p.accent, 0.28)};border-radius:${W * 0.04}px;padding:${H * 0.011}px ${W * 0.03}px;margin-bottom:${H * 0.03}px;width:fit-content;"><div style="width:${W * 0.014}px;height:${W * 0.014}px;border-radius:50%;background:${p.accent};"></div><span style="font-family:${S.font};font-size:${W * 0.016}px;font-weight:700;color:${p.accent};text-transform:uppercase;letter-spacing:2px;">${S.platform === "pinterest" || S.platform === "tumblr" ? "Inspiration" : S.platform === "shopify" || S.platform === "kofi" ? "Shop Now" : "Spotlight"}</span></div>${hdr(W, p.text, fScale())}<div style="width:${W * 0.08}px;height:${H * 0.003}px;background:${p.accent};border-radius:2px;margin:${H * 0.024}px 0;"></div>${body(W, rgba(p.text, 0.72), fScale())}</div>${siteTag(W, H)}</div>`,
+          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${S.bg ? `<div style="position:absolute;inset:0;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}opacity:.14;"></div><div style="position:absolute;inset:0;background:linear-gradient(135deg,${rgba(p.bg, 0.92)} 40%,${rgba(p.bg, 0.6)} 100%);"></div>` : ""}<div style="position:absolute;top:0;left:0;right:0;height:${H * 0.009}px;background:${p.accent};"></div><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 80% 20%,${rgba(p.primary, 0.28)},transparent 58%);"></div>${logoHTML(W, H)}<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:${safePad(W, H).left}px;padding-top:${H * 0.08}px;box-sizing:border-box;"><div style="display:inline-flex;align-items:center;gap:${W * 0.012}px;background:${rgba(p.accent, 0.12)};border:1px solid ${rgba(p.accent, 0.28)};border-radius:${W * 0.04}px;padding:${H * 0.011}px ${W * 0.03}px;margin-bottom:${H * 0.03}px;width:fit-content;"><div style="width:${W * 0.014}px;height:${W * 0.014}px;border-radius:50%;background:${p.accent};"></div><span style="font-family:${S.font};font-size:${W * 0.016}px;font-weight:700;color:${p.accent};text-transform:uppercase;letter-spacing:2px;">${S.platform === "pinterest" || S.platform === "tumblr" ? "Inspiration" : S.platform === "shopify" || S.platform === "kofi" ? "Shop Now" : "Spotlight"}</span></div>${hdr(W, p.text, fScale())}<div style="width:${W * 0.08}px;height:${H * 0.003}px;background:${p.accent};border-radius:2px;margin:${H * 0.024}px 0;"></div>${body(W, rgba(p.text, 0.72), fScale())}</div>${siteTag(W, H)}</div>`,
 
         // 22. Announcement
         (p, W, H) =>
-          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${S.bg ? `<div style="position:absolute;inset:0;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;opacity:.16;filter:saturate(.6);"></div><div style="position:absolute;inset:0;background:${rgba(p.bg, 0.78)};"></div>` : ""}<div style="position:absolute;inset:0;background:radial-gradient(ellipse at 85% 15%,${rgba(p.primary, 0.38)},transparent 55%);"></div><div style="position:absolute;top:${H * 0.055}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;display:flex;align-items:center;gap:${W * 0.022}px;"><div style="background:${p.accent};color:${ctxt(p.accent)};font-family:${S.font};font-size:${W * 0.015}px;font-weight:800;padding:${H * 0.01}px ${W * 0.028}px;border-radius:${W * 0.035}px;text-transform:uppercase;letter-spacing:2.5px;white-space:nowrap;">NEW</div><div style="height:1px;flex:1;background:${rgba(p.text, 0.12)};"></div></div>${logoHTML(W, H)}<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:${safePad(W, H).left}px;">${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.025}px;">${body(W, rgba(p.text, 0.7), fScale())}</div></div>${siteTag(W, H)}</div>`,
+          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${S.bg ? `<div style="position:absolute;inset:0;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}opacity:.16;filter:saturate(.6);"></div><div style="position:absolute;inset:0;background:${rgba(p.bg, 0.78)};"></div>` : ""}<div style="position:absolute;inset:0;background:radial-gradient(ellipse at 85% 15%,${rgba(p.primary, 0.38)},transparent 55%);"></div><div style="position:absolute;top:${H * 0.055}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;display:flex;align-items:center;gap:${W * 0.022}px;"><div style="background:${p.accent};color:${ctxt(p.accent)};font-family:${S.font};font-size:${W * 0.015}px;font-weight:800;padding:${H * 0.01}px ${W * 0.028}px;border-radius:${W * 0.035}px;text-transform:uppercase;letter-spacing:2.5px;white-space:nowrap;">NEW</div><div style="height:1px;flex:1;background:${rgba(p.text, 0.12)};"></div></div>${logoHTML(W, H)}<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:${safePad(W, H).left}px;">${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.025}px;">${body(W, rgba(p.text, 0.7), fScale())}</div></div>${siteTag(W, H)}</div>`,
 
         // 23. Frosted Glass
         (p, W, H) =>
@@ -11955,7 +12437,7 @@ Post:
             ih = H * 0.46 * isc;
           const bh = H * 0.006;
           const tw = tpw(W, 0.5);
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:0;left:0;right:0;height:${bh}px;background:${p.accent};"></div><div style="position:absolute;bottom:0;left:0;right:0;height:${bh}px;background:${rgba(p.accent, 0.45)};"></div><div style="position:absolute;top:${bh}px;right:0;bottom:${bh}px;width:${W * 0.46}px;background:${rgba(p.primary, 0.18)};"></div><div style="position:absolute;top:${bh}px;right:0;bottom:${bh}px;width:1.5px;background:${rgba(p.accent, 0.35)};"></div>${S.bg ? `<div style="position:absolute;top:${H * 0.07}px;right:${W * 0.04}px;width:${iw}px;height:${ih}px;border-radius:${W * 0.012}px;overflow:hidden;opacity:.75;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;"></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}${tw > 0 ? `<div style="position:absolute;bottom:${H * 0.1}px;left:${W * 0.07}px;width:${tw}px;overflow:hidden;">${aline(W, p.accent)}${hdr(W, p.text, 0.9)}<div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.72), 0.9)}</div></div>` : ""}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:0;left:0;right:0;height:${bh}px;background:${p.accent};"></div><div style="position:absolute;bottom:0;left:0;right:0;height:${bh}px;background:${rgba(p.accent, 0.45)};"></div><div style="position:absolute;top:${bh}px;right:0;bottom:${bh}px;width:${W * 0.46}px;background:${rgba(p.primary, 0.18)};"></div><div style="position:absolute;top:${bh}px;right:0;bottom:${bh}px;width:1.5px;background:${rgba(p.accent, 0.35)};"></div>${S.bg ? `<div style="position:absolute;top:${H * 0.07}px;right:${W * 0.04}px;width:${iw}px;height:${ih}px;border-radius:${W * 0.012}px;overflow:hidden;opacity:.75;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}"></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}${tw > 0 ? `<div style="position:absolute;bottom:${H * 0.1}px;left:${W * 0.07}px;width:${tw}px;overflow:hidden;">${aline(W, p.accent)}${hdr(W, p.text, 0.9)}<div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.72), 0.9)}</div></div>` : ""}</div>`;
         },
 
         // 25. Feature Pill
@@ -11964,7 +12446,7 @@ Post:
             iw = W * 0.45 * isc,
             ih = H * 0.5 * isc,
             cd = W * 0.3;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.primary};"><div style="position:absolute;bottom:-${W * 0.28}px;right:-${W * 0.14}px;width:${W * 0.62}px;height:${W * 0.62}px;border-radius:50%;background:${rgba(p.accent, 0.16)};"></div><div style="position:absolute;top:-${W * 0.22}px;left:-${W * 0.08}px;width:${W * 0.52}px;height:${W * 0.52}px;border-radius:50%;background:${rgba(p.bg, 0.14)};"></div>${S.bg ? `<div style="position:absolute;top:${H * 0.06}px;right:${W * 0.04}px;width:${iw}px;height:${ih}px;overflow:hidden;border-radius:${W * 0.014}px;box-shadow:0 ${W * 0.012}px ${W * 0.035}px rgba(0,0,0,.55);"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;"></div>` : ``}${S.bg2 ? `<div style="position:absolute;top:${H * 0.06 + ih - cd / 2}px;right:${W * 0.04 + iw - cd / 2}px;width:${cd}px;height:${cd}px;overflow:hidden;border-radius:50%;border:${W * 0.005}px solid rgba(255,255,255,.92);box-shadow:0 ${W * 0.01}px ${W * 0.03}px rgba(0,0,0,.55);z-index:3;"><img src="${S.bg2}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg2")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;"></div>` : ``} ${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${Math.max(H * 0.07, tagSafe(W, H).b)}px;left:${W * 0.07}px;right:${W * 0.5}px;"><div style="background:${p.accent};color:${ctxt(p.accent)};font-family:${S.font};font-size:${W * 0.013}px;font-weight:700;letter-spacing:2px;padding:${H * 0.009}px ${W * 0.022}px;border-radius:${W * 0.028}px;display:inline-block;margin-bottom:${H * 0.022}px;text-transform:uppercase;">FEATURE</div>${hdr(W, ctxt(p.primary), 0.78)}<div style="margin-top:${H * 0.018}px;">${body(W, rgba(ctxt(p.primary), 0.7), 0.82)}</div></div></div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.primary};"><div style="position:absolute;bottom:-${W * 0.28}px;right:-${W * 0.14}px;width:${W * 0.62}px;height:${W * 0.62}px;border-radius:50%;background:${rgba(p.accent, 0.16)};"></div><div style="position:absolute;top:-${W * 0.22}px;left:-${W * 0.08}px;width:${W * 0.52}px;height:${W * 0.52}px;border-radius:50%;background:${rgba(p.bg, 0.14)};"></div>${S.bg ? `<div style="position:absolute;top:${H * 0.06}px;right:${W * 0.04}px;width:${iw}px;height:${ih}px;overflow:hidden;border-radius:${W * 0.014}px;box-shadow:0 ${W * 0.012}px ${W * 0.035}px rgba(0,0,0,.55);"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}"></div>` : ``}${S.bg2 ? `<div style="position:absolute;top:${H * 0.06 + ih - cd / 2}px;right:${W * 0.04 + iw - cd / 2}px;width:${cd}px;height:${cd}px;overflow:hidden;border-radius:50%;border:${W * 0.005}px solid rgba(255,255,255,.92);box-shadow:0 ${W * 0.01}px ${W * 0.03}px rgba(0,0,0,.55);z-index:3;"><img src="${S.bg2}" style="width:100%;height:100%;${bgFitPos("bg2")}${bgZoomCss("bg2")}"></div>` : ``} ${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${Math.max(H * 0.07, tagSafe(W, H).b)}px;left:${W * 0.07}px;right:${W * 0.5}px;"><div style="background:${p.accent};color:${ctxt(p.accent)};font-family:${S.font};font-size:${W * 0.013}px;font-weight:700;letter-spacing:2px;padding:${H * 0.009}px ${W * 0.022}px;border-radius:${W * 0.028}px;display:inline-block;margin-bottom:${H * 0.022}px;text-transform:uppercase;">FEATURE</div>${hdr(W, ctxt(p.primary), 0.78)}<div style="margin-top:${H * 0.018}px;">${body(W, rgba(ctxt(p.primary), 0.7), 0.82)}</div></div></div>`;
         },
 
         // 26. Layered Depth
@@ -11972,19 +12454,19 @@ Post:
           const isc = (S.imgSize || 100) / 100,
             iw = W * 0.5 * isc,
             ih = H * 0.56 * isc;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:${H * 0.08}px;left:${W * 0.32}px;right:-${W * 0.03}px;bottom:${H * 0.14}px;background:${rgba(p.primary, 0.5)};border-radius:${W * 0.018}px;"></div><div style="position:absolute;top:${H * 0.04}px;left:${W * 0.21}px;right:${W * 0.07}px;bottom:${H * 0.22}px;background:${rgba(p.accent, 0.3)};border-radius:${W * 0.018}px;"></div>${S.bg ? `<div style="position:absolute;top:${H * 0.1}px;right:${W * 0.04}px;width:${iw}px;height:${ih}px;border-radius:${W * 0.016}px;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;"></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${Math.max(H * 0.07, tagSafe(W, H).b)}px;left:${W * 0.06}px;width:${W * 0.5}px;">${aline(W, p.accent)}${hdr(W, p.text, 0.85)}<div style="margin-top:${H * 0.018}px;">${body(W, rgba(p.text, 0.75), 0.85)}</div></div></div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:${H * 0.08}px;left:${W * 0.32}px;right:-${W * 0.03}px;bottom:${H * 0.14}px;background:${rgba(p.primary, 0.5)};border-radius:${W * 0.018}px;"></div><div style="position:absolute;top:${H * 0.04}px;left:${W * 0.21}px;right:${W * 0.07}px;bottom:${H * 0.22}px;background:${rgba(p.accent, 0.3)};border-radius:${W * 0.018}px;"></div>${S.bg ? `<div style="position:absolute;top:${H * 0.1}px;right:${W * 0.04}px;width:${iw}px;height:${ih}px;border-radius:${W * 0.016}px;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}"></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${Math.max(H * 0.07, tagSafe(W, H).b)}px;left:${W * 0.06}px;width:${W * 0.5}px;">${aline(W, p.accent)}${hdr(W, p.text, 0.85)}<div style="margin-top:${H * 0.018}px;">${body(W, rgba(p.text, 0.75), 0.85)}</div></div></div>`;
         },
 
         // 27. Type Hero
         (p, W, H) =>
-          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.accent};">${S.bg ? `<div style="position:absolute;inset:0;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;opacity:.48;filter:grayscale(80%) contrast(1.1);mix-blend-mode:overlay;"></div>` : ""}<div style="position:absolute;inset:0;background:radial-gradient(ellipse at 30% 70%,${rgba(p.primary, 0.48)},transparent 58%);"></div><div style="position:absolute;top:${H * 0.045}px;left:${W * 0.045}px;right:${W * 0.045}px;bottom:${H * 0.045}px;border:1px solid ${rgba(ctxt(p.accent), 0.16)};box-sizing:border-box;border-radius:${W * 0.01}px;"></div>${logoHTML(W, H)}<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:${Math.max(W * 0.08, safePad(W, H).left)}px;box-sizing:border-box;"><div style="font-family:${S.font};font-size:${W * 0.013}px;font-weight:700;color:${rgba(ctxt(p.accent), 0.58)};letter-spacing:4px;text-transform:uppercase;margin-bottom:${H * 0.022}px;">✦ ${S.platform.toUpperCase()} ✦</div>${hdr(W, ctxt(p.accent), fScale())}<div style="width:${W * 0.09}px;height:4px;background:${rgba(ctxt(p.accent), 0.45)};margin:${H * 0.024}px auto;border-radius:2px;"></div>${body(W, rgba(ctxt(p.accent), 0.78))}</div>${siteTag(W, H)}</div>`,
+          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.accent};">${S.bg ? `<div style="position:absolute;inset:0;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}opacity:.48;filter:grayscale(80%) contrast(1.1);mix-blend-mode:overlay;"></div>` : ""}<div style="position:absolute;inset:0;background:radial-gradient(ellipse at 30% 70%,${rgba(p.primary, 0.48)},transparent 58%);"></div><div style="position:absolute;top:${H * 0.045}px;left:${W * 0.045}px;right:${W * 0.045}px;bottom:${H * 0.045}px;border:1px solid ${rgba(ctxt(p.accent), 0.16)};box-sizing:border-box;border-radius:${W * 0.01}px;"></div>${logoHTML(W, H)}<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:${Math.max(W * 0.08, safePad(W, H).left)}px;box-sizing:border-box;"><div style="font-family:${S.font};font-size:${W * 0.013}px;font-weight:700;color:${rgba(ctxt(p.accent), 0.58)};letter-spacing:4px;text-transform:uppercase;margin-bottom:${H * 0.022}px;">✦ ${S.platform.toUpperCase()} ✦</div>${hdr(W, ctxt(p.accent), fScale())}<div style="width:${W * 0.09}px;height:4px;background:${rgba(ctxt(p.accent), 0.45)};margin:${H * 0.024}px auto;border-radius:2px;"></div>${body(W, rgba(ctxt(p.accent), 0.78))}</div>${siteTag(W, H)}</div>`,
 
         // 28. Outline Box
         (p, W, H) => {
           const m = W * 0.05,
             isc = (S.imgSize || 100) / 100,
             imgH = H * 0.38 * isc;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:${m}px;border:${W * 0.004}px solid ${p.accent};border-radius:${W * 0.015}px;box-sizing:border-box;"></div><div style="position:absolute;top:${m + H * 0.04}px;left:${m + W * 0.04}px;right:${m + W * 0.04}px;height:${imgH}px;overflow:hidden;border-radius:${W * 0.01}px;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.38)};display:flex;align-items:center;justify-content:center;"><div style="width:${W * 0.18}px;height:${W * 0.18}px;border-radius:50%;background:${rgba(p.accent, 0.28)};"></div></div>`}</div>${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${H * 0.1}px;left:${m + W * 0.04}px;right:${m + W * 0.04}px;text-align:center;">${hdr(W, p.text, fScale())}<div style="width:${W * 0.08}px;height:4px;background:${p.accent};margin:${H * 0.02}px auto;border-radius:2px;"></div>${body(W, rgba(p.text, 0.72), fScale())}</div></div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:${m}px;border:${W * 0.004}px solid ${p.accent};border-radius:${W * 0.015}px;box-sizing:border-box;"></div><div style="position:absolute;top:${m + H * 0.04}px;left:${m + W * 0.04}px;right:${m + W * 0.04}px;height:${imgH}px;overflow:hidden;border-radius:${W * 0.01}px;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.38)};display:flex;align-items:center;justify-content:center;"><div style="width:${W * 0.18}px;height:${W * 0.18}px;border-radius:50%;background:${rgba(p.accent, 0.28)};"></div></div>`}</div>${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${H * 0.1}px;left:${m + W * 0.04}px;right:${m + W * 0.04}px;text-align:center;">${hdr(W, p.text, fScale())}<div style="width:${W * 0.08}px;height:4px;background:${p.accent};margin:${H * 0.02}px auto;border-radius:2px;"></div>${body(W, rgba(p.text, 0.72), fScale())}</div></div>`;
         },
 
         // 29. Minimal Bars
@@ -11994,7 +12476,7 @@ Post:
             imgW = W * 0.47 * isc,
             imgH = H * 0.52 * isc,
             textRight = W - pw - W * 0.07;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;left:0;top:0;bottom:0;width:${W * 0.017}px;background:${p.accent};"></div><div style="position:absolute;left:${W * 0.032}px;top:0;bottom:0;width:${W * 0.004}px;background:${rgba(p.accent, 0.28)};"></div>${S.bg ? `<div style="position:absolute;top:${H * 0.06}px;right:${W * 0.04}px;width:${imgW}px;height:${imgH}px;border-radius:${W * 0.014}px;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;"></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;top:${H * 0.1}px;left:${W * 0.07}px;right:${Math.max(0, textRight)}px;overflow:hidden;">${aline(W, p.accent)}${hdr(W, p.text, 0.88)}<div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.72), 0.85)}</div></div></div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;left:0;top:0;bottom:0;width:${W * 0.017}px;background:${p.accent};"></div><div style="position:absolute;left:${W * 0.032}px;top:0;bottom:0;width:${W * 0.004}px;background:${rgba(p.accent, 0.28)};"></div>${S.bg ? `<div style="position:absolute;top:${H * 0.06}px;right:${W * 0.04}px;width:${imgW}px;height:${imgH}px;border-radius:${W * 0.014}px;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}"></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;top:${H * 0.1}px;left:${W * 0.07}px;right:${Math.max(0, textRight)}px;overflow:hidden;">${aline(W, p.accent)}${hdr(W, p.text, 0.88)}<div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.72), 0.85)}</div></div></div>`;
         },
 
         // 30. Glassy Stats
@@ -12011,7 +12493,7 @@ Post:
           const img1 = S.bg,
             img2 = S.bg2 || S.bg,
             img3 = S.bg3 || S.bg2 || S.bg;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:0;left:0;width:${sw - g / 2}px;height:${ch}px;overflow:hidden;">${img1 ? `<img src="${img1}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;filter:saturate(1.1);">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.7)};"></div>`}</div><div style="position:absolute;top:0;left:${sw + g / 2}px;width:${sw - g}px;height:${ch}px;overflow:hidden;">${img2 ? `<img src="${img2}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg2")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;filter:saturate(1.2) brightness(.9);">` : `<div style="width:100%;height:100%;background:${rgba(p.accent, 0.6)};"></div>`}</div><div style="position:absolute;top:0;right:0;width:${sw - g / 2}px;height:${ch}px;overflow:hidden;">${img3 ? `<img src="${img3}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg3")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;filter:saturate(.9) contrast(1.05);">` : `<div style="width:100%;height:100%;background:${lighten(p.bg, 15)};"></div>`}</div><div style="position:absolute;left:0;right:0;top:${ch}px;height:${g}px;background:${p.accent};"></div>${ch < H ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${H - ch}px;background:${p.bg};display:flex;flex-direction:column;justify-content:center;padding:${safePad(W, H).left}px;padding-bottom:${Math.max(W * 0.07, tagSafe(W, H).b)}px;box-sizing:border-box;">${aline(W, p.accent, true)}${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(p.text, 0.75), fScale())}</div></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:0;left:0;width:${sw - g / 2}px;height:${ch}px;overflow:hidden;">${img1 ? `<img src="${img1}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}filter:saturate(1.1);">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.7)};"></div>`}</div><div style="position:absolute;top:0;left:${sw + g / 2}px;width:${sw - g}px;height:${ch}px;overflow:hidden;">${img2 ? `<img src="${img2}" style="width:100%;height:100%;${bgFitPos("bg2")}${bgZoomCss("bg2")}filter:saturate(1.2) brightness(.9);">` : `<div style="width:100%;height:100%;background:${rgba(p.accent, 0.6)};"></div>`}</div><div style="position:absolute;top:0;right:0;width:${sw - g / 2}px;height:${ch}px;overflow:hidden;">${img3 ? `<img src="${img3}" style="width:100%;height:100%;${bgFitPos("bg3")}${bgZoomCss("bg3")}filter:saturate(.9) contrast(1.05);">` : `<div style="width:100%;height:100%;background:${lighten(p.bg, 15)};"></div>`}</div><div style="position:absolute;left:0;right:0;top:${ch}px;height:${g}px;background:${p.accent};"></div>${ch < H ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${H - ch}px;background:${p.bg};display:flex;flex-direction:column;justify-content:center;padding:${safePad(W, H).left}px;padding-bottom:${Math.max(W * 0.07, tagSafe(W, H).b)}px;box-sizing:border-box;">${aline(W, p.accent, true)}${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(p.text, 0.75), fScale())}</div></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
 
         // 32. Bold Overlay
@@ -12023,7 +12505,7 @@ Post:
           const r = (Math.min(W, H) * 0.28 * (S.imgSize || 100)) / 100,
             cx = W * 0.5,
             cy = H * 0.38;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 38%,${rgba(p.primary, 0.4)},transparent 65%);"></div><div style="position:absolute;top:${cy - r * 1.32}px;left:${cx - r * 1.32}px;width:${r * 2.64}px;height:${r * 2.64}px;border-radius:50%;border:${W * 0.005}px dashed ${rgba(p.accent, 0.35)};"></div><div style="position:absolute;top:${cy - r * 1.15}px;left:${cx - r * 1.15}px;width:${r * 2.3}px;height:${r * 2.3}px;border-radius:50%;border:${W * 0.008}px solid ${rgba(p.accent, 0.55)};"></div><div style="position:absolute;top:${cy - r}px;left:${cx - r}px;width:${r * 2}px;height:${r * 2}px;border-radius:50%;overflow:hidden;box-shadow:0 0 ${W * 0.05}px ${rgba(p.accent, 0.45)};">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${p.primary};"></div>`}</div>${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${Math.max(safePad(W, H).bot, tagSafe(W, H).b)}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;text-align:center;">${aline(W, p.accent, true)}<div style="margin-bottom:${H * 0.008}px;"></div>${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div></div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 38%,${rgba(p.primary, 0.4)},transparent 65%);"></div><div style="position:absolute;top:${cy - r * 1.32}px;left:${cx - r * 1.32}px;width:${r * 2.64}px;height:${r * 2.64}px;border-radius:50%;border:${W * 0.005}px dashed ${rgba(p.accent, 0.35)};"></div><div style="position:absolute;top:${cy - r * 1.15}px;left:${cx - r * 1.15}px;width:${r * 2.3}px;height:${r * 2.3}px;border-radius:50%;border:${W * 0.008}px solid ${rgba(p.accent, 0.55)};"></div><div style="position:absolute;top:${cy - r}px;left:${cx - r}px;width:${r * 2}px;height:${r * 2}px;border-radius:50%;overflow:hidden;box-shadow:0 0 ${W * 0.05}px ${rgba(p.accent, 0.45)};">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${p.primary};"></div>`}</div>${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${Math.max(safePad(W, H).bot, tagSafe(W, H).b)}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;text-align:center;">${aline(W, p.accent, true)}<div style="margin-bottom:${H * 0.008}px;"></div>${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div></div>`;
         },
 
         // 34. Lifestyle Fade
@@ -12049,13 +12531,13 @@ Post:
             fh = H * 0.52 * isc,
             fl = (W - fw2) / 2,
             ft = H * 0.08;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:0;left:0;right:0;height:${H * 0.7}px;background:${rgba(p.primary, 0.18)};"></div><div style="position:absolute;left:${fl}px;top:${ft}px;width:${fw2}px;height:${fh}px;border-radius:${W * 0.02}px;overflow:hidden;box-shadow:0 ${H * 0.025}px ${H * 0.055}px rgba(0,0,0,.4);border:${W * 0.004}px solid ${rgba(p.accent, 0.4)};">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.55)};display:flex;align-items:center;justify-content:center;font-size:${W * 0.12}px;">🖼</div>`}</div><div style="position:absolute;top:${ft}px;left:${fl}px;width:${W * 0.05}px;height:${W * 0.05}px;background:${p.accent};"></div><div style="position:absolute;top:${ft}px;right:${fl}px;width:${W * 0.05}px;height:${W * 0.05}px;background:${p.accent};transform:translateX(${W * 0.05}px);"></div>${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${Math.max(H * 0.04, tagSafe(W, H).b)}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;text-align:center;">${hdr(W, p.text, fScale())}<div style="width:${W * 0.09}px;height:4px;background:${p.accent};margin:${H * 0.018}px auto;border-radius:2px;"></div>${body(W, rgba(p.text, 0.72), fScale())}</div></div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:0;left:0;right:0;height:${H * 0.7}px;background:${rgba(p.primary, 0.18)};"></div><div style="position:absolute;left:${fl}px;top:${ft}px;width:${fw2}px;height:${fh}px;border-radius:${W * 0.02}px;overflow:hidden;box-shadow:0 ${H * 0.025}px ${H * 0.055}px rgba(0,0,0,.4);border:${W * 0.004}px solid ${rgba(p.accent, 0.4)};">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.55)};display:flex;align-items:center;justify-content:center;font-size:${W * 0.12}px;">🖼</div>`}</div><div style="position:absolute;top:${ft}px;left:${fl}px;width:${W * 0.05}px;height:${W * 0.05}px;background:${p.accent};"></div><div style="position:absolute;top:${ft}px;right:${fl}px;width:${W * 0.05}px;height:${W * 0.05}px;background:${p.accent};transform:translateX(${W * 0.05}px);"></div>${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${Math.max(H * 0.04, tagSafe(W, H).b)}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;text-align:center;">${hdr(W, p.text, fScale())}<div style="width:${W * 0.09}px;height:4px;background:${p.accent};margin:${H * 0.018}px auto;border-radius:2px;"></div>${body(W, rgba(p.text, 0.72), fScale())}</div></div>`;
         },
 
         // 36. Scrapbook Tilt
         (p, W, H) => {
           const tw = tpw(W, 1);
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:${H * 0.07}px;left:${W * 0.08}px;right:${W * 0.08}px;height:${H * 0.5}px;background:${rgba(p.primary, 0.25)};transform:rotate(-2.5deg);border-radius:${W * 0.01}px;"></div><div style="position:absolute;top:${H * 0.05}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;height:${H * 0.52}px;overflow:hidden;border-radius:${W * 0.012}px;transform:rotate(1.8deg);box-shadow:0 ${H * 0.02}px ${H * 0.04}px rgba(0,0,0,.35);">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.6)};"></div>`}</div><div style="position:absolute;top:${H * 0.05}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;height:${W * 0.022}px;background:${rgba(p.accent, 0.85)};transform:rotate(1.8deg);"></div><div style="position:absolute;top:${H * 0.567}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;height:${W * 0.018}px;background:${rgba(p.highlight, 0.55)};transform:rotate(1.8deg);"></div>${logoHTML(W, H)}${siteTag(W, H)}${tw > 0 ? `<div style="position:absolute;bottom:${Math.max(H * 0.05, tagSafe(W, H).b)}px;left:${W * 0.07}px;width:${tw}px;overflow:hidden;">${aline(W, p.accent)}${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.016}px;">${body(W, rgba(p.text, 0.75), fScale())}</div></div>` : ""}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:${H * 0.07}px;left:${W * 0.08}px;right:${W * 0.08}px;height:${H * 0.5}px;background:${rgba(p.primary, 0.25)};transform:rotate(-2.5deg);border-radius:${W * 0.01}px;"></div><div style="position:absolute;top:${H * 0.05}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;height:${H * 0.52}px;overflow:hidden;border-radius:${W * 0.012}px;transform:rotate(1.8deg);box-shadow:0 ${H * 0.02}px ${H * 0.04}px rgba(0,0,0,.35);">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.6)};"></div>`}</div><div style="position:absolute;top:${H * 0.05}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;height:${W * 0.022}px;background:${rgba(p.accent, 0.85)};transform:rotate(1.8deg);"></div><div style="position:absolute;top:${H * 0.567}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;height:${W * 0.018}px;background:${rgba(p.highlight, 0.55)};transform:rotate(1.8deg);"></div>${logoHTML(W, H)}${siteTag(W, H)}${tw > 0 ? `<div style="position:absolute;bottom:${Math.max(H * 0.05, tagSafe(W, H).b)}px;left:${W * 0.07}px;width:${tw}px;overflow:hidden;">${aline(W, p.accent)}${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.016}px;">${body(W, rgba(p.text, 0.75), fScale())}</div></div>` : ""}</div>`;
         },
 
         // 37. Color Block
@@ -12065,9 +12547,9 @@ Post:
             fs = fScale();
           if (o === "tall") {
             const textH = Math.round(H * 0.42);
-            return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;display:flex;flex-direction:column;"><div style="flex:1;position:relative;overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${p.primary};"></div>`}</div><div style="height:${textH}px;background:${p.accent};display:flex;flex-direction:column;justify-content:center;padding:${sp.left}px;padding-bottom:${Math.max(sp.bot, tagSafe(W, H).b)}px;box-sizing:border-box;flex-shrink:0;">${logoHTML(W, H)}<div style="width:${W * 0.055}px;height:${W * 0.004}px;background:${rgba(ctxt(p.accent), 0.5)};border-radius:2px;margin-bottom:${H * 0.018}px;"></div>${hdr(W, ctxt(p.accent), fs * 0.88)}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(ctxt(p.accent), 0.78), fs * 0.82)}</div></div>${siteTag(W, H)}</div>`;
+            return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;display:flex;flex-direction:column;"><div style="flex:1;position:relative;overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${p.primary};"></div>`}</div><div style="height:${textH}px;background:${p.accent};display:flex;flex-direction:column;justify-content:center;padding:${sp.left}px;padding-bottom:${Math.max(sp.bot, tagSafe(W, H).b)}px;box-sizing:border-box;flex-shrink:0;">${logoHTML(W, H)}<div style="width:${W * 0.055}px;height:${W * 0.004}px;background:${rgba(ctxt(p.accent), 0.5)};border-radius:2px;margin-bottom:${H * 0.018}px;"></div>${hdr(W, ctxt(p.accent), fs * 0.88)}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(ctxt(p.accent), 0.78), fs * 0.82)}</div></div>${siteTag(W, H)}</div>`;
           }
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;display:flex;"><div style="width:${tpwPct()};height:100%;background:${p.accent};display:flex;flex-direction:column;justify-content:flex-end;padding:${sp.left}px;padding-bottom:${Math.max(sp.bot, tagSafe(W, H).b)}px;box-sizing:border-box;flex-shrink:0;z-index:2;">${logoHTML(W, H)}<div style="width:${W * 0.055}px;height:${W * 0.004}px;background:${rgba(ctxt(p.accent), 0.5)};border-radius:2px;margin-bottom:${H * 0.022}px;"></div>${hdr(W, ctxt(p.accent), fs * 0.75)}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(ctxt(p.accent), 0.78), fs * 0.82)}</div></div><div style="flex:1;position:relative;overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${p.primary};"></div>`}</div><div style="position:absolute;left:${tpwPct()};top:0;bottom:0;width:${W * 0.018}px;background:${rgba(ctxt(p.accent), 0.6)};z-index:3;"></div>${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;display:flex;"><div style="width:${tpwPct()};height:100%;background:${p.accent};display:flex;flex-direction:column;justify-content:flex-end;padding:${sp.left}px;padding-bottom:${Math.max(sp.bot, tagSafe(W, H).b)}px;box-sizing:border-box;flex-shrink:0;z-index:2;">${logoHTML(W, H)}<div style="width:${W * 0.055}px;height:${W * 0.004}px;background:${rgba(ctxt(p.accent), 0.5)};border-radius:2px;margin-bottom:${H * 0.022}px;"></div>${hdr(W, ctxt(p.accent), fs * 0.75)}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(ctxt(p.accent), 0.78), fs * 0.82)}</div></div><div style="flex:1;position:relative;overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${p.primary};"></div>`}</div><div style="position:absolute;left:${tpwPct()};top:0;bottom:0;width:${W * 0.018}px;background:${rgba(ctxt(p.accent), 0.6)};z-index:3;"></div>${siteTag(W, H)}</div>`;
         },
         // 38. Story Bars
         (p, W, H) => {
@@ -12086,7 +12568,7 @@ Post:
         // 39. Pinterest Pin
         (p, W, H) => {
           const ih = tpw(H, 1 - 0.34);
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:0;left:0;right:0;height:${ih}px;overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.7)};display:flex;align-items:center;justify-content:center;font-size:${W * 0.18}px;">📌</div>`}<div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 75%,${p.bg} 100%);"></div></div>${logoHTML(W, H)}<div style="position:absolute;top:${H * 0.02}px;right:${W * 0.04}px;background:${p.accent};color:${ctxt(p.accent)};font-family:${S.font};font-size:${W * 0.015}px;font-weight:800;padding:${H * 0.01}px ${W * 0.028}px;border-radius:${W * 0.04}px;letter-spacing:1.5px;text-transform:uppercase;">SAVE</div>${ih < H ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${H - ih + H * 0.04}px;background:${p.bg};display:flex;flex-direction:column;justify-content:center;padding:${safePad(W, H).left}px;padding-bottom:${Math.max(W * 0.07, tagSafe(W, H).b)}px;box-sizing:border-box;">${aline(W, p.accent, true)}${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(p.text, 0.75), fScale())}</div></div>` : ""} ${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:0;left:0;right:0;height:${ih}px;overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.7)};display:flex;align-items:center;justify-content:center;font-size:${W * 0.18}px;">📌</div>`}<div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 75%,${p.bg} 100%);"></div></div>${logoHTML(W, H)}<div style="position:absolute;top:${H * 0.02}px;right:${W * 0.04}px;background:${p.accent};color:${ctxt(p.accent)};font-family:${S.font};font-size:${W * 0.015}px;font-weight:800;padding:${H * 0.01}px ${W * 0.028}px;border-radius:${W * 0.04}px;letter-spacing:1.5px;text-transform:uppercase;">SAVE</div>${ih < H ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${H - ih + H * 0.04}px;background:${p.bg};display:flex;flex-direction:column;justify-content:center;padding:${safePad(W, H).left}px;padding-bottom:${Math.max(W * 0.07, tagSafe(W, H).b)}px;box-sizing:border-box;">${aline(W, p.accent, true)}${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(p.text, 0.75), fScale())}</div></div>` : ""} ${siteTag(W, H)}</div>`;
         },
 
         // 40. Editorial Split
@@ -12098,14 +12580,14 @@ Post:
           if (o === "tall") {
             // Tall: image top, text below
             const imgH = Math.round(H * 0.52 * isc);
-            return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;display:flex;flex-direction:column;background:${p.bg};"><div style="height:${imgH}px;overflow:hidden;flex-shrink:0;position:relative;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.55)};"></div>`}<div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 70%,${rgba(p.bg, 0.85)} 100%);"></div><div style="position:absolute;top:${sp.top}px;left:${sp.left}px;font-family:${S.font};font-size:${W * 0.011}px;font-weight:800;color:#fff;letter-spacing:3px;text-transform:uppercase;background:${rgba(p.accent, 0.9)};padding:${H * 0.009}px ${W * 0.02}px;">GET IN THE KNOW</div></div><div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:${sp.left}px;box-sizing:border-box;position:relative;">${logoHTML(W, H)}${aline(W, p.accent)}<div style="font-family:${S.font};font-size:${effH() * fs * 0.88 * (W / 1080)}px;font-weight:900;color:${p.text};line-height:1.18;${ts(W, S.hDropShadow)}">${S.header}</div><div style="width:${W * 0.06}px;height:3px;background:${rgba(p.accent, 0.45)};margin:${H * 0.02}px 0;"></div>${body(W, rgba(p.text, 0.72), fs * 0.88)}</div>${siteTag(W, H)}</div>`;
+            return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;display:flex;flex-direction:column;background:${p.bg};"><div style="height:${imgH}px;overflow:hidden;flex-shrink:0;position:relative;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.55)};"></div>`}<div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 70%,${rgba(p.bg, 0.85)} 100%);"></div><div style="position:absolute;top:${sp.top}px;left:${sp.left}px;font-family:${S.font};font-size:${W * 0.011}px;font-weight:800;color:#fff;letter-spacing:3px;text-transform:uppercase;background:${rgba(p.accent, 0.9)};padding:${H * 0.009}px ${W * 0.02}px;">GET IN THE KNOW</div></div><div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:${sp.left}px;box-sizing:border-box;position:relative;">${logoHTML(W, H)}${aline(W, p.accent)}<div style="font-family:${S.font};font-size:${effH() * fs * 0.88 * (W / 1080)}px;font-weight:900;color:${p.text};line-height:1.18;${ts(W, S.hDropShadow)}">${S.header}</div><div style="width:${W * 0.06}px;height:3px;background:${rgba(p.accent, 0.45)};margin:${H * 0.02}px 0;"></div>${body(W, rgba(p.text, 0.72), fs * 0.88)}</div>${siteTag(W, H)}</div>`;
           }
           const imgW = W * 0.6 * isc;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;display:flex;background:${p.bg};"><div style="width:${imgW}px;height:100%;overflow:hidden;flex-shrink:0;position:relative;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.55)};"></div>`}<div style="position:absolute;inset:0;background:linear-gradient(to right,transparent 70%,${rgba(p.bg, 0.85)} 100%);"></div><div style="position:absolute;top:${sp.top}px;left:${W * 0.04}px;font-family:${S.font};font-size:${W * 0.012}px;font-weight:800;color:#fff;letter-spacing:3px;text-transform:uppercase;background:${rgba(p.accent, 0.9)};padding:${H * 0.009}px ${W * 0.02}px;">GET IN THE KNOW</div></div><div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:${sp.left}px;box-sizing:border-box;position:relative;">${logoHTML(W, H)}${aline(W, p.accent)}<div style="font-family:${S.font};font-size:${effH() * fs * 0.82 * (W / 1080)}px;font-weight:900;color:${p.text};line-height:1.18;${ts(W, S.hDropShadow)}">${S.header}</div><div style="width:${W * 0.06}px;height:3px;background:${rgba(p.accent, 0.45)};margin:${H * 0.022}px 0;"></div>${body(W, rgba(p.text, 0.72), fs * 0.88)}</div>${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;display:flex;background:${p.bg};"><div style="width:${imgW}px;height:100%;overflow:hidden;flex-shrink:0;position:relative;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.55)};"></div>`}<div style="position:absolute;inset:0;background:linear-gradient(to right,transparent 70%,${rgba(p.bg, 0.85)} 100%);"></div><div style="position:absolute;top:${sp.top}px;left:${W * 0.04}px;font-family:${S.font};font-size:${W * 0.012}px;font-weight:800;color:#fff;letter-spacing:3px;text-transform:uppercase;background:${rgba(p.accent, 0.9)};padding:${H * 0.009}px ${W * 0.02}px;">GET IN THE KNOW</div></div><div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:${sp.left}px;box-sizing:border-box;position:relative;">${logoHTML(W, H)}${aline(W, p.accent)}<div style="font-family:${S.font};font-size:${effH() * fs * 0.82 * (W / 1080)}px;font-weight:900;color:${p.text};line-height:1.18;${ts(W, S.hDropShadow)}">${S.header}</div><div style="width:${W * 0.06}px;height:3px;background:${rgba(p.accent, 0.45)};margin:${H * 0.022}px 0;"></div>${body(W, rgba(p.text, 0.72), fs * 0.88)}</div>${siteTag(W, H)}</div>`;
         },
         // 41. Neon Glow
         (p, W, H) =>
-          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:#06061a;">${S.bg ? `<div style="position:absolute;inset:0;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;opacity:.45;filter:grayscale(60%) brightness(.7);mix-blend-mode:screen;"></div>` : ""}<div style="position:absolute;inset:0;background-image:linear-gradient(${rgba(p.accent, 0.07)} 1px,transparent 1px),linear-gradient(90deg,${rgba(p.accent, 0.07)} 1px,transparent 1px);background-size:${W * 0.07}px ${W * 0.07}px;"></div><div style="position:absolute;inset:${W * 0.055}px;border:${W * 0.003}px solid ${rgba(p.accent, 0.55)};border-radius:${W * 0.012}px;box-shadow:0 0 ${W * 0.025}px ${rgba(p.accent, 0.35)},inset 0 0 ${W * 0.04}px ${rgba(p.accent, 0.08)};"></div><div style="position:absolute;top:${W * 0.055}px;left:${W * 0.055}px;right:${W * 0.055}px;height:${W * 0.003}px;background:linear-gradient(to right,transparent,${rgba(p.accent, 0.7)},transparent);box-shadow:0 0 ${W * 0.02}px ${rgba(p.accent, 0.5)};"></div>${logoHTML(W, H)}<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:${Math.max(W * 0.08, safePad(W, H).left)}px;"><div style="border-left:${W * 0.004}px solid ${p.accent};padding-left:${W * 0.04}px;box-shadow:-${W * 0.015}px 0 ${W * 0.02}px ${rgba(p.accent, 0.3)};margin-bottom:${H * 0.03}px;"><div style="font-family:${S.font};font-size:${Math.max(20, W * 0.02)}px;font-weight:700;color:${p.accent};letter-spacing:3px;text-transform:uppercase;">✦ ${S.platform === "google" ? "Get in the Know" : PLATS[S.platform] ? PLATS[S.platform].label.split("·")[0].trim() : S.platform} ✦</div></div>${hdr(W, "#fff", fScale())}<div style="margin-top:${H * 0.022}px;">${body(W, "rgba(255,255,255,.72)", fScale())}</div></div>${siteTag(W, H)}</div>`,
+          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:#06061a;">${S.bg ? `<div style="position:absolute;inset:0;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}opacity:.45;filter:grayscale(60%) brightness(.7);mix-blend-mode:screen;"></div>` : ""}<div style="position:absolute;inset:0;background-image:linear-gradient(${rgba(p.accent, 0.07)} 1px,transparent 1px),linear-gradient(90deg,${rgba(p.accent, 0.07)} 1px,transparent 1px);background-size:${W * 0.07}px ${W * 0.07}px;"></div><div style="position:absolute;inset:${W * 0.055}px;border:${W * 0.003}px solid ${rgba(p.accent, 0.55)};border-radius:${W * 0.012}px;box-shadow:0 0 ${W * 0.025}px ${rgba(p.accent, 0.35)},inset 0 0 ${W * 0.04}px ${rgba(p.accent, 0.08)};"></div><div style="position:absolute;top:${W * 0.055}px;left:${W * 0.055}px;right:${W * 0.055}px;height:${W * 0.003}px;background:linear-gradient(to right,transparent,${rgba(p.accent, 0.7)},transparent);box-shadow:0 0 ${W * 0.02}px ${rgba(p.accent, 0.5)};"></div>${logoHTML(W, H)}<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:${Math.max(W * 0.08, safePad(W, H).left)}px;"><div style="border-left:${W * 0.004}px solid ${p.accent};padding-left:${W * 0.04}px;box-shadow:-${W * 0.015}px 0 ${W * 0.02}px ${rgba(p.accent, 0.3)};margin-bottom:${H * 0.03}px;"><div style="font-family:${S.font};font-size:${Math.max(20, W * 0.02)}px;font-weight:700;color:${p.accent};letter-spacing:3px;text-transform:uppercase;">✦ ${S.platform === "google" ? "Get in the Know" : PLATS[S.platform] ? PLATS[S.platform].label.split("·")[0].trim() : S.platform} ✦</div></div>${hdr(W, "#fff", fScale())}<div style="margin-top:${H * 0.022}px;">${body(W, "rgba(255,255,255,.72)", fScale())}</div></div>${siteTag(W, H)}</div>`,
 
         // 42. Bold Type BG
         (p, W, H) =>
@@ -12128,7 +12610,7 @@ Post:
         (p, W, H) => {
           const tw = tpw(W, 0.5);
           const imgW = Math.max(0, Math.round(W - W * 0.04 - W * 0.07 - tw - W * 0.03));
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:#0a0a0a;"><div style="position:absolute;top:0;left:0;right:0;height:${H * 0.006}px;background:linear-gradient(to right,transparent,${p.accent},transparent);"></div><div style="position:absolute;bottom:0;left:0;right:0;height:${H * 0.006}px;background:linear-gradient(to right,transparent,${p.accent},transparent);"></div><div style="position:absolute;inset:${W * 0.04}px;border:1px solid ${rgba(p.accent, 0.18)};border-radius:${W * 0.008}px;pointer-events:none;"></div><div style="position:absolute;top:-${W * 0.3}px;right:-${W * 0.2}px;width:${W * 0.7}px;height:${W * 0.7}px;border-radius:50%;background:${rgba(p.accent, 0.06)};filter:blur(${W * 0.06}px);"></div>${S.bg && imgW > 0 ? `<div style="position:absolute;right:${W * 0.04}px;top:${H * 0.1}px;bottom:${H * 0.1}px;width:${imgW}px;overflow:hidden;border-radius:${W * 0.01}px;opacity:.48;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;"></div>` : ""} ${tw > 0 ? `<div style="position:absolute;left:${W * 0.07}px;top:50%;transform:translateY(-50%);width:${tw}px;overflow:hidden;"><div style="font-family:${S.font};font-size:${W * 0.011}px;font-weight:600;color:${p.accent};letter-spacing:4px;text-transform:uppercase;margin-bottom:${H * 0.028}px;">Premium</div>${aline(W, p.accent)}${hdr(W, "#e8e8e8", fScale())}<div style="margin-top:${H * 0.025}px;">${body(W, "rgba(200,200,200,.65)", fScale())}</div></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:#0a0a0a;"><div style="position:absolute;top:0;left:0;right:0;height:${H * 0.006}px;background:linear-gradient(to right,transparent,${p.accent},transparent);"></div><div style="position:absolute;bottom:0;left:0;right:0;height:${H * 0.006}px;background:linear-gradient(to right,transparent,${p.accent},transparent);"></div><div style="position:absolute;inset:${W * 0.04}px;border:1px solid ${rgba(p.accent, 0.18)};border-radius:${W * 0.008}px;pointer-events:none;"></div><div style="position:absolute;top:-${W * 0.3}px;right:-${W * 0.2}px;width:${W * 0.7}px;height:${W * 0.7}px;border-radius:50%;background:${rgba(p.accent, 0.06)};filter:blur(${W * 0.06}px);"></div>${S.bg && imgW > 0 ? `<div style="position:absolute;right:${W * 0.04}px;top:${H * 0.1}px;bottom:${H * 0.1}px;width:${imgW}px;overflow:hidden;border-radius:${W * 0.01}px;opacity:.48;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}"></div>` : ""} ${tw > 0 ? `<div style="position:absolute;left:${W * 0.07}px;top:50%;transform:translateY(-50%);width:${tw}px;overflow:hidden;"><div style="font-family:${S.font};font-size:${W * 0.011}px;font-weight:600;color:${p.accent};letter-spacing:4px;text-transform:uppercase;margin-bottom:${H * 0.028}px;">Premium</div>${aline(W, p.accent)}${hdr(W, "#e8e8e8", fScale())}<div style="margin-top:${H * 0.025}px;">${body(W, "rgba(200,200,200,.65)", fScale())}</div></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
 
         // 46. Retro Stripes
@@ -12143,7 +12625,7 @@ Post:
 
         // 48. Neon Frame
         (p, W, H) =>
-          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:#080812;"><div style="position:absolute;inset:${W * 0.045}px;border:${W * 0.003}px solid ${p.accent};border-radius:${W * 0.012}px;box-shadow:0 0 ${W * 0.02}px ${rgba(p.accent, 0.6)},inset 0 0 ${W * 0.02}px ${rgba(p.accent, 0.15)};pointer-events:none;"></div><div style="position:absolute;inset:${W * 0.07}px;border:1px solid ${rgba(p.accent, 0.15)};border-radius:${W * 0.008}px;pointer-events:none;"></div>${S.bg ? `<div style="position:absolute;inset:${W * 0.055}px;overflow:hidden;border-radius:${W * 0.01}px;opacity:.25;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;"></div>` : ""}<div style="position:absolute;top:${H * 0.12}px;left:${W * 0.1}px;width:${W * 0.22}px;height:${H * 0.35}px;background:radial-gradient(${rgba(p.accent, 0.35)},transparent 70%);filter:blur(${W * 0.04}px);"></div>${logoHTML(W, H)}<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:${W * 0.12}px;">${hdr(W, p.accent, fScale())}<div style="margin-top:${H * 0.022}px;">${body(W, rgba(p.text, 0.7), fScale())}</div></div>${siteTag(W, H)}</div>`,
+          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:#080812;"><div style="position:absolute;inset:${W * 0.045}px;border:${W * 0.003}px solid ${p.accent};border-radius:${W * 0.012}px;box-shadow:0 0 ${W * 0.02}px ${rgba(p.accent, 0.6)},inset 0 0 ${W * 0.02}px ${rgba(p.accent, 0.15)};pointer-events:none;"></div><div style="position:absolute;inset:${W * 0.07}px;border:1px solid ${rgba(p.accent, 0.15)};border-radius:${W * 0.008}px;pointer-events:none;"></div>${S.bg ? `<div style="position:absolute;inset:${W * 0.055}px;overflow:hidden;border-radius:${W * 0.01}px;opacity:.25;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}"></div>` : ""}<div style="position:absolute;top:${H * 0.12}px;left:${W * 0.1}px;width:${W * 0.22}px;height:${H * 0.35}px;background:radial-gradient(${rgba(p.accent, 0.35)},transparent 70%);filter:blur(${W * 0.04}px);"></div>${logoHTML(W, H)}<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:${W * 0.12}px;">${hdr(W, p.accent, fScale())}<div style="margin-top:${H * 0.022}px;">${body(W, rgba(p.text, 0.7), fScale())}</div></div>${siteTag(W, H)}</div>`,
 
         // 49. Starburst
         (p, W, H) => {
@@ -12162,7 +12644,7 @@ Post:
         // 52. Wave Divider
         (p, W, H) => {
           const tw = tpw(W, 0.5);
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;bottom:0;left:0;right:0;height:${H * 0.333}px;background:${p.primary};"></div><svg style="position:absolute;bottom:${H * 0.308}px;left:0;pointer-events:none;" width="${W}" height="${Math.round(H * 0.065)}" viewBox="0 0 ${W} ${Math.round(H * 0.065)}" preserveAspectRatio="none"><path d="M0,${Math.round(H * 0.032)} C${Math.round(W * 0.25)},0 ${Math.round(W * 0.5)},${Math.round(H * 0.065)} ${Math.round(W * 0.75)},${Math.round(H * 0.032)} S${W},0 ${W},${Math.round(H * 0.032)} L${W},${Math.round(H * 0.065)} L0,${Math.round(H * 0.065)} Z" fill="${p.primary}"/></svg>${S.bg ? `<div style="position:absolute;top:0;left:0;right:0;height:${H * 0.667}px;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;opacity:.5;"></div>` : ""}<div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 25%,${rgba(p.bg, 0.25)},transparent 52%);"></div>${logoHTML(W, H)}<div style="position:absolute;left:${W * 0.05}px;bottom:${H * 0.14}px;width:${W * 0.4}px;height:${H * 0.24}px;border-radius:${W * 0.025}px;overflow:hidden;border:${W * 0.004}px solid rgba(255,255,255,.72);box-shadow:0 ${W * 0.008}px ${W * 0.028}px rgba(0,0,0,.6);z-index:5;background:${rgba(p.primary, 0.6)};">${S.bg2 ? `<img src="${S.bg2}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg2")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : ""}</div>${tw > 0 ? `<div style="position:absolute;bottom:${Math.max(H * 0.08, tagSafe(W, H).b)}px;right:${W * 0.05}px;width:${tw}px;z-index:6;overflow:hidden;">${aline(W, p.accent)}${hdr(W, ctxt(p.primary), 0.88)}<div style="margin-top:${H * 0.018}px;">${body(W, rgba(ctxt(p.primary), 0.75), 0.92)}</div></div>` : ""} ${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;bottom:0;left:0;right:0;height:${H * 0.333}px;background:${p.primary};"></div><svg style="position:absolute;bottom:${H * 0.308}px;left:0;pointer-events:none;" width="${W}" height="${Math.round(H * 0.065)}" viewBox="0 0 ${W} ${Math.round(H * 0.065)}" preserveAspectRatio="none"><path d="M0,${Math.round(H * 0.032)} C${Math.round(W * 0.25)},0 ${Math.round(W * 0.5)},${Math.round(H * 0.065)} ${Math.round(W * 0.75)},${Math.round(H * 0.032)} S${W},0 ${W},${Math.round(H * 0.032)} L${W},${Math.round(H * 0.065)} L0,${Math.round(H * 0.065)} Z" fill="${p.primary}"/></svg>${S.bg ? `<div style="position:absolute;top:0;left:0;right:0;height:${H * 0.667}px;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}opacity:.5;"></div>` : ""}<div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 25%,${rgba(p.bg, 0.25)},transparent 52%);"></div>${logoHTML(W, H)}<div style="position:absolute;left:${W * 0.05}px;bottom:${H * 0.14}px;width:${W * 0.4}px;height:${H * 0.24}px;border-radius:${W * 0.025}px;overflow:hidden;border:${W * 0.004}px solid rgba(255,255,255,.72);box-shadow:0 ${W * 0.008}px ${W * 0.028}px rgba(0,0,0,.6);z-index:5;background:${rgba(p.primary, 0.6)};">${S.bg2 ? `<img src="${S.bg2}" style="width:100%;height:100%;${bgFitPos("bg2")}${bgZoomCss("bg2")}">` : ""}</div>${tw > 0 ? `<div style="position:absolute;bottom:${Math.max(H * 0.08, tagSafe(W, H).b)}px;right:${W * 0.05}px;width:${tw}px;z-index:6;overflow:hidden;">${aline(W, p.accent)}${hdr(W, ctxt(p.primary), 0.88)}<div style="margin-top:${H * 0.018}px;">${body(W, rgba(ctxt(p.primary), 0.75), 0.92)}</div></div>` : ""} ${siteTag(W, H)}</div>`;
         },
 
         // 53. Stage Spotlight
@@ -12193,7 +12675,7 @@ Post:
         // 57. Product Window
         (p, W, H) => {
           const r = Math.min(W, H) * 0.33;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 72% 35%,${rgba(p.primary, 0.28)},transparent 60%);"></div><div style="position:absolute;top:${H * 0.07}px;right:${W * 0.05}px;width:${r * 2}px;height:${r * 2}px;border-radius:50%;overflow:hidden;border:${W * 0.005}px solid ${rgba(p.accent, 0.45)};box-shadow:0 ${H * 0.02}px ${H * 0.05}px ${rgba(p.primary, 0.45)};">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.65)};display:flex;align-items:center;justify-content:center;font-size:${r * 0.5}px;">📦</div>`}</div>${logoHTML(W, H)}<div style="position:absolute;left:${W * 0.06}px;bottom:${Math.max(H * 0.08, tagSafe(W, H).b)}px;width:${tpw(W, 0.48)}px;">${aline(W, p.accent)}${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.022}px;">${body(W, rgba(p.text, 0.75), fScale())}</div></div>${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 72% 35%,${rgba(p.primary, 0.28)},transparent 60%);"></div><div style="position:absolute;top:${H * 0.07}px;right:${W * 0.05}px;width:${r * 2}px;height:${r * 2}px;border-radius:50%;overflow:hidden;border:${W * 0.005}px solid ${rgba(p.accent, 0.45)};box-shadow:0 ${H * 0.02}px ${H * 0.05}px ${rgba(p.primary, 0.45)};">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.65)};display:flex;align-items:center;justify-content:center;font-size:${r * 0.5}px;">📦</div>`}</div>${logoHTML(W, H)}<div style="position:absolute;left:${W * 0.06}px;bottom:${Math.max(H * 0.08, tagSafe(W, H).b)}px;width:${tpw(W, 0.48)}px;">${aline(W, p.accent)}${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.022}px;">${body(W, rgba(p.text, 0.75), fScale())}</div></div>${siteTag(W, H)}</div>`;
         },
 
         // 58. Social Proof
@@ -12210,7 +12692,7 @@ Post:
 
         // 61. Card Stack
         (p, W, H) =>
-          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${S.bg ? `<div style="position:absolute;inset:0;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;opacity:.12;"></div><div style="position:absolute;inset:0;background:${rgba(p.bg, 0.72)};"></div>` : ""}<div style="position:absolute;top:${H * 0.06}px;left:${W * 0.08}px;right:${W * 0.05}px;bottom:${H * 0.04}px;background:${rgba(p.accent, 0.14)};border-radius:${W * 0.016}px;transform:rotate(4deg);"></div><div style="position:absolute;top:${H * 0.04}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;bottom:${H * 0.06}px;background:${rgba(p.primary, 0.2)};border-radius:${W * 0.016}px;transform:rotate(-2deg);"></div><div style="position:absolute;top:${H * 0.08}px;left:${W * 0.05}px;right:${W * 0.05}px;bottom:${H * 0.08}px;background:${rgba(p.bg, 0.97)};border:1px solid ${rgba(p.accent, 0.25)};border-radius:${W * 0.016}px;display:flex;flex-direction:column;justify-content:center;padding:${W * 0.065}px;">${logoHTML(W, H)}${aline(W, p.accent)}${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.022}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${siteTag(W, H)}</div>`,
+          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${S.bg ? `<div style="position:absolute;inset:0;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}opacity:.12;"></div><div style="position:absolute;inset:0;background:${rgba(p.bg, 0.72)};"></div>` : ""}<div style="position:absolute;top:${H * 0.06}px;left:${W * 0.08}px;right:${W * 0.05}px;bottom:${H * 0.04}px;background:${rgba(p.accent, 0.14)};border-radius:${W * 0.016}px;transform:rotate(4deg);"></div><div style="position:absolute;top:${H * 0.04}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;bottom:${H * 0.06}px;background:${rgba(p.primary, 0.2)};border-radius:${W * 0.016}px;transform:rotate(-2deg);"></div><div style="position:absolute;top:${H * 0.08}px;left:${W * 0.05}px;right:${W * 0.05}px;bottom:${H * 0.08}px;background:${rgba(p.bg, 0.97)};border:1px solid ${rgba(p.accent, 0.25)};border-radius:${W * 0.016}px;display:flex;flex-direction:column;justify-content:center;padding:${W * 0.065}px;">${logoHTML(W, H)}${aline(W, p.accent)}${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.022}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${siteTag(W, H)}</div>`,
 
         // 62. Gradient Mesh
         (p, W, H) =>
@@ -12226,7 +12708,7 @@ Post:
           const frameTop = bannerBot + frameGap;
           const frameH = H * 0.22;
           const frameBot = H - frameTop - frameH;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.primary};"><div style="position:absolute;top:0;left:0;right:0;height:${imgH}px;background:${p.bg};overflow:hidden;">${S.bg ? `<div style="position:absolute;inset:0;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;"></div>` : ""}  </div>${logoHTML(W, H)}<div style="position:absolute;top:${bannerTop}px;left:${W * 0.05}px;right:${W * 0.05}px;height:${H * 0.13}px;background:${p.accent};border-radius:${W * 0.01}px;z-index:4;display:flex;align-items:center;padding:0 ${W * 0.06}px;overflow:hidden;transform:rotate(2.5deg);transform-origin:center;">${hdr(W, ctxt(p.accent), fScale())}</div>${th > 0 ? `<div style="position:absolute;left:${W * 0.05}px;top:${frameTop}px;width:${W * 0.38}px;height:${frameH}px;border-radius:${W * 0.025}px;overflow:hidden;border:${W * 0.004}px solid rgba(255,255,255,.68);box-shadow:0 ${W * 0.008}px ${W * 0.025}px rgba(0,0,0,.55);z-index:5;background:${rgba(p.primary, 0.55)};">${S.bg2 ? `<img src="${S.bg2}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg2")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : ""}</div><div style="position:absolute;left:${W * 0.47}px;right:${W * 0.05}px;top:${frameTop}px;height:${frameH}px;z-index:5;display:flex;align-items:center;overflow:hidden;">${body(W, ctxt(p.primary), 0.85)}</div>` : ""} ${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.primary};"><div style="position:absolute;top:0;left:0;right:0;height:${imgH}px;background:${p.bg};overflow:hidden;">${S.bg ? `<div style="position:absolute;inset:0;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}"></div>` : ""}  </div>${logoHTML(W, H)}<div style="position:absolute;top:${bannerTop}px;left:${W * 0.05}px;right:${W * 0.05}px;height:${H * 0.13}px;background:${p.accent};border-radius:${W * 0.01}px;z-index:4;display:flex;align-items:center;padding:0 ${W * 0.06}px;overflow:hidden;transform:rotate(2.5deg);transform-origin:center;">${hdr(W, ctxt(p.accent), fScale())}</div>${th > 0 ? `<div style="position:absolute;left:${W * 0.05}px;top:${frameTop}px;width:${W * 0.38}px;height:${frameH}px;border-radius:${W * 0.025}px;overflow:hidden;border:${W * 0.004}px solid rgba(255,255,255,.68);box-shadow:0 ${W * 0.008}px ${W * 0.025}px rgba(0,0,0,.55);z-index:5;background:${rgba(p.primary, 0.55)};">${S.bg2 ? `<img src="${S.bg2}" style="width:100%;height:100%;${bgFitPos("bg2")}${bgZoomCss("bg2")}">` : ""}</div><div style="position:absolute;left:${W * 0.47}px;right:${W * 0.05}px;top:${frameTop}px;height:${frameH}px;z-index:5;display:flex;align-items:center;overflow:hidden;">${body(W, ctxt(p.primary), 0.85)}</div>` : ""} ${siteTag(W, H)}</div>`;
         },
 
         // 64. Pill Tags
@@ -12253,7 +12735,7 @@ Post:
 
         // 69. Kinetic Type
         (p, W, H) =>
-          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.accent};"><div style="position:absolute;top:${H * 0.02}px;left:-${W * 0.05}px;right:-${W * 0.05}px;font-family:${S.font};font-size:${W * 0.12}px;font-weight:900;color:${rgba(ctxt(p.accent), 0.07)};white-space:nowrap;line-height:1.1;letter-spacing:-2px;pointer-events:none;">${(S.header + " " + S.header).toUpperCase()}</div><div style="position:absolute;top:${H * 0.3}px;left:-${W * 0.05}px;right:-${W * 0.05}px;font-family:${S.font};font-size:${W * 0.12}px;font-weight:900;color:${rgba(ctxt(p.accent), 0.07)};white-space:nowrap;line-height:1.1;letter-spacing:-2px;pointer-events:none;">${(S.header + " " + S.header).toUpperCase()}</div>${S.bg ? `<div style="position:absolute;inset:0;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;opacity:.22;mix-blend-mode:overlay;"></div>` : ""}<div style="position:absolute;inset:0;background:radial-gradient(ellipse at 28% 60%,${rgba(p.primary, 0.35)},transparent 58%);"></div>${logoHTML(W, H)}<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:${safePad(W, H).left}px;"><div style="background:${rgba(p.bg, 0.9)};border-radius:${W * 0.012}px;padding:${W * 0.06}px;">${aline(W, p.primary)}${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.75), fScale())}</div></div></div>${siteTag(W, H)}</div>`,
+          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.accent};"><div style="position:absolute;top:${H * 0.02}px;left:-${W * 0.05}px;right:-${W * 0.05}px;font-family:${S.font};font-size:${W * 0.12}px;font-weight:900;color:${rgba(ctxt(p.accent), 0.07)};white-space:nowrap;line-height:1.1;letter-spacing:-2px;pointer-events:none;">${(S.header + " " + S.header).toUpperCase()}</div><div style="position:absolute;top:${H * 0.3}px;left:-${W * 0.05}px;right:-${W * 0.05}px;font-family:${S.font};font-size:${W * 0.12}px;font-weight:900;color:${rgba(ctxt(p.accent), 0.07)};white-space:nowrap;line-height:1.1;letter-spacing:-2px;pointer-events:none;">${(S.header + " " + S.header).toUpperCase()}</div>${S.bg ? `<div style="position:absolute;inset:0;overflow:hidden;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}opacity:.22;mix-blend-mode:overlay;"></div>` : ""}<div style="position:absolute;inset:0;background:radial-gradient(ellipse at 28% 60%,${rgba(p.primary, 0.35)},transparent 58%);"></div>${logoHTML(W, H)}<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:${safePad(W, H).left}px;"><div style="background:${rgba(p.bg, 0.9)};border-radius:${W * 0.012}px;padding:${W * 0.06}px;">${aline(W, p.primary)}${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.75), fScale())}</div></div></div>${siteTag(W, H)}</div>`,
 
         // 70. Duotone Photo
         (p, W, H) =>
@@ -12271,7 +12753,7 @@ Post:
 
         // 72. Geo Blocks Organic
         (p, W, H) =>
-          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:-${H * 0.1}px;right:-${W * 0.12}px;width:${W * 0.8}px;height:${H * 0.72}px;background:${rgba(p.primary, 0.55)};border-radius:60% 40% 45% 55%/40% 55% 45% 60%;filter:blur(${W * 0.02}px);"></div><div style="position:absolute;bottom:-${H * 0.12}px;left:-${W * 0.06}px;width:${W * 0.72}px;height:${H * 0.5}px;background:${rgba(p.primary, 0.28)};border-radius:45% 55% 60% 40%/55% 40% 60% 45%;filter:blur(${W * 0.018}px);"></div><div style="position:absolute;top:${H * 0.26}px;right:${W * 0.08}px;width:${W * 0.22}px;height:${W * 0.22}px;background:${rgba(p.highlight, 0.85)};border-radius:60% 40% 55% 45%/50% 60% 40% 50%;"></div>${S.bg ? `<div style="position:absolute;top:${W > H ? H * 0.04 : H * 0.09}px;right:${W * 0.04}px;width:${W * (W > H ? 0.38 : 0.42)}px;height:${W > H ? H * 0.92 : H * 0.4}px;overflow:hidden;border-radius:${W * 0.05}px;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;"></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${Math.max(H * 0.07, tagSafe(W, H).b)}px;left:${W * 0.06}px;width:${tpw(W, 0.58)}px;">${aline(W, p.accent)}${hdr(W, p.text, 0.88)}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(p.text, 0.78), 0.88)}</div></div></div>`,
+          `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:-${H * 0.1}px;right:-${W * 0.12}px;width:${W * 0.8}px;height:${H * 0.72}px;background:${rgba(p.primary, 0.55)};border-radius:60% 40% 45% 55%/40% 55% 45% 60%;filter:blur(${W * 0.02}px);"></div><div style="position:absolute;bottom:-${H * 0.12}px;left:-${W * 0.06}px;width:${W * 0.72}px;height:${H * 0.5}px;background:${rgba(p.primary, 0.28)};border-radius:45% 55% 60% 40%/55% 40% 60% 45%;filter:blur(${W * 0.018}px);"></div><div style="position:absolute;top:${H * 0.26}px;right:${W * 0.08}px;width:${W * 0.22}px;height:${W * 0.22}px;background:${rgba(p.highlight, 0.85)};border-radius:60% 40% 55% 45%/50% 60% 40% 50%;"></div>${S.bg ? `<div style="position:absolute;top:${W > H ? H * 0.04 : H * 0.09}px;right:${W * 0.04}px;width:${W * (W > H ? 0.38 : 0.42)}px;height:${W > H ? H * 0.92 : H * 0.4}px;overflow:hidden;border-radius:${W * 0.05}px;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}"></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${Math.max(H * 0.07, tagSafe(W, H).b)}px;left:${W * 0.06}px;width:${tpw(W, 0.58)}px;">${aline(W, p.accent)}${hdr(W, p.text, 0.88)}<div style="margin-top:${H * 0.015}px;">${body(W, rgba(p.text, 0.78), 0.88)}</div></div></div>`,
 
         // 73. Elegant Border Classic
         (p, W, H) => {
@@ -12292,7 +12774,7 @@ Post:
           const isc = (S.imgSize || 100) / 100,
             iw = W * 0.4 * isc,
             ih = H * 0.46 * isc;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:-${W * 0.22}px;right:-${W * 0.18}px;width:${W * 0.72}px;height:${W * 0.72}px;border-radius:50%;background:${rgba(p.accent, 0.22)};filter:blur(${W * 0.055}px);"></div><div style="position:absolute;bottom:-${W * 0.12}px;left:-${W * 0.08}px;width:${W * 0.58}px;height:${W * 0.58}px;border-radius:50%;background:${rgba(p.highlight, 0.32)};filter:blur(${W * 0.05}px);"></div>${S.bg ? `<div style="position:absolute;top:${H * 0.07}px;right:${W * 0.04}px;width:${iw}px;height:${ih}px;border-radius:${W * 0.018}px;overflow:hidden;opacity:.62;"><img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;"></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${H * 0.1}px;left:${W * 0.07}px;width:${W * 0.54}px;">${aline(W, p.accent)}${hdr(W, p.text, 0.9)}<div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.72), 0.9)}</div></div></div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:-${W * 0.22}px;right:-${W * 0.18}px;width:${W * 0.72}px;height:${W * 0.72}px;border-radius:50%;background:${rgba(p.accent, 0.22)};filter:blur(${W * 0.055}px);"></div><div style="position:absolute;bottom:-${W * 0.12}px;left:-${W * 0.08}px;width:${W * 0.58}px;height:${W * 0.58}px;border-radius:50%;background:${rgba(p.highlight, 0.32)};filter:blur(${W * 0.05}px);"></div>${S.bg ? `<div style="position:absolute;top:${H * 0.07}px;right:${W * 0.04}px;width:${iw}px;height:${ih}px;border-radius:${W * 0.018}px;overflow:hidden;opacity:.62;"><img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}"></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;bottom:${H * 0.1}px;left:${W * 0.07}px;width:${W * 0.54}px;">${aline(W, p.accent)}${hdr(W, p.text, 0.9)}<div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.72), 0.9)}</div></div></div>`;
         },
 
         // 76. Neon Glow Classic
@@ -12304,7 +12786,7 @@ Post:
         // 77. Screenshot Review
         (p, W, H) => {
           const bh = tpw(H, 0.4);
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 65% 20%,${rgba(p.primary, 0.22)},transparent 55%);pointer-events:none;"></div><div style="position:absolute;top:${H * 0.042}px;left:0;right:0;display:flex;justify-content:center;gap:${W * 0.022}px;z-index:2;">${[0, 1, 2, 3, 4].map(() => `<span style="font-size:${W * 0.068}px;color:${p.accent};line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.18));">★</span>`).join("")}</div><div style="position:absolute;top:${H * 0.141}px;left:${W * 0.101}px;right:${W * 0.101}px;height:${H * 0.418}px;border-radius:${W * 0.022}px;overflow:hidden;box-shadow:0 ${W * 0.018}px ${W * 0.055}px rgba(0,0,0,.42);z-index:2;background:${rgba(p.primary, 0.18)};">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center top;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"><span style="font-family:${S.font};font-size:${W * 0.028}px;color:${rgba(p.text, 0.3)};">Upload Review Screenshot</span></div>`}</div>${bh > 0 ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${bh}px;background:${p.bg};overflow:hidden;"><div style="width:100%;height:${H * 0.004}px;background:${p.accent};"></div><div style="padding:${bh * 0.07}px ${W * 0.07}px ${bh * 0.03}px;">${hdr(W, p.text, 0.78)}</div><div style="margin:0 ${W * 0.07}px ${bh * 0.045}px;height:1px;background:${rgba(p.text, 0.12)};"></div><div style="padding:0 ${W * 0.07}px;text-align:center;">${body(W, rgba(p.text, 0.78), 0.88)}</div></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 65% 20%,${rgba(p.primary, 0.22)},transparent 55%);pointer-events:none;"></div><div style="position:absolute;top:${H * 0.042}px;left:0;right:0;display:flex;justify-content:center;gap:${W * 0.022}px;z-index:2;">${[0, 1, 2, 3, 4].map(() => `<span style="font-size:${W * 0.068}px;color:${p.accent};line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.18));">★</span>`).join("")}</div><div style="position:absolute;top:${H * 0.141}px;left:${W * 0.101}px;right:${W * 0.101}px;height:${H * 0.418}px;border-radius:${W * 0.022}px;overflow:hidden;box-shadow:0 ${W * 0.018}px ${W * 0.055}px rgba(0,0,0,.42);z-index:2;background:${rgba(p.primary, 0.18)};">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"><span style="font-family:${S.font};font-size:${W * 0.028}px;color:${rgba(p.text, 0.3)};">Upload Review Screenshot</span></div>`}</div>${bh > 0 ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${bh}px;background:${p.bg};overflow:hidden;"><div style="width:100%;height:${H * 0.004}px;background:${p.accent};"></div><div style="padding:${bh * 0.07}px ${W * 0.07}px ${bh * 0.03}px;">${hdr(W, p.text, 0.78)}</div><div style="margin:0 ${W * 0.07}px ${bh * 0.045}px;height:1px;background:${rgba(p.text, 0.12)};"></div><div style="padding:0 ${W * 0.07}px;text-align:center;">${body(W, rgba(p.text, 0.78), 0.88)}</div></div>` : ""} ${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
 
         // 78. Star Burst Review — Big centred star cluster, quote floats below on frosted card
@@ -12320,7 +12802,7 @@ Post:
               .join(""),
             starsW = 5 * starSize + 4 * starGap,
             cardY = starRowY + starSize + H * 0.055;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,${rgba(p.primary, 0.35)},transparent 60%);pointer-events:none;"></div><div style="position:absolute;top:0;left:0;right:0;height:${H * 0.55}px;overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center top;">` : ""}<div style="position:absolute;inset:0;background:linear-gradient(to bottom,${rgba(p.bg, 0.18)},${rgba(p.bg, 0.82)});"></div></div><div style="position:absolute;top:${starRowY}px;left:${(W - starsW) / 2}px;width:${starsW}px;height:${starSize}px;">${starsHTML}</div><div style="position:absolute;top:${starRowY - H * 0.06}px;left:0;right:0;display:flex;justify-content:center;"><span style="font-family:${S.font};font-size:${W * 0.028}px;font-weight:700;letter-spacing:${W * 0.018}px;color:${rgba(p.accent, 0.7)};text-transform:uppercase;">5 Stars</span></div><div style="position:absolute;top:${cardY}px;left:${W * 0.065}px;right:${W * 0.065}px;bottom:${H * 0.04}px;border-radius:${W * 0.025}px;background:${rgba(p.primary, 0.13)};border:1px solid ${rgba(p.accent, 0.22)};backdrop-filter:blur(8px);overflow:hidden;padding:${H * 0.032}px ${W * 0.07}px ${H * 0.025}px;"><div style="width:${W * 0.11}px;height:3px;background:${p.accent};border-radius:2px;margin-bottom:${H * 0.022}px;"></div>${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.018}px;">${body(W, rgba(p.text, 0.82), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,${rgba(p.primary, 0.35)},transparent 60%);pointer-events:none;"></div><div style="position:absolute;top:0;left:0;right:0;height:${H * 0.55}px;overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : ""}<div style="position:absolute;inset:0;background:linear-gradient(to bottom,${rgba(p.bg, 0.18)},${rgba(p.bg, 0.82)});"></div></div><div style="position:absolute;top:${starRowY}px;left:${(W - starsW) / 2}px;width:${starsW}px;height:${starSize}px;">${starsHTML}</div><div style="position:absolute;top:${starRowY - H * 0.06}px;left:0;right:0;display:flex;justify-content:center;"><span style="font-family:${S.font};font-size:${W * 0.028}px;font-weight:700;letter-spacing:${W * 0.018}px;color:${rgba(p.accent, 0.7)};text-transform:uppercase;">5 Stars</span></div><div style="position:absolute;top:${cardY}px;left:${W * 0.065}px;right:${W * 0.065}px;bottom:${H * 0.04}px;border-radius:${W * 0.025}px;background:${rgba(p.primary, 0.13)};border:1px solid ${rgba(p.accent, 0.22)};backdrop-filter:blur(8px);overflow:hidden;padding:${H * 0.032}px ${W * 0.07}px ${H * 0.025}px;"><div style="width:${W * 0.11}px;height:3px;background:${p.accent};border-radius:2px;margin-bottom:${H * 0.022}px;"></div>${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.018}px;">${body(W, rgba(p.text, 0.82), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
 
         // 79. Split Star Testimonial — Bold vertical split: photo left, stars + quote right
@@ -12339,7 +12821,7 @@ Post:
                   `<div style="position:absolute;top:0;left:${i * (starSz + starGap)}px;width:${starSz}px;height:${starSz}px;display:flex;align-items:center;justify-content:center;"><span style="font-size:${starSz * 0.9}px;color:${p.accent};line-height:1;filter:drop-shadow(0 0 ${W * 0.008}px ${rgba(p.accent, 0.6)});">★</span></div>`,
               )
               .join("");
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:0;left:0;width:${photoW}px;height:100%;overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.25)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${W * 0.02}px;"><div style="width:${photoW * 0.32}px;height:${photoW * 0.32}px;border-radius:50%;border:2px dashed ${rgba(p.accent, 0.4)};display:flex;align-items:center;justify-content:center;"><span style="font-size:${photoW * 0.1}px;opacity:.4;">🖼</span></div><span style="font-family:${S.font};font-size:${W * 0.018}px;color:${rgba(p.text, 0.3)};">Upload photo</span></div>`}<div style="position:absolute;inset:0;background:linear-gradient(to right,transparent 65%,${rgba(p.bg, 0.95)});"></div></div><div style="position:absolute;top:0;right:0;width:${textW}px;height:100%;background:${p.bg};"></div><div style="position:absolute;top:0;left:${photoW - W * 0.008}px;width:${W * 0.016}px;height:100%;background:${p.accent};opacity:.8;"></div><div style="position:absolute;top:${starsY}px;left:${photoW + (textW - starsW) / 2}px;width:${starsW}px;height:${starSz}px;">${starsHTML}</div><div style="position:absolute;top:${starsY + starSz + H * 0.025}px;left:${photoW + textW * 0.08}px;right:${W * 0.05}px;"><div style="font-family:${S.font};font-size:${textW * 0.09}px;font-weight:900;line-height:1;color:${p.accent};margin-bottom:${H * 0.01}px;">5.0</div><div style="font-family:${S.font};font-size:${W * 0.014}px;font-weight:600;letter-spacing:${W * 0.008}px;text-transform:uppercase;color:${rgba(p.text, 0.45)};margin-bottom:${H * 0.025}px;">Verified Rating</div><div style="width:${textW * 0.18}px;height:2px;background:${p.accent};border-radius:2px;margin-bottom:${H * 0.025}px;"></div>${hdr(W, p.text, 0.78)}<div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.75), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;top:0;left:0;width:${photoW}px;height:100%;overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.25)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${W * 0.02}px;"><div style="width:${photoW * 0.32}px;height:${photoW * 0.32}px;border-radius:50%;border:2px dashed ${rgba(p.accent, 0.4)};display:flex;align-items:center;justify-content:center;"><span style="font-size:${photoW * 0.1}px;opacity:.4;">🖼</span></div><span style="font-family:${S.font};font-size:${W * 0.018}px;color:${rgba(p.text, 0.3)};">Upload photo</span></div>`}<div style="position:absolute;inset:0;background:linear-gradient(to right,transparent 65%,${rgba(p.bg, 0.95)});"></div></div><div style="position:absolute;top:0;right:0;width:${textW}px;height:100%;background:${p.bg};"></div><div style="position:absolute;top:0;left:${photoW - W * 0.008}px;width:${W * 0.016}px;height:100%;background:${p.accent};opacity:.8;"></div><div style="position:absolute;top:${starsY}px;left:${photoW + (textW - starsW) / 2}px;width:${starsW}px;height:${starSz}px;">${starsHTML}</div><div style="position:absolute;top:${starsY + starSz + H * 0.025}px;left:${photoW + textW * 0.08}px;right:${W * 0.05}px;"><div style="font-family:${S.font};font-size:${textW * 0.09}px;font-weight:900;line-height:1;color:${p.accent};margin-bottom:${H * 0.01}px;">5.0</div><div style="font-family:${S.font};font-size:${W * 0.014}px;font-weight:600;letter-spacing:${W * 0.008}px;text-transform:uppercase;color:${rgba(p.text, 0.45)};margin-bottom:${H * 0.025}px;">Verified Rating</div><div style="width:${textW * 0.18}px;height:2px;background:${p.accent};border-radius:2px;margin-bottom:${H * 0.025}px;"></div>${hdr(W, p.text, 0.78)}<div style="margin-top:${H * 0.02}px;">${body(W, rgba(p.text, 0.75), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
 
         // 80. Star Badge Card — Centered badge with large star ring + review quote, full-bleed photo bg
@@ -12356,7 +12838,7 @@ Post:
                 return `<div style="position:absolute;top:${sy - sz / 2}px;left:${sx - sz / 2}px;width:${sz}px;height:${sz}px;display:flex;align-items:center;justify-content:center;"><span style="font-size:${sz * 0.88}px;color:${p.accent};line-height:1;filter:drop-shadow(0 0 ${W * 0.008}px ${rgba(p.accent, 0.75)});">★</span></div>`;
               })
               .join("");
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${S.bg ? `<img src="${S.bg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : ""}<div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 38%,${rgba(p.bg, 0.2)} 0%,${rgba(p.bg, 0.78)} 62%,${rgba(p.bg, 0.97)} 100%);"></div><div style="position:absolute;top:${cy - badgeR}px;left:${cx - badgeR}px;width:${badgeR * 2}px;height:${badgeR * 2}px;border-radius:50%;border:2px solid ${rgba(p.accent, 0.28)};"></div><div style="position:absolute;top:${cy - badgeR * 0.64}px;left:${cx - badgeR * 0.64}px;width:${badgeR * 1.28}px;height:${badgeR * 1.28}px;border-radius:50%;background:${rgba(p.primary, 0.18)};backdrop-filter:blur(6px);border:1px solid ${rgba(p.accent, 0.18)};display:flex;align-items:center;justify-content:center;"><div style="text-align:center;"><div style="font-family:${S.font};font-size:${W * 0.075}px;font-weight:900;line-height:1;color:${p.text};text-shadow:0 2px 12px rgba(0,0,0,.4);">5★</div><div style="font-family:${S.font};font-size:${W * 0.016}px;font-weight:600;letter-spacing:${W * 0.008}px;text-transform:uppercase;color:${rgba(p.accent, 0.8)};margin-top:${H * 0.006}px;">Five Stars</div></div></div>${starsOnRing}<div style="position:absolute;top:${cy + badgeR + H * 0.032}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;text-align:center;"><div style="width:${W * 0.12}px;height:2px;background:${p.accent};border-radius:2px;margin:0 auto ${H * 0.022}px;"></div>${hdr(W, p.text, 0.9)}<div style="margin-top:${H * 0.016}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${S.bg ? `<img src="${S.bg}" style="position:absolute;inset:0;width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : ""}<div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 38%,${rgba(p.bg, 0.2)} 0%,${rgba(p.bg, 0.78)} 62%,${rgba(p.bg, 0.97)} 100%);"></div><div style="position:absolute;top:${cy - badgeR}px;left:${cx - badgeR}px;width:${badgeR * 2}px;height:${badgeR * 2}px;border-radius:50%;border:2px solid ${rgba(p.accent, 0.28)};"></div><div style="position:absolute;top:${cy - badgeR * 0.64}px;left:${cx - badgeR * 0.64}px;width:${badgeR * 1.28}px;height:${badgeR * 1.28}px;border-radius:50%;background:${rgba(p.primary, 0.18)};backdrop-filter:blur(6px);border:1px solid ${rgba(p.accent, 0.18)};display:flex;align-items:center;justify-content:center;"><div style="text-align:center;"><div style="font-family:${S.font};font-size:${W * 0.075}px;font-weight:900;line-height:1;color:${p.text};text-shadow:0 2px 12px rgba(0,0,0,.4);">5★</div><div style="font-family:${S.font};font-size:${W * 0.016}px;font-weight:600;letter-spacing:${W * 0.008}px;text-transform:uppercase;color:${rgba(p.accent, 0.8)};margin-top:${H * 0.006}px;">Five Stars</div></div></div>${starsOnRing}<div style="position:absolute;top:${cy + badgeR + H * 0.032}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;text-align:center;"><div style="width:${W * 0.12}px;height:2px;background:${p.accent};border-radius:2px;margin:0 auto ${H * 0.022}px;"></div>${hdr(W, p.text, 0.9)}<div style="margin-top:${H * 0.016}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
 
         // 81. Agent Spotlight — Circular agent photo badge with radiant sunburst lines, expanded star ring, and name/quote layout for featuring team members
@@ -12389,7 +12871,7 @@ Post:
                 return `<div style="position:absolute;top:${sy - sz / 2}px;left:${sx - sz / 2}px;width:${sz}px;height:${sz}px;display:flex;align-items:center;justify-content:center;"><span style="font-size:${isPrimary ? sz * 0.9 : sz * 0.62}px;color:${isPrimary ? p.accent : rgba(p.accent, 0.55)};line-height:1;filter:drop-shadow(0 0 ${W * 0.007}px ${rgba(p.accent, 0.8)});">★</span></div>`;
               })
               .join("");
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${S.bg ? `<img src="${S.bg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : ""}<div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 38%,${rgba(p.bg, 0.1)} 0%,${rgba(p.bg, 0.72)} 58%,${rgba(p.bg, 0.97)} 100%);"></div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}">${rays}<circle cx="${cx}" cy="${cy}" r="${outerR}" fill="none" stroke="${rgba(p.accent, 0.22)}" stroke-width="${W * 0.004}"/><circle cx="${cx}" cy="${cy}" r="${outerR * 0.82}" fill="none" stroke="${rgba(p.accent, 0.1)}" stroke-width="${W * 0.002}"/></svg><div style="position:absolute;top:${cy - photoR}px;left:${cx - photoR}px;width:${photoR * 2}px;height:${photoR * 2}px;border-radius:50%;overflow:hidden;border:${W * 0.007}px solid ${p.accent};box-shadow:0 0 ${W * 0.035}px ${rgba(p.accent, 0.65)},0 0 ${W * 0.012}px ${rgba(p.accent, 0.35)} inset;">${S.bg2 ? `<img src="${S.bg2}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg2")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.28)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${W * 0.012}px;"><span style="font-size:${photoR * 0.55}px;opacity:.4;">👤</span><span style="font-family:${S.font};font-size:${W * 0.018}px;color:${rgba(p.text, 0.45)};">Image 2</span></div>`}</div>${starsOnRing}<div style="position:absolute;top:${cy + badgeR + H * 0.032}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;text-align:center;"><div style="display:flex;align-items:center;justify-content:center;gap:${W * 0.02}px;margin-bottom:${H * 0.018}px;"><div style="height:1px;width:${W * 0.08}px;background:${rgba(p.accent, 0.5)};"></div><span style="font-size:${W * 0.022}px;color:${p.accent};">★★★★★</span><div style="height:1px;width:${W * 0.08}px;background:${rgba(p.accent, 0.5)};"></div></div>${hdr(W, p.text, 0.9)}<div style="margin-top:${H * 0.016}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};">${S.bg ? `<img src="${S.bg}" style="position:absolute;inset:0;width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : ""}<div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 38%,${rgba(p.bg, 0.1)} 0%,${rgba(p.bg, 0.72)} 58%,${rgba(p.bg, 0.97)} 100%);"></div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}">${rays}<circle cx="${cx}" cy="${cy}" r="${outerR}" fill="none" stroke="${rgba(p.accent, 0.22)}" stroke-width="${W * 0.004}"/><circle cx="${cx}" cy="${cy}" r="${outerR * 0.82}" fill="none" stroke="${rgba(p.accent, 0.1)}" stroke-width="${W * 0.002}"/></svg><div style="position:absolute;top:${cy - photoR}px;left:${cx - photoR}px;width:${photoR * 2}px;height:${photoR * 2}px;border-radius:50%;overflow:hidden;border:${W * 0.007}px solid ${p.accent};box-shadow:0 0 ${W * 0.035}px ${rgba(p.accent, 0.65)},0 0 ${W * 0.012}px ${rgba(p.accent, 0.35)} inset;">${S.bg2 ? `<img src="${S.bg2}" style="width:100%;height:100%;${bgFitPos("bg2")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.28)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${W * 0.012}px;"><span style="font-size:${photoR * 0.55}px;opacity:.4;">👤</span><span style="font-family:${S.font};font-size:${W * 0.018}px;color:${rgba(p.text, 0.45)};">Image 2</span></div>`}</div>${starsOnRing}<div style="position:absolute;top:${cy + badgeR + H * 0.032}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;text-align:center;"><div style="display:flex;align-items:center;justify-content:center;gap:${W * 0.02}px;margin-bottom:${H * 0.018}px;"><div style="height:1px;width:${W * 0.08}px;background:${rgba(p.accent, 0.5)};"></div><span style="font-size:${W * 0.022}px;color:${p.accent};">★★★★★</span><div style="height:1px;width:${W * 0.08}px;background:${rgba(p.accent, 0.5)};"></div></div>${hdr(W, p.text, 0.9)}<div style="margin-top:${H * 0.016}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
 
         // 82. Cross-Cut Overlay — Four SVG triangles slice from all four corners, text sits in a solid accent footer band
@@ -12397,7 +12879,7 @@ Post:
           const footH = tpw(H, 0.34),
             cut = W * 0.38,
             photoH = H - footH;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;"><div style="position:absolute;top:0;left:0;right:0;height:${photoH}px;overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center top;">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.22)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${W * 0.025}px;"><div style="width:${W * 0.28}px;height:${W * 0.28}px;border-radius:${W * 0.02}px;border:2px dashed ${rgba(p.accent, 0.4)};display:flex;align-items:center;justify-content:center;"><span style="font-size:${W * 0.08}px;opacity:.35;">🖼</span></div><span style="font-family:${S.font};font-size:${W * 0.022}px;color:${rgba(p.text, 0.3)};">Upload photo</span></div>`}</div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}"><polygon points="0,0 ${cut},0 0,${photoH * 0.42}" fill="${rgba(p.accent, 0.78)}"/><polygon points="${W},0 ${W},${photoH * 0.38} ${W - cut},0" fill="${rgba(p.primary, 0.68)}"/><polygon points="0,${H} ${cut * 0.9},${H} 0,${H - footH * 0.38}" fill="${rgba(p.primary, 0.62)}"/><polygon points="${W},${H} ${W},${H - footH * 0.34} ${W - cut * 0.7},${H}" fill="${rgba(p.accent, 0.55)}"/></svg><div style="position:absolute;inset:0;background:linear-gradient(180deg,${rgba(p.bg, 0.05)} 25%,${rgba(p.bg, 0.55)} 65%,${rgba(p.bg, 0.95)} 82%,${p.bg} 100%);pointer-events:none;"></div><div style="position:absolute;bottom:0;left:0;right:0;height:${footH}px;border-top:${W * 0.006}px solid ${p.accent};background:${rgba(p.bg, 0.97)};padding:${footH * 0.1}px ${W * 0.07}px ${Math.max(footH * 0.08, tagSafe(W, H).b)}px;box-sizing:border-box;"><div style="display:flex;align-items:center;gap:${W * 0.02}px;margin-bottom:${H * 0.014}px;"><div style="width:${W * 0.055}px;height:${W * 0.055}px;background:${p.accent};clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);flex-shrink:0;"></div><div style="flex:1;height:${W * 0.004}px;background:${rgba(p.accent, 0.35)};border-radius:2px;"></div></div>${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.014}px;">${body(W, rgba(p.text, 0.8), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;"><div style="position:absolute;top:0;left:0;right:0;height:${photoH}px;overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.22)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${W * 0.025}px;"><div style="width:${W * 0.28}px;height:${W * 0.28}px;border-radius:${W * 0.02}px;border:2px dashed ${rgba(p.accent, 0.4)};display:flex;align-items:center;justify-content:center;"><span style="font-size:${W * 0.08}px;opacity:.35;">🖼</span></div><span style="font-family:${S.font};font-size:${W * 0.022}px;color:${rgba(p.text, 0.3)};">Upload photo</span></div>`}</div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}"><polygon points="0,0 ${cut},0 0,${photoH * 0.42}" fill="${rgba(p.accent, 0.78)}"/><polygon points="${W},0 ${W},${photoH * 0.38} ${W - cut},0" fill="${rgba(p.primary, 0.68)}"/><polygon points="0,${H} ${cut * 0.9},${H} 0,${H - footH * 0.38}" fill="${rgba(p.primary, 0.62)}"/><polygon points="${W},${H} ${W},${H - footH * 0.34} ${W - cut * 0.7},${H}" fill="${rgba(p.accent, 0.55)}"/></svg><div style="position:absolute;inset:0;background:linear-gradient(180deg,${rgba(p.bg, 0.05)} 25%,${rgba(p.bg, 0.55)} 65%,${rgba(p.bg, 0.95)} 82%,${p.bg} 100%);pointer-events:none;"></div><div style="position:absolute;bottom:0;left:0;right:0;height:${footH}px;border-top:${W * 0.006}px solid ${p.accent};background:${rgba(p.bg, 0.97)};padding:${footH * 0.1}px ${W * 0.07}px ${Math.max(footH * 0.08, tagSafe(W, H).b)}px;box-sizing:border-box;"><div style="display:flex;align-items:center;gap:${W * 0.02}px;margin-bottom:${H * 0.014}px;"><div style="width:${W * 0.055}px;height:${W * 0.055}px;background:${p.accent};clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);flex-shrink:0;"></div><div style="flex:1;height:${W * 0.004}px;background:${rgba(p.accent, 0.35)};border-radius:2px;"></div></div>${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.014}px;">${body(W, rgba(p.text, 0.8), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
 
         // 83. Slash Frame Overlay — Two bold parallel diagonal slash bars frame the photo; headline floats inside the negative space between them, centred — optimised for square Instagram
@@ -12408,7 +12890,7 @@ Post:
             bar1Y = H * (0.08 + panelFrac * 0.18),
             bar2Y = H * (0.52 + panelFrac * 0.22),
             skew = W * 0.22;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;"><div style="position:absolute;inset:0;overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.22)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${W * 0.025}px;"><div style="width:${W * 0.3}px;height:${W * 0.3}px;border-radius:${W * 0.018}px;border:2px dashed ${rgba(p.accent, 0.4)};display:flex;align-items:center;justify-content:center;"><span style="font-size:${W * 0.09}px;opacity:.35;">🖼</span></div><span style="font-family:${S.font};font-size:${W * 0.022}px;color:${rgba(p.text, 0.3)};">Upload photo</span></div>`}</div><div style="position:absolute;inset:0;background:linear-gradient(155deg,${rgba(p.bg, 0.15)},${rgba(p.bg, 0.52)});pointer-events:none;"></div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}"><polygon points="${-skew * 0.5},${bar1Y} ${slashW - skew * 0.5},${bar1Y} ${slashW + skew * 0.5},${bar1Y + barH} ${skew * 0.5},${bar1Y + barH}" fill="${rgba(p.accent, 0.88)}"/><polygon points="${-skew * 0.5},${bar2Y} ${slashW - skew * 0.5},${bar2Y} ${slashW + skew * 0.5},${bar2Y + barH} ${skew * 0.5},${bar2Y + barH}" fill="${rgba(p.primary, 0.82)}"/></svg><div style="position:absolute;top:${bar1Y + barH + H * 0.015}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;bottom:${H - bar2Y + H * 0.01}px;display:flex;flex-direction:column;justify-content:center;">${hdr(W, "#fff", fScale())}<div style="width:${W * 0.07}px;height:${W * 0.004}px;background:${p.accent};border-radius:2px;margin:${H * 0.016}px 0;"></div>${body(W, "rgba(255,255,255,.85)", fScale())}</div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;"><div style="position:absolute;inset:0;overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="position:absolute;inset:0;width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.22)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${W * 0.025}px;"><div style="width:${W * 0.3}px;height:${W * 0.3}px;border-radius:${W * 0.018}px;border:2px dashed ${rgba(p.accent, 0.4)};display:flex;align-items:center;justify-content:center;"><span style="font-size:${W * 0.09}px;opacity:.35;">🖼</span></div><span style="font-family:${S.font};font-size:${W * 0.022}px;color:${rgba(p.text, 0.3)};">Upload photo</span></div>`}</div><div style="position:absolute;inset:0;background:linear-gradient(155deg,${rgba(p.bg, 0.15)},${rgba(p.bg, 0.52)});pointer-events:none;"></div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}"><polygon points="${-skew * 0.5},${bar1Y} ${slashW - skew * 0.5},${bar1Y} ${slashW + skew * 0.5},${bar1Y + barH} ${skew * 0.5},${bar1Y + barH}" fill="${rgba(p.accent, 0.88)}"/><polygon points="${-skew * 0.5},${bar2Y} ${slashW - skew * 0.5},${bar2Y} ${slashW + skew * 0.5},${bar2Y + barH} ${skew * 0.5},${bar2Y + barH}" fill="${rgba(p.primary, 0.82)}"/></svg><div style="position:absolute;top:${bar1Y + barH + H * 0.015}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;bottom:${H - bar2Y + H * 0.01}px;display:flex;flex-direction:column;justify-content:center;">${hdr(W, "#fff", fScale())}<div style="width:${W * 0.07}px;height:${W * 0.004}px;background:${p.accent};border-radius:2px;margin:${H * 0.016}px 0;"></div>${body(W, "rgba(255,255,255,.85)", fScale())}</div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
 
         // 84. Corner Sweep Overlay — A single bold swept arc from bottom-left fills the lower third with a solid colour block; header text sits inside it on the right, creating a magazine-cover energy — great for Pinterest tall format
@@ -12417,7 +12899,7 @@ Post:
             sweepH = H * (0.25 + panelFrac * 0.26),
             arcCtrlX = W * 0.55,
             arcCtrlY = H - sweepH - H * 0.14;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;${bgDiv(W, H)}"><div style="position:absolute;top:0;left:0;right:0;height:${H * 0.5}px;overflow:hidden;">${S.bg2 ? `<img src="${S.bg2}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg2")}">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"><span style="font-family:${S.font};font-size:${W * 0.02}px;color:${rgba(p.text, 0.25)};">Upload Image 2</span></div>`}</div><div style="position:absolute;inset:0;background:linear-gradient(170deg,transparent 40%,${rgba(p.bg, 0.45)} 70%,${rgba(p.bg, 0.85)} 100%);pointer-events:none;"></div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}"><path d="M0,${H} L0,${H - sweepH} Q${arcCtrlX},${arcCtrlY} ${W},${H - sweepH * 1.18} L${W},${H} Z" fill="${rgba(p.accent, 0.92)}"/><path d="M0,${H} L0,${H - sweepH * 0.62} Q${arcCtrlX * 0.7},${H - sweepH * 0.28} ${W},${H - sweepH * 0.48} L${W},${H} Z" fill="${p.primary}"/></svg><div style="position:absolute;top:${H * 0.055}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;z-index:2;"><div style="width:${W * 0.08}px;height:${W * 0.006}px;background:${p.accent};border-radius:2px;margin-bottom:${H * 0.018}px;"></div>${hdr(W, "#fff", fScale())}</div><div style="position:absolute;bottom:${Math.max(H * 0.045, tagSafe(W, H).b)}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;"><div style="margin-bottom:${H * 0.01}px;">${body(W, rgba(ctxt(p.accent), 0.9))}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;${bgDiv(W, H)}"><div style="position:absolute;top:0;left:0;right:0;height:${H * 0.5}px;overflow:hidden;">${S.bg2 ? `<img src="${S.bg2}" style="width:100%;height:100%;${bgFitPos("bg2")}">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"><span style="font-family:${S.font};font-size:${W * 0.02}px;color:${rgba(p.text, 0.25)};">Upload Image 2</span></div>`}</div><div style="position:absolute;inset:0;background:linear-gradient(170deg,transparent 40%,${rgba(p.bg, 0.45)} 70%,${rgba(p.bg, 0.85)} 100%);pointer-events:none;"></div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}"><path d="M0,${H} L0,${H - sweepH} Q${arcCtrlX},${arcCtrlY} ${W},${H - sweepH * 1.18} L${W},${H} Z" fill="${rgba(p.accent, 0.92)}"/><path d="M0,${H} L0,${H - sweepH * 0.62} Q${arcCtrlX * 0.7},${H - sweepH * 0.28} ${W},${H - sweepH * 0.48} L${W},${H} Z" fill="${p.primary}"/></svg><div style="position:absolute;top:${H * 0.055}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;z-index:2;"><div style="width:${W * 0.08}px;height:${W * 0.006}px;background:${p.accent};border-radius:2px;margin-bottom:${H * 0.018}px;"></div>${hdr(W, "#fff", fScale())}</div><div style="position:absolute;bottom:${Math.max(H * 0.045, tagSafe(W, H).b)}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;"><div style="margin-bottom:${H * 0.01}px;">${body(W, rgba(ctxt(p.accent), 0.9))}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
 
         // 85. Image Circles
@@ -12436,7 +12918,7 @@ Post:
             img2 = S.bg2 || S.bg,
             img3 = S.bg3 || S.bg2 || S.bg,
             bw = W * 0.007;
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 30%,${rgba(p.primary, 0.24)},transparent 62%);pointer-events:none;"></div><div style="position:absolute;bottom:0;left:0;right:0;height:${H * 0.42}px;background:linear-gradient(to top,${rgba(p.bg, 0.55)},transparent);pointer-events:none;"></div><div style="position:absolute;top:${c1y - r1 * 1.55}px;left:${c1x - r1 * 1.55}px;width:${r1 * 3.1}px;height:${r1 * 3.1}px;border-radius:50%;border:1px dashed ${rgba(p.accent, 0.13)};pointer-events:none;"></div><div style="position:absolute;top:${c1y - r1 * 1.24}px;left:${c1x - r1 * 1.24}px;width:${r1 * 2.48}px;height:${r1 * 2.48}px;border-radius:50%;border:1px dashed ${rgba(p.accent, 0.25)};pointer-events:none;"></div><div style="position:absolute;top:${c2y - r2 * 1.32}px;left:${c2x - r2 * 1.32}px;width:${r2 * 2.64}px;height:${r2 * 2.64}px;border-radius:50%;border:1px dashed ${rgba(p.primary, 0.26)};pointer-events:none;"></div><div style="position:absolute;top:${c3y - r3 * 1.36}px;left:${c3x - r3 * 1.36}px;width:${r3 * 2.72}px;height:${r3 * 2.72}px;border-radius:50%;border:1px dashed ${rgba(p.highlight, 0.26)};pointer-events:none;"></div><div style="position:absolute;top:${c2y - r2}px;left:${c2x - r2}px;width:${r2 * 2}px;height:${r2 * 2}px;border-radius:50%;border:${bw}px solid ${p.primary};overflow:hidden;box-shadow:0 ${W * 0.01}px ${W * 0.034}px rgba(0,0,0,.45);">${img2 ? `<img src="${img2}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg2")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.45)};display:flex;align-items:center;justify-content:center;"><div style="width:40%;height:40%;border-radius:50%;border:2px solid ${rgba(p.primary, 0.4)};"></div></div>`}</div><div style="position:absolute;top:${c3y - r3}px;left:${c3x - r3}px;width:${r3 * 2}px;height:${r3 * 2}px;border-radius:50%;border:${bw}px solid ${p.highlight};overflow:hidden;box-shadow:0 ${W * 0.008}px ${W * 0.028}px rgba(0,0,0,.42);">${img3 ? `<img src="${img3}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg3")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.highlight, 0.45)};display:flex;align-items:center;justify-content:center;"><div style="width:40%;height:40%;border-radius:50%;border:2px solid ${rgba(p.highlight, 0.4)};"></div></div>`}</div><div style="position:absolute;top:${c1y - r1}px;left:${c1x - r1}px;width:${r1 * 2}px;height:${r1 * 2}px;border-radius:50%;border:${bw}px solid ${p.accent};overflow:hidden;box-shadow:0 ${W * 0.013}px ${W * 0.044}px rgba(0,0,0,.5);">${img1 ? `<img src="${img1}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.accent, 0.35)};display:flex;align-items:center;justify-content:center;"><div style="width:40%;height:40%;border-radius:50%;border:3px solid ${rgba(p.accent, 0.4)};"></div></div>`}</div><div style="position:absolute;top:${c1y + r1 - W * 0.01}px;left:${c1x - W * 0.01}px;width:${W * 0.02}px;height:${W * 0.02}px;border-radius:50%;background:${p.accent};z-index:6;box-shadow:0 0 ${W * 0.012}px ${rgba(p.accent, 0.65)};pointer-events:none;"></div><div style="position:absolute;top:${c2y + r2 * 0.62}px;left:${c2x + r2 * 0.6}px;width:${W * 0.012}px;height:${W * 0.012}px;border-radius:50%;background:${p.primary};z-index:6;pointer-events:none;"></div><div style="position:absolute;top:${c3y - r3 * 0.5}px;left:${c3x - r3 * 0.9}px;width:${W * 0.008}px;height:${W * 0.008}px;border-radius:50%;background:${p.highlight};z-index:6;pointer-events:none;"></div>${logoHTML(W, H)}<div style="position:absolute;bottom:0;left:0;right:0;padding:${W * 0.07}px;padding-bottom:${Math.max(W * 0.07, tagSafe(W, H).b)}px;box-sizing:border-box;">${aline(W, p.accent)}${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.018}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 30%,${rgba(p.primary, 0.24)},transparent 62%);pointer-events:none;"></div><div style="position:absolute;bottom:0;left:0;right:0;height:${H * 0.42}px;background:linear-gradient(to top,${rgba(p.bg, 0.55)},transparent);pointer-events:none;"></div><div style="position:absolute;top:${c1y - r1 * 1.55}px;left:${c1x - r1 * 1.55}px;width:${r1 * 3.1}px;height:${r1 * 3.1}px;border-radius:50%;border:1px dashed ${rgba(p.accent, 0.13)};pointer-events:none;"></div><div style="position:absolute;top:${c1y - r1 * 1.24}px;left:${c1x - r1 * 1.24}px;width:${r1 * 2.48}px;height:${r1 * 2.48}px;border-radius:50%;border:1px dashed ${rgba(p.accent, 0.25)};pointer-events:none;"></div><div style="position:absolute;top:${c2y - r2 * 1.32}px;left:${c2x - r2 * 1.32}px;width:${r2 * 2.64}px;height:${r2 * 2.64}px;border-radius:50%;border:1px dashed ${rgba(p.primary, 0.26)};pointer-events:none;"></div><div style="position:absolute;top:${c3y - r3 * 1.36}px;left:${c3x - r3 * 1.36}px;width:${r3 * 2.72}px;height:${r3 * 2.72}px;border-radius:50%;border:1px dashed ${rgba(p.highlight, 0.26)};pointer-events:none;"></div><div style="position:absolute;top:${c2y - r2}px;left:${c2x - r2}px;width:${r2 * 2}px;height:${r2 * 2}px;border-radius:50%;border:${bw}px solid ${p.primary};overflow:hidden;box-shadow:0 ${W * 0.01}px ${W * 0.034}px rgba(0,0,0,.45);">${img2 ? `<img src="${img2}" style="width:100%;height:100%;${bgFitPos("bg2")}${bgZoomCss("bg2")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.45)};display:flex;align-items:center;justify-content:center;"><div style="width:40%;height:40%;border-radius:50%;border:2px solid ${rgba(p.primary, 0.4)};"></div></div>`}</div><div style="position:absolute;top:${c3y - r3}px;left:${c3x - r3}px;width:${r3 * 2}px;height:${r3 * 2}px;border-radius:50%;border:${bw}px solid ${p.highlight};overflow:hidden;box-shadow:0 ${W * 0.008}px ${W * 0.028}px rgba(0,0,0,.42);">${img3 ? `<img src="${img3}" style="width:100%;height:100%;${bgFitPos("bg3")}${bgZoomCss("bg3")}">` : `<div style="width:100%;height:100%;background:${rgba(p.highlight, 0.45)};display:flex;align-items:center;justify-content:center;"><div style="width:40%;height:40%;border-radius:50%;border:2px solid ${rgba(p.highlight, 0.4)};"></div></div>`}</div><div style="position:absolute;top:${c1y - r1}px;left:${c1x - r1}px;width:${r1 * 2}px;height:${r1 * 2}px;border-radius:50%;border:${bw}px solid ${p.accent};overflow:hidden;box-shadow:0 ${W * 0.013}px ${W * 0.044}px rgba(0,0,0,.5);">${img1 ? `<img src="${img1}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.accent, 0.35)};display:flex;align-items:center;justify-content:center;"><div style="width:40%;height:40%;border-radius:50%;border:3px solid ${rgba(p.accent, 0.4)};"></div></div>`}</div><div style="position:absolute;top:${c1y + r1 - W * 0.01}px;left:${c1x - W * 0.01}px;width:${W * 0.02}px;height:${W * 0.02}px;border-radius:50%;background:${p.accent};z-index:6;box-shadow:0 0 ${W * 0.012}px ${rgba(p.accent, 0.65)};pointer-events:none;"></div><div style="position:absolute;top:${c2y + r2 * 0.62}px;left:${c2x + r2 * 0.6}px;width:${W * 0.012}px;height:${W * 0.012}px;border-radius:50%;background:${p.primary};z-index:6;pointer-events:none;"></div><div style="position:absolute;top:${c3y - r3 * 0.5}px;left:${c3x - r3 * 0.9}px;width:${W * 0.008}px;height:${W * 0.008}px;border-radius:50%;background:${p.highlight};z-index:6;pointer-events:none;"></div>${logoHTML(W, H)}<div style="position:absolute;bottom:0;left:0;right:0;padding:${W * 0.07}px;padding-bottom:${Math.max(W * 0.07, tagSafe(W, H).b)}px;box-sizing:border-box;">${aline(W, p.accent)}${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.018}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${siteTag(W, H)}</div>`;
         },
 
         // 86. Solar Burst — Off-centre sunburst rays radiating from behind a diamond/hexagon-clipped image frame, with a bold offset accent bar
@@ -12477,7 +12959,7 @@ Post:
                 return `${50 + 50 * Math.cos(a)}% ${50 + 50 * Math.sin(a)}%`;
               })
               .join(", ");
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at ${(cx / W) * 100}% ${(cy / H) * 100}%,${rgba(p.primary, 0.28)} 0%,transparent 62%);pointer-events:none;"></div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}">${rays}<path d="${hexPath(cx, cy, outerR)}" fill="none" stroke="${rgba(p.accent, 0.28)}" stroke-width="${W * 0.005}"/><path d="${hexPath(cx, cy, outerR * 0.8)}" fill="none" stroke="${rgba(p.accent, 0.12)}" stroke-width="${W * 0.002}"/></svg><div style="position:absolute;top:${cy - innerR}px;left:${cx - innerR}px;width:${innerR * 2}px;height:${innerR * 2}px;clip-path:polygon(${hexPts});overflow:hidden;border:0;box-shadow:none;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.35)};display:flex;align-items:center;justify-content:center;"><span style="font-size:${innerR * 0.5}px;opacity:.3;">🖼</span></div>`}</div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}"><path d="${hexPath(cx, cy, innerR * 1.04)}" fill="none" stroke="${p.accent}" stroke-width="${W * 0.008}"/><path d="${hexPath(cx, cy, innerR * 1.16)}" fill="none" stroke="${rgba(p.accent, 0.35)}" stroke-width="${W * 0.003}"/></svg><div style="position:absolute;left:0;right:0;bottom:0;padding:${H * 0.04}px ${W * 0.07}px ${Math.max(H * 0.06, tagSafe(W, H).b)}px;box-sizing:border-box;"><div style="width:${W * 0.07}px;height:${W * 0.007}px;background:${p.accent};border-radius:2px;margin-bottom:${H * 0.022}px;"></div>${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.016}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at ${(cx / W) * 100}% ${(cy / H) * 100}%,${rgba(p.primary, 0.28)} 0%,transparent 62%);pointer-events:none;"></div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}">${rays}<path d="${hexPath(cx, cy, outerR)}" fill="none" stroke="${rgba(p.accent, 0.28)}" stroke-width="${W * 0.005}"/><path d="${hexPath(cx, cy, outerR * 0.8)}" fill="none" stroke="${rgba(p.accent, 0.12)}" stroke-width="${W * 0.002}"/></svg><div style="position:absolute;top:${cy - innerR}px;left:${cx - innerR}px;width:${innerR * 2}px;height:${innerR * 2}px;clip-path:polygon(${hexPts});overflow:hidden;border:0;box-shadow:none;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.35)};display:flex;align-items:center;justify-content:center;"><span style="font-size:${innerR * 0.5}px;opacity:.3;">🖼</span></div>`}</div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}"><path d="${hexPath(cx, cy, innerR * 1.04)}" fill="none" stroke="${p.accent}" stroke-width="${W * 0.008}"/><path d="${hexPath(cx, cy, innerR * 1.16)}" fill="none" stroke="${rgba(p.accent, 0.35)}" stroke-width="${W * 0.003}"/></svg><div style="position:absolute;left:0;right:0;bottom:0;padding:${H * 0.04}px ${W * 0.07}px ${Math.max(H * 0.06, tagSafe(W, H).b)}px;box-sizing:border-box;"><div style="width:${W * 0.07}px;height:${W * 0.007}px;background:${p.accent};border-radius:2px;margin-bottom:${H * 0.022}px;"></div>${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.016}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
 
         // 87. Star Frame Burst — Five-pointed star clip-path image frame with radiating rays and decorative concentric star rings
@@ -12518,7 +13000,7 @@ Post:
                 return `${50 + r * Math.cos(a)}% ${50 + r * Math.sin(a)}%`;
               })
               .join(", ");
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 36%,${rgba(p.primary, 0.32)} 0%,transparent 60%);pointer-events:none;"></div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}">${rays}<polygon points="${starPoints(cx, cy, outerR, outerR * 0.42)}" fill="none" stroke="${rgba(p.accent, 0.3)}" stroke-width="${W * 0.005}"/><polygon points="${starPoints(cx, cy, outerR * 1.22, outerR * 0.52)}" fill="none" stroke="${rgba(p.accent, 0.13)}" stroke-width="${W * 0.0025}"/><polygon points="${starPoints(cx, cy, outerR * 0.72, outerR * 0.3)}" fill="none" stroke="${rgba(p.accent, 0.18)}" stroke-width="${W * 0.002}"/></svg><div style="position:absolute;top:${cy - starR}px;left:${cx - starR}px;width:${starR * 2}px;height:${starR * 2}px;clip-path:polygon(${starClipPts});overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.38)};display:flex;align-items:center;justify-content:center;"><span style="font-size:${starR * 0.6}px;opacity:.3;">⭐</span></div>`}</div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}"><polygon points="${starPoints(cx, cy, starR * 1.05, starR * 0.44)}" fill="none" stroke="${p.accent}" stroke-width="${W * 0.009}"/><polygon points="${starPoints(cx, cy, starR * 1.18, starR * 0.5)}" fill="none" stroke="${rgba(p.accent, 0.32)}" stroke-width="${W * 0.003}"/></svg><div style="position:absolute;top:${cy + starR + H * 0.025}px;left:${W * 0.08}px;right:${W * 0.08}px;text-align:center;"><div style="display:flex;align-items:center;justify-content:center;gap:${W * 0.014}px;margin-bottom:${H * 0.016}px;"><div style="height:${W * 0.003}px;flex:1;background:${rgba(p.accent, 0.4)};border-radius:2px;"></div><span style="font-size:${W * 0.03}px;color:${p.accent};line-height:1;filter:drop-shadow(0 0 ${W * 0.008}px ${rgba(p.accent, 0.7)});">★</span><div style="height:${W * 0.003}px;flex:1;background:${rgba(p.accent, 0.4)};border-radius:2px;"></div></div>${hdr(W, p.text, 0.96)}<div style="margin-top:${H * 0.016}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 36%,${rgba(p.primary, 0.32)} 0%,transparent 60%);pointer-events:none;"></div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}">${rays}<polygon points="${starPoints(cx, cy, outerR, outerR * 0.42)}" fill="none" stroke="${rgba(p.accent, 0.3)}" stroke-width="${W * 0.005}"/><polygon points="${starPoints(cx, cy, outerR * 1.22, outerR * 0.52)}" fill="none" stroke="${rgba(p.accent, 0.13)}" stroke-width="${W * 0.0025}"/><polygon points="${starPoints(cx, cy, outerR * 0.72, outerR * 0.3)}" fill="none" stroke="${rgba(p.accent, 0.18)}" stroke-width="${W * 0.002}"/></svg><div style="position:absolute;top:${cy - starR}px;left:${cx - starR}px;width:${starR * 2}px;height:${starR * 2}px;clip-path:polygon(${starClipPts});overflow:hidden;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.38)};display:flex;align-items:center;justify-content:center;"><span style="font-size:${starR * 0.6}px;opacity:.3;">⭐</span></div>`}</div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}"><polygon points="${starPoints(cx, cy, starR * 1.05, starR * 0.44)}" fill="none" stroke="${p.accent}" stroke-width="${W * 0.009}"/><polygon points="${starPoints(cx, cy, starR * 1.18, starR * 0.5)}" fill="none" stroke="${rgba(p.accent, 0.32)}" stroke-width="${W * 0.003}"/></svg><div style="position:absolute;top:${cy + starR + H * 0.025}px;left:${W * 0.08}px;right:${W * 0.08}px;text-align:center;"><div style="display:flex;align-items:center;justify-content:center;gap:${W * 0.014}px;margin-bottom:${H * 0.016}px;"><div style="height:${W * 0.003}px;flex:1;background:${rgba(p.accent, 0.4)};border-radius:2px;"></div><span style="font-size:${W * 0.03}px;color:${p.accent};line-height:1;filter:drop-shadow(0 0 ${W * 0.008}px ${rgba(p.accent, 0.7)});">★</span><div style="height:${W * 0.003}px;flex:1;background:${rgba(p.accent, 0.4)};border-radius:2px;"></div></div>${hdr(W, p.text, 0.96)}<div style="margin-top:${H * 0.016}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
 
         // 88. Crest Burst — Oval portrait frame on a shield-shaped backing, with dense short rays forming an inner halo and long sparse rays reaching to canvas edges
@@ -12554,7 +13036,7 @@ Post:
                 return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${rgba(p.accent, 0.1)}" stroke-width="${W * 0.002}"/>`;
               })
               .join("");
-          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 37%,${rgba(p.primary, 0.3)} 0%,transparent 58%);pointer-events:none;"></div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}">${outerRays}${innerRays}<ellipse cx="${cx}" cy="${cy}" rx="${haloR}" ry="${haloR * 0.92}" fill="none" stroke="${rgba(p.accent, 0.22)}" stroke-width="${W * 0.005}"/><ellipse cx="${cx}" cy="${cy}" rx="${haloR * 1.38}" ry="${haloR * 1.27}" fill="none" stroke="${rgba(p.accent, 0.1)}" stroke-width="${W * 0.002}"/></svg><div style="position:absolute;top:${cy - halfH - W * 0.012}px;left:${cx - halfW - W * 0.012}px;width:${(halfW + W * 0.012) * 2}px;height:${(halfH + W * 0.012) * 2}px;border-radius:50%;background:${rgba(p.accent, 0.18)};"></div><div style="position:absolute;top:${cy - halfH}px;left:${cx - halfW}px;width:${ovalW}px;height:${ovalH}px;border-radius:50%;overflow:hidden;border:${W * 0.008}px solid ${p.accent};box-shadow:0 0 ${W * 0.04}px ${rgba(p.accent, 0.55)},0 0 ${W * 0.015}px ${rgba(p.accent, 0.3)} inset;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;object-fit:cover;${bgObjPos("bg")}transform:scale(${(S.bgScale || 100) / 100});transform-origin:center;">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.3)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${W * 0.012}px;"><span style="font-size:${halfH * 0.55}px;opacity:.35;">👤</span><span style="font-family:${S.font};font-size:${W * 0.018}px;color:${rgba(p.text, 0.4)};">Image</span></div>`}</div><div style="position:absolute;top:${cy + halfH + H * 0.028}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;text-align:center;"><div style="display:flex;align-items:center;justify-content:center;gap:${W * 0.018}px;margin-bottom:${H * 0.018}px;"><div style="height:${W * 0.0035}px;flex:1;background:${rgba(p.accent, 0.45)};border-radius:2px;"></div><div style="width:${W * 0.022}px;height:${W * 0.022}px;background:${p.accent};clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);flex-shrink:0;"></div><div style="height:${W * 0.0035}px;flex:1;background:${rgba(p.accent, 0.45)};border-radius:2px;"></div></div>${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.016}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 37%,${rgba(p.primary, 0.3)} 0%,transparent 58%);pointer-events:none;"></div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}">${outerRays}${innerRays}<ellipse cx="${cx}" cy="${cy}" rx="${haloR}" ry="${haloR * 0.92}" fill="none" stroke="${rgba(p.accent, 0.22)}" stroke-width="${W * 0.005}"/><ellipse cx="${cx}" cy="${cy}" rx="${haloR * 1.38}" ry="${haloR * 1.27}" fill="none" stroke="${rgba(p.accent, 0.1)}" stroke-width="${W * 0.002}"/></svg><div style="position:absolute;top:${cy - halfH - W * 0.012}px;left:${cx - halfW - W * 0.012}px;width:${(halfW + W * 0.012) * 2}px;height:${(halfH + W * 0.012) * 2}px;border-radius:50%;background:${rgba(p.accent, 0.18)};"></div><div style="position:absolute;top:${cy - halfH}px;left:${cx - halfW}px;width:${ovalW}px;height:${ovalH}px;border-radius:50%;overflow:hidden;border:${W * 0.008}px solid ${p.accent};box-shadow:0 0 ${W * 0.04}px ${rgba(p.accent, 0.55)},0 0 ${W * 0.015}px ${rgba(p.accent, 0.3)} inset;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.3)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${W * 0.012}px;"><span style="font-size:${halfH * 0.55}px;opacity:.35;">👤</span><span style="font-family:${S.font};font-size:${W * 0.018}px;color:${rgba(p.text, 0.4)};">Image</span></div>`}</div><div style="position:absolute;top:${cy + halfH + H * 0.028}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;text-align:center;"><div style="display:flex;align-items:center;justify-content:center;gap:${W * 0.018}px;margin-bottom:${H * 0.018}px;"><div style="height:${W * 0.0035}px;flex:1;background:${rgba(p.accent, 0.45)};border-radius:2px;"></div><div style="width:${W * 0.022}px;height:${W * 0.022}px;background:${p.accent};clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);flex-shrink:0;"></div><div style="height:${W * 0.0035}px;flex:1;background:${rgba(p.accent, 0.45)};border-radius:2px;"></div></div>${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.016}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
       ];
 
@@ -12769,7 +13251,7 @@ Post:
               scale: 1,
               useCORS: true,
               allowTaint: true,
-              backgroundColor: null,
+              backgroundColor: gapColor(),
               logging: false,
               x: 0,
               y: 0,
@@ -13985,7 +14467,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
           scale: 1,
           useCORS: true,
           allowTaint: true,
-          backgroundColor: null,
+          backgroundColor: gapColor(),
           logging: false,
           x: 0,
           y: 0,
