@@ -3343,7 +3343,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v65</span>
+              <span class="sb-version">v66</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -4977,6 +4977,7 @@ Your message, caption, or call to action goes right here.</textarea
         bg2Scale: 100,
         bg3Scale: 100,
         gapColor: "bg",
+        mixes: {},
         showZones: false,
         bgInfo: null,
         bg2Info: null,
@@ -6303,6 +6304,7 @@ Your message, caption, or call to action goes right here.</textarea
             bg2Scale: S.bg2Scale,
             bg3Scale: S.bg3Scale,
             gapColor: S.gapColor,
+            mixes: S.mixes,
             showZones: S.showZones,
             bgInfo: S.bgInfo,
             bg2Info: S.bg2Info,
@@ -8700,22 +8702,24 @@ Your message, caption, or call to action goes right here.</textarea
         indices.forEach((idx) => {
           const group = document.createElement("div");
           group.className = "mp-pv-group";
-          group.innerHTML = `<div class="mp-pv-head"><span class="mp-pv-title">${idx + 1}. ${escHtml(NAMES[idx] || "")}</span><button type="button" class="mp-pv-x" title="Remove from preview" aria-label="Remove ${escHtml(NAMES[idx] || "")} from preview" onclick="toggleSel(${idx})">✕</button></div>`;
+          group.innerHTML = `<div class="mp-pv-head"><span class="mp-pv-title">${idx + 1}. ${escHtml(NAMES[idx] || "")}</span><span class="mix-head-actions"><button type="button" class="mp-pv-send" onclick="openPfPicker(${idx}, this)" title="Send this post to the Scheduler, with each platform's layout">📤 Send to PostPilot</button><button type="button" class="mp-pv-x" title="Remove from preview" aria-label="Remove ${escHtml(NAMES[idx] || "")} from preview" onclick="toggleSel(${idx})">✕</button></span></div>`;
           const row = document.createElement("div");
           row.className = "mp-pv-row";
           row.style.gap = GAP + "px";
           keys.forEach((pk) => {
             const pl = PLATS[pk];
             if (!pl) return;
+            const use = mixIdx(idx, pk); // this platform's layout (the post's own, unless swapped)
             const sc = Math.min(colW / pl.w, maxH / pl.h);
             const iw = Math.round(pl.w * sc),
               ih = Math.round(pl.h * sc);
             const item = document.createElement("div");
             item.className = "mp-pv-item";
             item.dataset.pk = pk;
-            item.dataset.idx = idx;
+            item.dataset.idx = use;
+            item.dataset.orig = idx;
             item.style.width = Math.max(iw, Math.min(colW, 150)) + "px";
-            item.innerHTML = `<div class="mp-pv-label">${platIcon(pk, 12)}<span>${_mpName(pk)}</span><span class="mp-pv-dim">${pl.w}×${pl.h}</span><span class="mp-pv-best" hidden title="One of the best layouts for ${_mpName(pk)}">★ Best</span></div>`;
+            item.innerHTML = `<div class="mp-pv-label">${platIcon(pk, 12)}<span>${_mpName(pk)}</span><span class="mp-pv-dim">${pl.w}×${pl.h}</span><span class="mp-pv-best" hidden title="One of the best layouts for ${_mpName(pk)}">★ Best</span></div>${use !== idx ? `<div class="mix-note">Layout #${use + 1} ${escHtml(NAMES[use] || "")} <button type="button" class="mix-restore" onclick="mixRestore(${idx},'${pk}')" title="Go back to the post's original layout for ${_mpName(pk)}">↺ Restore #${idx + 1}</button></div>` : ""}`;
             const wrap = document.createElement("div");
             wrap.className = "mp-pv-img";
             wrap.style.cssText = `width:${iw}px;height:${ih}px;`;
@@ -8725,7 +8729,7 @@ Your message, caption, or call to action goes right here.</textarea
             let zl = null;
             S.platform = pk;
             try {
-              inner.innerHTML = applyGifOverlay(templates[idx](pal, pl.w, pl.h));
+              inner.innerHTML = applyGifOverlay(templates[use](pal, pl.w, pl.h));
               if (S.showZones) zl = zoneOverlayEl(iw, ih);
             } catch (e) {
             } finally {
@@ -8736,7 +8740,7 @@ Your message, caption, or call to action goes right here.</textarea
             item.appendChild(wrap);
             const btns = document.createElement("div");
             btns.className = "mp-pv-btns";
-            btns.innerHTML = `<button type="button" class="mp-pv-open" onclick="mpOpenPlatform(${idx},'${pk}',this)" title="${(MP_OPEN[pk] || {}).paste ? "Copies the image" : "Saves the image, copies the caption,"} and opens ${_mpName(pk)}. Nothing is posted.">${platIcon(pk, 11)} Open ${_mpShort(pk)} ↗</button><button type="button" class="mp-pv-save" onclick="mpSavePlatform(${idx},'${pk}',this)" title="Download the ${_mpName(pk)} version">⬇ Save</button><button type="button" class="mp-pv-cap${pcOver(pk) ? " over" : ""}" onclick="pcCopyCaption('${pk}', this)" title="Copy the ${_mpName(pk)} caption">📋 Caption</button>`;
+            btns.innerHTML = `<button type="button" class="mp-pv-open" onclick="mpOpenPlatform(${use},'${pk}',this)" title="${(MP_OPEN[pk] || {}).paste ? "Copies the image" : "Saves the image, copies the caption,"} and opens ${_mpName(pk)}. Nothing is posted.">${platIcon(pk, 11)} Open ${_mpShort(pk)} ↗</button><button type="button" class="mp-pv-save" onclick="mpSavePlatform(${use},'${pk}',this)" title="Download the ${_mpName(pk)} version">⬇ Save</button><button type="button" class="mp-pv-cap${pcOver(pk) ? " over" : ""}" onclick="pcCopyCaption('${pk}', this)" title="Copy the ${_mpName(pk)} caption">📋 Caption</button><button type="button" class="mp-pv-layout" onclick="mixOpenPicker(${idx},'${pk}')" title="Use a different layout for ${_mpName(pk)} only">⟳ Layout</button>`;
             item.appendChild(btns);
             row.appendChild(item);
             inners.push(inner);
@@ -10773,6 +10777,159 @@ Post:
           .logo-slot:not(.filled) { cursor: pointer; }
           .logo-slot.drop { outline: 2px dashed var(--hi); outline-offset: 1px; }
           .logo-slot:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+        `;
+        document.head.appendChild(st);
+      })();
+      // ══════════════════════════════════════════
+      // MIX LAYOUTS PER PLATFORM (v66)
+      // In the preview, any platform can use a different layout than the rest of the post
+      // (⟳ Layout), and go back to the post's original layout any time (↺ Restore).
+      // Open, Save and Send to PostPilot all use each platform's chosen layout.
+      // ══════════════════════════════════════════
+      // The layout a platform actually uses for a post whose original layout is `orig`
+      function mixIdx(orig, pid) {
+        const m = S.mixes && S.mixes[orig];
+        const v = m ? m[pid] : undefined;
+        return Number.isInteger(v) && templates[v] ? v : orig;
+      }
+      function mixSet(orig, pid, idx) {
+        S.mixes = Object.assign({}, S.mixes || {});
+        const m = Object.assign({}, S.mixes[orig] || {});
+        if (idx == null || idx === orig) delete m[pid];
+        else m[pid] = idx;
+        if (Object.keys(m).length) S.mixes[orig] = m;
+        else delete S.mixes[orig];
+        debounceSave();
+        if (previewOpen) renderPreview();
+      }
+      function mixRestore(orig, pid) {
+        mixSet(orig, pid, null);
+        _mpToast(`${_mpName(pid)} is back to layout <b>#${orig + 1} ${escHtml(NAMES[orig] || "")}</b>.`);
+      }
+      // Layouts in the best order for a platform: its Smart Fit top picks and scores first
+      function _mixOrder(pid) {
+        const scores = pid === S.platform ? (typeof _tmplScores !== "undefined" ? _tmplScores : {}) : _mpScores[pid] || {};
+        const picks = _mpPicksFor(pid) || new Set();
+        const all = templates.map((_, i) => i);
+        return all.sort((a, b) => {
+          const pa = picks.has(a) ? 1 : 0,
+            pb = picks.has(b) ? 1 : 0;
+          if (pa !== pb) return pb - pa;
+          const sa = scores[a] ? scores[a].score : -1,
+            sb = scores[b] ? scores[b].score : -1;
+          return sb - sa || a - b;
+        });
+      }
+      function mixOpenPicker(orig, pid) {
+        let ov = document.getElementById("mix-overlay");
+        if (!ov) {
+          ov = document.createElement("div");
+          ov.id = "mix-overlay";
+          ov.className = "us-overlay";
+          ov.setAttribute("role", "dialog");
+          ov.setAttribute("aria-modal", "true");
+          ov.setAttribute("aria-labelledby", "mix-title");
+          ov.innerHTML = `<div class="us-modal mix-modal">
+              <div class="us-head"><div><div class="us-title" id="mix-title"></div><div class="mix-sub" id="mix-sub"></div></div>
+                <div class="mix-head-actions"><button type="button" class="us-more" id="mix-restore" hidden></button><button type="button" class="us-x" aria-label="Close" onclick="mixClosePicker()">✕</button></div></div>
+              <div class="mix-grid" id="mix-grid"></div>
+            </div>`;
+          document.body.appendChild(ov);
+          ov.addEventListener("mousedown", (e) => (ov._down = e.target === ov));
+          ov.addEventListener("click", (e) => {
+            if (e.target === ov && ov._down) mixClosePicker();
+            ov._down = false;
+          });
+          ov.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              mixClosePicker();
+            }
+          });
+        }
+        const cur = mixIdx(orig, pid);
+        document.getElementById("mix-title").textContent = `Choose the ${_mpName(pid)} layout`;
+        document.getElementById("mix-sub").textContent = `For post layout #${orig + 1} ${NAMES[orig] || ""}. The best layouts for ${_mpName(pid)} come first.`;
+        const rb = document.getElementById("mix-restore");
+        rb.hidden = cur === orig;
+        rb.textContent = `↺ Use the original (#${orig + 1})`;
+        rb.onclick = () => {
+          mixClosePicker();
+          mixRestore(orig, pid);
+        };
+        // Draw every layout for this platform
+        const grid = document.getElementById("mix-grid");
+        grid.innerHTML = "";
+        const pl = PLATS[pid];
+        const cellW = 150,
+          sc = Math.min(cellW / pl.w, 200 / pl.h);
+        const pal = PAL(),
+          picks = _mpPicksFor(pid) || new Set(),
+          saved = S.platform,
+          inners = [];
+        _mixOrder(pid).forEach((i) => {
+          const cell = document.createElement("button");
+          cell.type = "button";
+          cell.className = "mix-cell" + (i === cur ? " on" : "");
+          cell.setAttribute("aria-label", `Layout ${i + 1}: ${NAMES[i] || ""}${picks.has(i) ? " (one of the best for " + _mpName(pid) + ")" : ""}`);
+          const box = document.createElement("div");
+          box.className = "mix-thumb";
+          box.style.cssText = `width:${Math.round(pl.w * sc)}px;height:${Math.round(pl.h * sc)}px;`;
+          const inner = document.createElement("div");
+          inner.style.cssText = `width:${pl.w}px;height:${pl.h}px;transform:scale(${sc});transform-origin:top left;pointer-events:none;`;
+          S.platform = pid;
+          try {
+            inner.innerHTML = applyGifOverlay(templates[i](pal, pl.w, pl.h));
+          } catch (e) {
+          } finally {
+            S.platform = saved;
+          }
+          box.appendChild(inner);
+          cell.appendChild(box);
+          const tags = (picks.has(i) ? `<span class="mix-best">★ Best</span>` : "") + (i === orig ? `<span class="mix-tag">Original</span>` : "") + (i === cur && i !== orig ? `<span class="mix-tag on">In use</span>` : "");
+          cell.insertAdjacentHTML("beforeend", `<div class="mix-name">${i + 1}. ${escHtml(NAMES[i] || "")}</div><div class="mix-tags">${tags}</div>`);
+          cell.addEventListener("click", () => {
+            mixClosePicker();
+            mixSet(orig, pid, i);
+            _mpToast(i === orig ? `${_mpName(pid)} uses the original layout.` : `${_mpName(pid)} now uses <b>#${i + 1} ${escHtml(NAMES[i] || "")}</b>. ↺ Restore puts #${orig + 1} back.`);
+          });
+          grid.appendChild(cell);
+          inners.push(inner);
+        });
+        ov.style.display = "flex";
+        fitTextBatch(inners);
+        setTimeout(() => {
+          const on = grid.querySelector(".mix-cell.on") || grid.querySelector(".mix-cell");
+          if (on) on.focus();
+        }, 30);
+      }
+      function mixClosePicker() {
+        const ov = document.getElementById("mix-overlay");
+        if (ov) ov.style.display = "none";
+      }
+      (function _mixStyles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          .mix-modal { width: min(1080px, 100%); }
+          .mix-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+          .mix-head-actions { display: flex; align-items: center; gap: 8px; }
+          .mix-grid { display: flex; flex-wrap: wrap; gap: 14px 12px; padding: 4px 18px 18px; overflow-y: auto; align-content: flex-start; justify-content: center; }
+          .mix-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 160px; padding: 5px; border: 2px solid transparent; border-radius: 10px; background: transparent; cursor: pointer; color: var(--text); font: 500 11px "DM Sans", sans-serif; }
+          .mix-cell:hover, .mix-cell:focus-visible { border-color: var(--hi); outline: none; }
+          .mix-cell.on { border-color: var(--acc); background: var(--acc-dim); }
+          .mix-thumb { position: relative; overflow: hidden; border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,.45); }
+          .mix-name { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .mix-tags { display: flex; gap: 4px; min-height: 16px; }
+          .mix-best { color: #1a1206; background: var(--hi); border-radius: 999px; padding: 0 6px; font-size: 9.5px; font-weight: 700; }
+          .mix-tag { color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; font-size: 9.5px; }
+          .mix-tag.on { color: var(--text); border-color: var(--acc); }
+          .mix-note { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; font-size: 10.5px; color: var(--text); background: var(--acc-dim); border: 1px solid var(--acc); border-radius: 7px; padding: 3px 8px; }
+          .mix-restore { background: none; border: none; color: var(--hi); font: 700 10.5px "DM Sans", sans-serif; cursor: pointer; padding: 0; text-decoration: underline; }
+          .mp-pv-layout { display: inline-flex; align-items: center; gap: 4px; border-radius: 7px; font: 600 11px "DM Sans", sans-serif; padding: 6px 10px; cursor: pointer; border: 1px solid var(--border); background: var(--panel); color: var(--text); }
+          .mp-pv-layout:hover { border-color: var(--hi); }
+          .mp-pv-send { background: none; border: 1px solid var(--border); color: var(--text); border-radius: 6px; font: 600 11px "DM Sans", sans-serif; padding: 3px 8px; cursor: pointer; }
+          .mp-pv-send:hover { border-color: var(--hi); }
+          .mix-restore:focus-visible, .mp-pv-layout:focus-visible, .mp-pv-send:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
         `;
         document.head.appendChild(st);
       })();
@@ -15540,7 +15697,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
             // Render a correctly-sized canvas for EACH selected platform
             const platformImages = {};
             for (const pid of selectedPlatforms) {
-              const c = await renderToCanvasForPlatform(idx, pid);
+              const c = await renderToCanvasForPlatform(mixIdx(idx, pid), pid); // each platform's own layout
               if (c) platformImages[pid] = await compressForQueue(c);
             }
             // Primary dataUrl = current platform's render (or first available) for PostPilot preview
@@ -15593,7 +15750,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
                 try {
                   const recompressed = {};
                   for (const pid of selectedPlatforms) {
-                    const c = await renderToCanvasForPlatform(idx, pid);
+                    const c = await renderToCanvasForPlatform(mixIdx(idx, pid), pid); // each platform's own layout
                     if (c) recompressed[pid] = await compressForQueue(c, q);
                   }
                   queueItem.platformImages = recompressed;
