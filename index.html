@@ -3343,7 +3343,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v57</span>
+              <span class="sb-version">v58</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -3396,7 +3396,7 @@
 
       <div class="sec">
         <div class="sec-label" style="display: flex; align-items: center; gap: 8px">
-          <span>Platform</span>
+          <span>Platforms</span>
           <div style="display: flex; gap: 4px; align-items: center">
             <button
               class="pos-reset-btn"
@@ -3424,6 +3424,12 @@
               📩 Paste
             </button>
           </div>
+        </div>
+        <div class="mp-hint">Pick every platform this post is for</div>
+        <div class="mp-chips" id="mp-chips" role="group" aria-label="Platforms for this post"></div>
+        <div class="mp-view" id="mp-view" style="display: none">
+          <span class="mp-view-label" id="mp-view-label">Showing in grid</span>
+          <div class="mp-tabs" id="mp-tabs" role="tablist" aria-labelledby="mp-view-label"></div>
         </div>
         <!-- Platform selector: compact pill + dropdown grid -->
         <div style="position: relative" id="plat-selector-wrap">
@@ -4923,6 +4929,7 @@ Your message, caption, or call to action goes right here.</textarea
         hAuto: true,
         cAuto: true,
         platFormats: {},
+        platforms: [],
         showZones: false,
         bgInfo: null,
         bg2Info: null,
@@ -5671,6 +5678,7 @@ Your message, caption, or call to action goes right here.</textarea
       let _scoreTimer = null;
       let _scoreCtx = "";
       function scheduleTemplateScoring(delay) {
+        if (typeof _mpCancel === "function") _mpCancel();
         clearTimeout(_scoreTimer);
         _applyScoreBadges();
         if (!smartOn()) return;
@@ -5865,7 +5873,7 @@ Your message, caption, or call to action goes right here.</textarea
           .sort((a, b) => _tmplScores[b].score - _tmplScores[a].score || a - b);
         _topPicks = new Set(_bestOrder.slice(0, 6).filter((i) => _tmplScores[i].score >= 55));
         _applyScoreBadges();
-        if (bestActive) _applyBestFilter();
+        if (bestActive) _applyBestFilter();        if (typeof _mpScheduleScoring === "function") _mpScheduleScoring(200);
       }
       function _applyBestFilter() {
         const q = _searchQuery || "";
@@ -5875,12 +5883,17 @@ Your message, caption, or call to action goes right here.</textarea
         renderFiltered();
       }
       function _applyScoreBadges() {
+        const multi = typeof mpMulti === "function" && mpMulti();
         document.querySelectorAll("#grid .tcard").forEach((card, i) => {
           const wrap = card.querySelector(".tcard-preview");
           if (!wrap) return;
           let slot = wrap.querySelector(".sf-badges");
           const sc = smartOn() ? _tmplScores[i] : null;
-          if (!sc || (!_topPicks.has(i) && !sc.warn.length)) {
+          // Several platforms chosen: icons for every platform this layout is a top pick for
+          const best = multi && smartOn() ? mpBestFor(i) : [];
+          const top = !multi && !!sc && _topPicks.has(i);
+          const warn = !!(sc && sc.warn.length);
+          if (!best.length && !top && !warn) {
             if (slot) slot.remove();
             return;
           }
@@ -5890,13 +5903,20 @@ Your message, caption, or call to action goes right here.</textarea
             wrap.appendChild(slot);
           }
           slot.innerHTML = "";
-          if (_topPicks.has(i)) {
+          if (best.length) {
+            const b = document.createElement("span");
+            b.className = "sf-top sf-best-plats";
+            b.title = "Best layout for " + best.map((p) => PLAT_NAMES[p] || p).join(", ");
+            b.setAttribute("aria-label", b.title);
+            b.innerHTML = "★" + best.map((p) => '<span class="sf-bp-ic">' + platIcon(p, 11) + "</span>").join("");
+            slot.appendChild(b);
+          } else if (top) {
             const b = document.createElement("span");
             b.className = "sf-top";
             b.textContent = "★ Top pick";
             slot.appendChild(b);
           }
-          if (sc.warn.length) {
+          if (warn) {
             const w = document.createElement("span");
             w.className = "sf-warn";
             w.textContent = "!";
@@ -5907,8 +5927,8 @@ Your message, caption, or call to action goes right here.</textarea
             slot.appendChild(w);
           }
         });
+        if (typeof _mpRefreshPreviewBadges === "function") _mpRefreshPreviewBadges();
       }
-
       // ── Preview overlay of the app's UI ────────────────────────────
       function zoneOverlayEl(w, h) {
         const z = fmtZone();
@@ -6221,6 +6241,7 @@ Your message, caption, or call to action goes right here.</textarea
             hAuto: S.hAuto,
             cAuto: S.cAuto,
             platFormats: S.platFormats,
+            platforms: S.platforms,
             showZones: S.showZones,
             bgInfo: S.bgInfo,
             bg2Info: S.bg2Info,
@@ -8235,6 +8256,500 @@ Your message, caption, or call to action goes right here.</textarea
       }
 
       // ══════════════════════════════════════════
+      // MULTI-PLATFORM POSTS (v58)
+      // Pick every platform a post is for, preview each version, see which layouts
+      // suit each platform, and open the platform with the image ready to paste/upload.
+      // Nothing is ever posted for you.
+      // ══════════════════════════════════════════
+      const MP_ORDER = ["instagram", "facebook", "linkedin", "pinterest", "tiktok", "youtube", "google", "twitter", "threads", "bluesky", "shopify", "tumblr", "kofi", "patreon"];
+      const MP_MORE = new Set(["shopify", "tumblr", "kofi", "patreon"]);
+      const MP_SHORT = { google: "Google", twitter: "X", kofi: "Ko-fi" };
+      // Where "Open" takes you. paste: the site takes a pasted image (Ctrl+V); otherwise the file is saved for upload.
+      const MP_OPEN = {
+        instagram: { url: "https://www.instagram.com/", paste: false },
+        facebook: { url: "https://www.facebook.com/", paste: true },
+        linkedin: { url: "https://www.linkedin.com/feed/?shareActive=true", paste: true },
+        pinterest: { url: "https://www.pinterest.com/pin-creation-tool/", paste: false },
+        tiktok: { url: "https://www.tiktok.com/upload", paste: false },
+        youtube: { url: "https://studio.youtube.com/", paste: false },
+        google: { url: "https://business.google.com/", paste: false },
+        twitter: { url: "https://x.com/compose/post", paste: true },
+        threads: { url: "https://www.threads.com/", paste: true },
+        bluesky: { url: "https://bsky.app/", paste: true },
+        shopify: { url: "https://admin.shopify.com/", paste: false },
+        tumblr: { url: "https://www.tumblr.com/new", paste: false },
+        kofi: { url: "https://ko-fi.com/", paste: false },
+        patreon: { url: "https://www.patreon.com/", paste: false },
+      };
+      const _mpName = (p) => PLAT_NAMES[p] || p;
+      const _mpShort = (p) => MP_SHORT[p] || PLAT_NAMES[p] || p;
+
+      // ── Which platforms this post is for (the grid shows S.platform) ──
+      function mpList() {
+        let arr = Array.isArray(S.platforms) ? S.platforms.filter((p) => PLATS[p]) : [];
+        if (!arr.includes(S.platform)) arr = arr.concat(S.platform);
+        return MP_ORDER.filter((p) => arr.includes(p)).concat(arr.filter((p) => !MP_ORDER.includes(p)));
+      }
+      function mpMulti() {
+        return mpList().length > 1;
+      }
+      function _mpSet(list) {
+        S.platforms = MP_ORDER.filter((p) => list.includes(p)).concat(list.filter((p) => !MP_ORDER.includes(p)));
+      }
+      function mpTogglePlatform(pid) {
+        const cur = mpList();
+        if (cur.includes(pid)) {
+          if (cur.length === 1) {
+            _mpToast("Keep at least one platform selected.");
+            return;
+          }
+          const rest = cur.filter((p) => p !== pid);
+          _mpSet(rest);
+          if (pid === S.platform) {
+            // The platform on screen was turned off: show the next one
+            choosePlatform(rest[0]);
+            return;
+          }
+        } else {
+          _mpSet(cur.concat(pid));
+        }
+        mpSyncUI();
+        debounceSave();
+        _applyScoreBadges();
+        if (previewOpen) renderPreview();
+        _mpScheduleScoring(150);
+      }
+      // Choosing a platform to view always makes it part of the post
+      const _mpOrigChoose = choosePlatform;
+      choosePlatform = function (p) {
+        if (!mpList().includes(p)) _mpSet(mpList().concat(p));
+        // Keep the old view's best picks so its icons don't blink out while re-ranking
+        if (p !== S.platform && typeof _topPicks !== "undefined" && _topPicks.size) _mpPicks[S.platform] = new Set(_topPicks);
+        _mpOrigChoose(p);
+        mpSyncUI();
+      };
+      // The chips and tabs follow every render (cheap, batched to one frame)
+      let _mpSyncQueued = false;
+      const _mpOrigApplyAll = applyAllPlatFormats;
+      applyAllPlatFormats = function () {
+        const r = _mpOrigApplyAll.apply(this, arguments);
+        if (!_mpSyncQueued) {
+          _mpSyncQueued = true;
+          requestAnimationFrame(() => {
+            _mpSyncQueued = false;
+            mpSyncUI();
+          });
+        }
+        return r;
+      };
+
+      let _mpShowMore = false;
+      function mpShowMore() {
+        _mpShowMore = true;
+        mpSyncUI();
+      }
+      function mpSyncUI() {
+        const sel = mpList();
+        const chips = document.getElementById("mp-chips");
+        if (chips) {
+          const focused = document.activeElement && chips.contains(document.activeElement) ? document.activeElement.dataset.p : null;
+          const showMore = _mpShowMore || sel.some((p) => MP_MORE.has(p));
+          chips.innerHTML =
+            MP_ORDER.filter((p) => PLATS[p] && (showMore || !MP_MORE.has(p)))
+              .map((p) => {
+                const on = sel.includes(p);
+                return `<button type="button" class="mp-chip${on ? " on" : ""}" data-p="${p}" aria-pressed="${on}" onclick="mpTogglePlatform('${p}')" title="${on ? "Remove" : "Add"} ${_mpName(p)}">${platIcon(p, 12)}<span>${_mpShort(p)}</span></button>`;
+              })
+              .join("") + (showMore ? "" : `<button type="button" class="mp-chip mp-more" data-p="more" onclick="mpShowMore()">+ More</button>`);
+          if (focused) {
+            const again = chips.querySelector(`[data-p="${focused}"]`);
+            if (again) again.focus();
+          }
+        }
+        const view = document.getElementById("mp-view"),
+          tabs = document.getElementById("mp-tabs");
+        if (view && tabs) {
+          view.style.display = sel.length > 1 ? "" : "none";
+          const focused = document.activeElement && tabs.contains(document.activeElement) ? document.activeElement.dataset.p : null;
+          tabs.innerHTML = sel
+            .map((p) => `<button type="button" role="tab" class="mp-tab${p === S.platform ? " on" : ""}" data-p="${p}" aria-selected="${p === S.platform}" onclick="choosePlatform('${p}')" title="Show the ${_mpName(p)} layouts in the grid">${platIcon(p, 12)}<span>${_mpShort(p)}</span></button>`)
+            .join("");
+          if (focused) {
+            const again = tabs.querySelector(`[data-p="${focused}"]`);
+            if (again) again.focus();
+          }
+        }
+      }
+
+      // ── Best layout per platform (Smart Fit ranking, run for every chosen platform) ──
+      let _mpPicks = {},
+        _mpScores = {},
+        _mpJob = 0,
+        _mpTimer = null;
+      function _mpPicksFor(pk) {
+        if (pk === S.platform) return typeof _topPicks !== "undefined" ? _topPicks : null;
+        return _mpPicks[pk] || null;
+      }
+      function mpBestFor(idx) {
+        if (!smartOn()) return [];
+        return mpList().filter((pk) => {
+          const s = _mpPicksFor(pk);
+          return !!(s && s.has(idx));
+        });
+      }
+      function _mpCancel() {
+        _mpJob++;
+        clearTimeout(_mpTimer);
+      }
+      function _mpScheduleScoring(delay) {
+        clearTimeout(_mpTimer);
+        _mpTimer = setTimeout(_mpRunScoring, delay == null ? 250 : delay);
+      }
+      async function _mpRunScoring() {
+        const job = ++_mpJob;
+        if (!smartOn() || !mpMulti()) return;
+        for (const pk of mpList().filter((p) => p !== S.platform)) {
+          const res = await _mpScorePlatform(pk, job);
+          if (!res || job !== _mpJob) return;
+          _mpScores[pk] = res.scores;
+          _mpPicks[pk] = res.picks;
+          _applyScoreBadges();
+        }
+      }
+      // Lays each template out for platform pk off-screen, fits the text, and scores it
+      // exactly the way the grid is scored. Runs in small batches so typing stays smooth.
+      async function _mpScorePlatform(pk, job) {
+        const pl = PLATS[pk];
+        if (!pl) return null;
+        let area = document.getElementById("mp-score-area");
+        if (!area) {
+          area = document.createElement("div");
+          area.id = "mp-score-area";
+          area.setAttribute("aria-hidden", "true");
+          document.body.appendChild(area);
+        }
+        const T = 220 / Math.max(pl.w, pl.h);
+        const tw = Math.round(pl.w * T),
+          th = Math.round(pl.h * T);
+        const pal = PAL();
+        const scores = {};
+        const N = templates.length;
+        let i = 0;
+        while (i < N) {
+          if (job !== _mpJob) {
+            area.innerHTML = "";
+            return null;
+          }
+          // Work one template at a time and hand the page back every ~35 ms
+          const t0 = performance.now();
+          do {
+            const saved = S.platform;
+            const card = document.createElement("div");
+            card.className = "mp-score-card";
+            const wrap = document.createElement("div");
+            wrap.className = "tcard-preview";
+            wrap.style.cssText = `position:relative;overflow:hidden;width:${tw}px;height:${th}px;`;
+            const inner = document.createElement("div");
+            inner.style.cssText = `position:absolute;top:0;left:0;width:${pl.w}px;height:${pl.h}px;transform:scale(${T});transform-origin:top left;`;
+            S.platform = pk;
+            try {
+              inner.innerHTML = applyGifOverlay(templates[i](pal, pl.w, pl.h));
+            } catch (e) {
+            } finally {
+              S.platform = saved;
+            }
+            wrap.appendChild(inner);
+            card.appendChild(wrap);
+            area.appendChild(card);
+            try {
+              fitTextBatch([inner]);
+            } catch (e) {}
+            S.platform = pk;
+            try {
+              const r = _scoreCard(card);
+              if (r) scores[i] = r;
+            } catch (e) {
+            } finally {
+              S.platform = saved;
+            }
+            area.removeChild(card);
+            i++;
+          } while (i < N && performance.now() - t0 < 35);
+          if (window.__mpT) window.__mpT.push(Math.round(performance.now() - t0));
+          await new Promise((r) => setTimeout(r, 0));
+        }
+        const order = Object.keys(scores)
+          .map(Number)
+          .sort((a, b) => scores[b].score - scores[a].score || a - b);
+        return { scores, picks: new Set(order.slice(0, 6).filter((i) => scores[i].score >= 55)) };
+      }
+
+      // ── "Open" and "Save": the finished image for one platform ──
+      let _mpQueue = Promise.resolve();
+      // One export at a time (they share the hidden export area), at the platform's native size
+      function _mpBlob(idx, pk) {
+        const run = _mpQueue.then(async () => {
+          const c = await renderToCanvasForPlatform(idx, pk);
+          if (!c) throw new Error("Couldn't draw this design");
+          const pl = PLATS[pk];
+          let out = c;
+          if (c.width !== pl.w || c.height !== pl.h) {
+            out = document.createElement("canvas");
+            out.width = pl.w;
+            out.height = pl.h;
+            const x = out.getContext("2d");
+            x.imageSmoothingEnabled = true;
+            x.imageSmoothingQuality = "high";
+            x.drawImage(c, 0, 0, pl.w, pl.h);
+          }
+          return await new Promise((res, rej) => out.toBlob((b) => (b ? res(b) : rej(new Error("No image"))), "image/png"));
+        });
+        _mpQueue = run.catch(() => {});
+        return run;
+      }
+      function _mpFileName(idx, pk) {
+        return `${S.fnPrefix || "BrandPost"}_${String(idx + 1).padStart(4, "0")}_${_mpShort(pk).replace(/[^A-Za-z0-9]+/g, "")}.png`;
+      }
+      function _mpDownload(blob, name) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+      }
+      async function mpOpenPlatform(idx, pk, btn) {
+        const info = MP_OPEN[pk] || { url: "", paste: false };
+        const nm = _mpName(pk);
+        if (btn) btn.classList.add("mp-busy");
+        const blobP = _mpBlob(idx, pk);
+        // Copy while this page still has focus (the new tab would take it away)
+        let copied = false;
+        const clipP =
+          navigator.clipboard && window.ClipboardItem
+            ? navigator.clipboard.write([new ClipboardItem({ "image/png": blobP })]).then(
+                () => (copied = true),
+                () => {},
+              )
+            : Promise.resolve();
+        let blob = null;
+        try {
+          blob = await blobP;
+        } catch (e) {}
+        await clipP;
+        if (btn) btn.classList.remove("mp-busy");
+        if (!blob) {
+          _mpToast(`Couldn't prepare the ${nm} image. Try ⬇ Save instead.`);
+          return;
+        }
+        const file = _mpFileName(idx, pk);
+        const saveIt = !info.paste || !copied;
+        if (saveIt) _mpDownload(blob, file);
+        const w = info.url ? window.open(info.url, "_blank") : null;
+        if (w) {
+          try {
+            w.opener = null;
+          } catch (e) {}
+        }
+        let msg;
+        if (info.paste && copied) msg = `Image copied. Paste it into your ${nm} post with <b>Ctrl+V</b>.`;
+        else msg = `<b>${escHtml(file)}</b> is in your Downloads. Upload it (or drag it in) on ${nm}.`;
+        if (!w && info.url) msg += ` Your browser blocked the new tab: <a href="${info.url}" target="_blank" rel="noopener">open ${nm}</a>.`;
+        _mpToast(msg, 7000);
+      }
+      async function mpSavePlatform(idx, pk, btn) {
+        if (btn) btn.classList.add("mp-busy");
+        try {
+          const blob = await _mpBlob(idx, pk);
+          _mpDownload(blob, _mpFileName(idx, pk));
+          _mpToast(`Saved <b>${escHtml(_mpFileName(idx, pk))}</b>.`);
+        } catch (e) {
+          _mpToast("Couldn't save that one. Please try again.");
+        }
+        if (btn) btn.classList.remove("mp-busy");
+      }
+      function _mpOpenBtnHtml(idx, pk) {
+        return `<button type="button" class="dl-btn mp-open" onclick="event.stopPropagation();mpOpenPlatform(${idx},'${pk}',this)" title="Open ${_mpName(pk)} with this image ready to paste or upload" aria-label="Open ${_mpName(pk)}">${platIcon(pk, 11)}<span aria-hidden="true">↗</span></button>`;
+      }
+      // Every grid card gets an Open button for the platform it was laid out for
+      const _mpOrigFitGrid = _fitGridText;
+      _fitGridText = function () {
+        const r = _mpOrigFitGrid.apply(this, arguments);
+        // The card's platform tag becomes the Open button ("Instagram ↗"), so the footer doesn't get wider
+        document.querySelectorAll("#grid .tcard").forEach((card, i) => {
+          const foot = card.querySelector(".tcard-foot");
+          const row = foot && foot.firstElementChild;
+          const chip = row && row.firstElementChild;
+          if (!chip || chip.classList.contains("mp-open") || chip.classList.contains("tcard-name")) return;
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "mp-open mp-open-chip";
+          b.style.cssText = chip.style.cssText;
+          b.innerHTML = chip.innerHTML + '<span aria-hidden="true">↗</span>';
+          b.title = "Open " + _mpName(S.platform) + " with this image ready to paste or upload";
+          b.setAttribute("aria-label", "Open " + _mpName(S.platform));
+          b.addEventListener("click", (e) => {
+            e.stopPropagation();
+            mpOpenPlatform(i, S.platform, b);
+          });
+          chip.replaceWith(b);
+        });
+        return r;
+      };
+      // "Send to PostPilot" starts with the platforms chosen for this post
+      function _mpPfDefaults() {
+        const ok = (p) => PF_PLATFORMS.some((x) => x.id === p);
+        return [S.platform].concat(mpList().filter((p) => p !== S.platform)).filter(ok);
+      }
+
+      // ── Preview: every selected template, once per chosen platform ──
+      function mpPreviewPlatforms() {
+        const sel = mpList();
+        if (sel.length > 1) return sel;
+        if (typeof preview3Up !== "undefined" && preview3Up) return ["instagram", "pinterest", "google", "linkedin"];
+        return null;
+      }
+      function _mpRenderPreviewMulti(indices, keys) {
+        const grid = document.getElementById("preview-grid");
+        grid.innerHTML = "";
+        // One group per template, stacked and scrolling (never wrapping into side-by-side columns)
+        grid.style.cssText = "display:flex;flex-direction:column;flex-wrap:nowrap;align-items:stretch;justify-content:flex-start;gap:16px;width:100%;height:100%;overflow-y:auto;overflow-x:hidden;padding:4px 2px 14px;";
+        // Room inside a group: grid padding, group padding and border, and a scrollbar
+        const W_avail = Math.max(180, grid.clientWidth - 36);
+        const GAP = 12;
+        const perRow = Math.max(1, Math.min(keys.length, Math.floor((W_avail + GAP) / (160 + GAP))));
+        const colW = Math.floor((W_avail - GAP * (perRow - 1)) / perRow);
+        const maxH = Math.max(180, Math.min(420, Math.round(colW * 1.6)));
+        const pal = PAL();
+        const inners = [];
+        const saved = S.platform;
+        indices.forEach((idx) => {
+          const group = document.createElement("div");
+          group.className = "mp-pv-group";
+          group.innerHTML = `<div class="mp-pv-head"><span class="mp-pv-title">${idx + 1}. ${escHtml(NAMES[idx] || "")}</span><button type="button" class="mp-pv-x" title="Remove from preview" aria-label="Remove ${escHtml(NAMES[idx] || "")} from preview" onclick="toggleSel(${idx})">✕</button></div>`;
+          const row = document.createElement("div");
+          row.className = "mp-pv-row";
+          row.style.gap = GAP + "px";
+          keys.forEach((pk) => {
+            const pl = PLATS[pk];
+            if (!pl) return;
+            const sc = Math.min(colW / pl.w, maxH / pl.h);
+            const iw = Math.round(pl.w * sc),
+              ih = Math.round(pl.h * sc);
+            const item = document.createElement("div");
+            item.className = "mp-pv-item";
+            item.dataset.pk = pk;
+            item.dataset.idx = idx;
+            item.style.width = Math.max(iw, Math.min(colW, 150)) + "px";
+            item.innerHTML = `<div class="mp-pv-label">${platIcon(pk, 12)}<span>${_mpName(pk)}</span><span class="mp-pv-dim">${pl.w}×${pl.h}</span><span class="mp-pv-best" hidden title="One of the best layouts for ${_mpName(pk)}">★ Best</span></div>`;
+            const wrap = document.createElement("div");
+            wrap.className = "mp-pv-img";
+            wrap.style.cssText = `width:${iw}px;height:${ih}px;`;
+            const inner = document.createElement("div");
+            inner.className = "sf-3up-inner";
+            inner.style.cssText = `width:${pl.w}px;height:${pl.h}px;transform:scale(${sc});transform-origin:top left;pointer-events:none;`;
+            let zl = null;
+            S.platform = pk;
+            try {
+              inner.innerHTML = applyGifOverlay(templates[idx](pal, pl.w, pl.h));
+              if (S.showZones) zl = zoneOverlayEl(iw, ih);
+            } catch (e) {
+            } finally {
+              S.platform = saved;
+            }
+            wrap.appendChild(inner);
+            if (zl) wrap.appendChild(zl);
+            item.appendChild(wrap);
+            const btns = document.createElement("div");
+            btns.className = "mp-pv-btns";
+            btns.innerHTML = `<button type="button" class="mp-pv-open" onclick="mpOpenPlatform(${idx},'${pk}',this)" title="Copies the image and opens ${_mpName(pk)}. Nothing is posted.">${platIcon(pk, 11)} Open ${_mpShort(pk)} ↗</button><button type="button" class="mp-pv-save" onclick="mpSavePlatform(${idx},'${pk}',this)" title="Download the ${_mpName(pk)} version">⬇ Save</button>`;
+            item.appendChild(btns);
+            row.appendChild(item);
+            inners.push(inner);
+          });
+          group.appendChild(row);
+          grid.appendChild(group);
+        });
+        S.platform = saved;
+        fitTextBatch(inners);
+        _mpRefreshPreviewBadges();
+      }
+      function _mpRefreshPreviewBadges() {
+        document.querySelectorAll("#preview-grid .mp-pv-item").forEach((item) => {
+          const s = _mpPicksFor(item.dataset.pk);
+          const b = item.querySelector(".mp-pv-best");
+          if (b) b.hidden = !(smartOn() && s && s.has(+item.dataset.idx));
+        });
+      }
+
+      function _mpToast(html, ms) {
+        let el = document.getElementById("mp-toast");
+        if (!el) {
+          el = document.createElement("div");
+          el.id = "mp-toast";
+          el.setAttribute("role", "status");
+          el.setAttribute("aria-live", "polite");
+          document.body.appendChild(el);
+        }
+        el.innerHTML = html;
+        el.classList.add("show");
+        clearTimeout(el._t);
+        el._t = setTimeout(() => el.classList.remove("show"), ms || 5200);
+      }
+
+      (function _mpStyles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          #plat-selector-wrap { display: none !important; }
+          .mp-hint { font-size: 10.5px; color: var(--muted); margin: -2px 0 8px; }
+          .mp-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+          .mp-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px 4px 7px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); font: 600 10.5px "DM Sans", sans-serif; cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
+          .mp-chip:hover { color: var(--text); border-color: var(--acc); }
+          .mp-chip.on { color: var(--text); border-color: var(--hi); background: var(--hi-dim); }
+          .mp-chip.on::after { content: "✓"; color: var(--hi); font-size: 10px; }
+          .mp-chip:not(.on) svg { opacity: .5; filter: grayscale(.7); }
+          .mp-chip.mp-more { border-style: dashed; }
+          .mp-chip:focus-visible, .mp-tab:focus-visible, .mp-pv-open:focus-visible, .mp-pv-save:focus-visible, .mp-pv-x:focus-visible, .mp-open:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+          .mp-view { margin-top: 11px; }
+          .mp-view-label { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+          .mp-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+          .mp-tab { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: 600 11px "DM Sans", sans-serif; cursor: pointer; }
+          .mp-tab:hover { color: var(--text); }
+          .mp-tab.on { background: var(--acc-dim); border-color: var(--acc); color: var(--text); }
+          .mp-open-chip { font-family: inherit; line-height: inherit; cursor: pointer; }
+          .mp-open-chip:hover { filter: brightness(1.3); text-decoration: underline; }
+          .mp-busy { opacity: .55; pointer-events: none; cursor: progress; }
+          .sf-best-plats { display: inline-flex; align-items: center; gap: 3px; }
+          .sf-bp-ic { display: inline-flex; width: 16px; height: 16px; border-radius: 50%; background: #fff; align-items: center; justify-content: center; }
+          .sf-bp-ic svg { width: 10px; height: 10px; }
+          .mp-pv-group { flex-shrink: 0; background: rgba(255,255,255,.02); border: 1px solid var(--border); border-radius: 10px; padding: 10px 10px 12px; }
+          .mp-pv-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+          .mp-pv-title { font-size: 12px; font-weight: 700; color: var(--text); }
+          .mp-pv-x { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; font-size: 11px; padding: 2px 7px; cursor: pointer; }
+          .mp-pv-x:hover { color: var(--text); }
+          .mp-pv-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+          .mp-pv-item { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+          .mp-pv-label { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--text); font-weight: 600; flex-wrap: wrap; justify-content: center; }
+          .mp-pv-dim { color: var(--muted); font-weight: 500; }
+          .mp-pv-best { color: #1a1206; background: var(--hi); border-radius: 999px; padding: 1px 7px; font-size: 9.5px; font-weight: 700; }
+          .mp-pv-best[hidden] { display: none; }
+          .mp-pv-img { position: relative; overflow: hidden; border-radius: 6px; box-shadow: 0 2px 12px rgba(0,0,0,.5); flex-shrink: 0; }
+          .mp-pv-btns { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; }
+          .mp-pv-open, .mp-pv-save { display: inline-flex; align-items: center; gap: 5px; border-radius: 7px; font: 600 11px "DM Sans", sans-serif; padding: 6px 10px; cursor: pointer; border: 1px solid var(--border); }
+          .mp-pv-open { background: var(--hi); color: #1a1206; border-color: var(--hi); }
+          .mp-pv-open svg { background: #fff; border-radius: 50%; padding: 1px; }
+          .mp-pv-save { background: var(--panel); color: var(--text); }
+          #mp-score-area { position: fixed; left: -40000px; top: 0; width: 2600px; display: flex; flex-wrap: wrap; align-items: flex-start; visibility: hidden; pointer-events: none; }
+          #mp-toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 16px); opacity: 0; z-index: 99990; background: #15122b; color: var(--text); border: 1px solid var(--hi); border-radius: 10px; padding: 11px 16px; font: 500 12.5px/1.45 "DM Sans", sans-serif; max-width: min(540px, calc(100vw - 32px)); box-shadow: 0 8px 30px rgba(0,0,0,.5); transition: opacity .2s, transform .2s; pointer-events: none; }
+          #mp-toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+          #mp-toast a { color: var(--hi); font-weight: 700; }
+          @media (prefers-reduced-motion: reduce) { #mp-toast { transition: none; } }
+        `;
+        document.head.appendChild(st);
+      })();
+      // ══════════════════════════════════════════
       // COPY TO CLIPBOARD
       // ══════════════════════════════════════════
       async function copyCardToClipboard(idx, btn) {
@@ -9344,47 +9859,10 @@ Your message, caption, or call to action goes right here.</textarea
         emptyMsg.style.display = "none";
         grid.style.display = "";
 
-        // ── 3-up platform mode ──────────────────────
-        if (preview3Up) {
-          const bodyEl = document.getElementById("preview-body");
-          const W_avail = bodyEl.clientWidth - 20;
-          const GAP = 10;
-          const platKeys = ["instagram", "pinterest", "google", "linkedin"]; // core 4 for 3-up preview
-          grid.innerHTML = "";
-          grid.style.cssText = `display:flex;flex-direction:column;gap:${GAP}px;align-items:center;width:100%;height:100%;overflow-y:auto;padding:4px 0;`;
-          const pal = PAL();
-          indices.forEach((idx) => {
-            const row = document.createElement("div");
-            row.style.cssText = `display:flex;gap:${GAP}px;align-items:center;justify-content:center;flex-shrink:0;`;
-            platKeys.forEach((pk) => {
-              const pl = PLATS[pk];
-              const sc = Math.min((W_avail / platKeys.length - GAP) / pl.w, 160 / pl.h);
-              const iw = Math.round(pl.w * sc),
-                ih = Math.round(pl.h * sc);
-              const col = document.createElement("div");
-              col.style.cssText = `display:flex;flex-direction:column;align-items:center;gap:3px;`;
-              const wrap = document.createElement("div");
-              wrap.style.cssText = `width:${iw}px;height:${ih}px;border-radius:5px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.5);flex-shrink:0;`;
-              const inner = document.createElement("div");
-              inner.style.cssText = `width:${pl.w}px;height:${pl.h}px;transform:scale(${sc});transform-origin:top left;pointer-events:none;`;
-              inner.className = "sf-3up-inner";
-              const _savedPlat = S.platform;
-              S.platform = pk;
-              try {
-                inner.innerHTML = applyGifOverlay(templates[idx](pal, pl.w, pl.h));
-              } catch (e) {}
-              S.platform = _savedPlat;
-              const lbl = document.createElement("div");
-              lbl.style.cssText = "font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;";
-              lbl.textContent = PLAT_NAMES[pk] || pk;
-              wrap.appendChild(inner);
-              col.appendChild(wrap);
-              col.appendChild(lbl);
-              row.appendChild(col);
-            });
-            grid.appendChild(row);
-          });
-          fitTextBatch([...grid.querySelectorAll(".sf-3up-inner")]);
+        // ── Several platforms: every selected template, once per platform (v58) ──
+        const _mpKeys = mpPreviewPlatforms();
+        if (_mpKeys) {
+          _mpRenderPreviewMulti(indices, _mpKeys);
           return;
         }
         // ── normal single-platform mode ─────────────
@@ -9503,6 +9981,15 @@ Your message, caption, or call to action goes right here.</textarea
 
           actions.appendChild(removeBtn);
           actions.appendChild(pfBtn);
+          const openBtn = document.createElement("button");
+          openBtn.className = "pv-action-btn mp-open-pv";
+          openBtn.innerHTML = platIcon(S.platform, 11) + " Open ↗";
+          openBtn.title = "Copies the image and opens " + (PLAT_NAMES[S.platform] || S.platform) + ". Nothing is posted.";
+          openBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            mpOpenPlatform(idx, S.platform, openBtn);
+          });
+          actions.appendChild(openBtn);
 
           wrap.appendChild(inner);
           wrap.appendChild(actions);
@@ -12735,7 +13222,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
         _pfPickerBtn = btn;
         _pfPickerStep = 1;
         loadPfAccounts();
-        _pfSelectedPlatforms = new Set(PF_PLATFORMS.some((x) => x.id === S.platform) ? [S.platform] : []);
+        _pfSelectedPlatforms = new Set(_mpPfDefaults());
         renderPfPicker();
         document.getElementById("pf-picker-overlay").style.display = "flex";
       }
@@ -12964,7 +13451,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
         _pfPickerBtn = document.getElementById("btn-sel-pf");
         _pfPickerStep = 1;
         loadPfAccounts();
-        _pfSelectedPlatforms = new Set(PF_PLATFORMS.some((x) => x.id === S.platform) ? [S.platform] : []);
+        _pfSelectedPlatforms = new Set(_mpPfDefaults());
         renderPfPicker();
         document.getElementById("pf-picker-overlay").style.display = "flex";
       }
