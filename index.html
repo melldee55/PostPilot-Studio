@@ -3343,7 +3343,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v64</span>
+              <span class="sb-version">v65</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -8669,8 +8669,8 @@ Your message, caption, or call to action goes right here.</textarea
         return r;
       };
       // "Send to PostPilot" starts with the platforms chosen for this post
-      // Platforms the Scheduler can hold (Facebook, X and Threads use Open ↗ and 📋 Caption instead)
-      const MP_SCHEDULER = new Set(["pinterest", "instagram", "google", "linkedin", "shopify", "bluesky", "tiktok", "youtube"]);
+      // Platforms the Scheduler can hold (Threads isn't one: it uses Open ↗ and 📋 Caption)
+      const MP_SCHEDULER = new Set(["pinterest", "instagram", "google", "linkedin", "shopify", "bluesky", "tiktok", "youtube", "facebook", "twitter", "tumblr", "kofi", "patreon"]);
       function _mpPfDefaults() {
         const ok = (p) => MP_SCHEDULER.has(p) && PF_PLATFORMS.some((x) => x.id === p);
         return [S.platform].concat(mpList().filter((p) => p !== S.platform)).filter(ok);
@@ -9655,6 +9655,8 @@ Your message, caption, or call to action goes right here.</textarea
       (function _xfStyles() {
         const st = document.createElement("style");
         st.textContent = `
+          /* Downloads and Recent thumbnails are drawn in a staging area behind the app; this solid layer keeps it out of sight */
+          body::before { content: ""; position: fixed; inset: 0; background: var(--main); z-index: -9000; pointer-events: none; }
           .xf-folder { display: inline-flex; align-items: center; gap: 6px; }
           .xf-folder-btn { display: inline-flex; align-items: center; gap: 6px; max-width: 220px; padding: 6px 11px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font: 600 12px "DM Sans", sans-serif; cursor: pointer; }
           .xf-folder-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -10271,7 +10273,7 @@ Post:
             <div class="pc-res-title">Filled in</div>
             <ul>${filled.map((f) => `<li>✓ ${esc(f)}</li>`).join("")}${b.plats.length ? `<li>✓ Platforms: ${b.plats.map((p) => esc(_mpName(p))).join(", ")}</li>` : ""}</ul>
             ${warn.length ? `<div class="pc-res-warn">${warn.map((w) => `⚠ ${w}`).join("<br>")}</div>` : ""}
-            <div class="pc-next">Next: pick a layout, then <b>Send to PostPilot</b> to schedule. Facebook and X use the <b>Open ↗</b> and <b>📋 Caption</b> buttons.</div>
+            <div class="pc-next">Next: pick a layout, then <b>Send to PostPilot</b> to schedule. Threads uses the <b>Open ↗</b> and <b>📋 Caption</b> buttons.</div>
             <div class="pc-res-actions">
               ${S.photoIdea ? `<button type="button" class="us-go" onclick="pcFindPhotos()">🔍 Find photos: “${esc(S.photoIdea)}”</button>` : ""}
               <button type="button" class="us-more" onclick="pcCloseBrief()">Done</button>
@@ -23264,7 +23266,7 @@ function checkIncomingQueue() {
           platforms: new Set(defaultPlatforms),
           format: first.format || 'png',
         };
-        state.showIncomingModal = true;
+        state.showIncomingModal = true; ((state.incomingQueue && state.incomingQueue[0] && state.incomingQueue[0].selectedPlatforms) || []).forEach(_pcShowPlatform);
         render();
       }
     }
@@ -23448,6 +23450,7 @@ async function scheduleIncomingNow() {
   if (!item || !state.incomingSelection) return;
   const platforms = [...state.incomingSelection.platforms];
   if (!platforms.length) return;
+  platforms.forEach(_pcShowPlatform);
   const fmt = state.incomingSelection.format;
 
   const btn = document.getElementById('incoming-confirm-btn');
@@ -27132,7 +27135,7 @@ function render() {
                     <input type="checkbox" id="bulk-cb-${post.id}" ${isSelected?'checked':''} onclick="event.stopPropagation();toggleBulkSelect('${post.id}')"
                       style="width:17px;height:17px;accent-color:#7aa3c8;cursor:pointer">
                   </div>` : ''}
-                <div class="post-thumb" style="position:relative">
+                <div class="post-thumb${state.bulkMode ? '' : ' pp-can-post'}" style="position:relative" ${state.bulkMode ? '' : `onclick="event.stopPropagation();postOnPlatform('${post.id}','${platform.id}',this)" title="Post on ${platform.name}: copies the caption, saves the image and opens it"`}>
                   ${post.image
                     ? `<img src="${escapeHtml(post.image)}" alt=""/>`
                     : `<span style="color:${platform.color}">${platform.icon}</span>`
@@ -27171,6 +27174,7 @@ function render() {
                 ${state.bulkMode ? '' : renderScheduleBadges(post, platform)}
                 ${state.bulkMode ? '' : `
                 <div class="post-actions">
+                  <button class="btn-edit pp-post-btn" style="background:${platform.color}" onclick="event.stopPropagation();postOnPlatform('${post.id}','${platform.id}',this)" title="Copies the caption, saves the image and opens ${platform.name}">${platform.icon.replace('width="20" height="20"','width="13" height="13"')} Post ↗</button>
                   <button class="btn-edit" onclick="openComposer('${post.id}')">Edit</button>
                   <button class="btn-edit" onclick="duplicatePost('${post.id}')" title="Duplicate post" style="background:var(--bg-elevated)">⧉</button>
                   <div style="position:relative">
@@ -29012,9 +29016,105 @@ function _pcFieldsFor(pid, src) {
   else if (pid === 'bluesky') { out.bskyText = cap; if (link) out.bskyUrl = link; }
   else if (pid === 'tiktok') out.tiktokText = cap;
   else if (pid === 'youtube') out.ytText = cap;
+  else if (pid === 'facebook') out.fbText = cap;
+  else if (pid === 'twitter') out.twitterText = cap;
+  else if (pid === 'tumblr') out.tumblrText = cap;
+  else if (pid === 'kofi') out.kofiText = cap;
+  else if (pid === 'patreon') out.patreonText = cap;
   if (alt) out.altText = alt;
   return out;
 }
+// A platform that receives a post is shown (Facebook and X start out hidden)
+function _pcShowPlatform(pid) {
+  if (state.hiddenPlatforms && state.hiddenPlatforms.has(pid)) { state.hiddenPlatforms.delete(pid); saveHiddenPlatforms(); }
+}
+// ── "Post ↗": copy the caption, save the image, open the platform ──
+const PP_OPEN_URLS = { instagram: 'https://www.instagram.com/', facebook: 'https://www.facebook.com/', linkedin: 'https://www.linkedin.com/feed/?shareActive=true',
+  pinterest: 'https://www.pinterest.com/pin-creation-tool/', tiktok: 'https://www.tiktok.com/upload', youtube: 'https://studio.youtube.com/', google: 'https://business.google.com/',
+  twitter: 'https://x.com/compose/post', bluesky: 'https://bsky.app/', shopify: 'https://admin.shopify.com/', tumblr: 'https://www.tumblr.com/new', kofi: 'https://ko-fi.com/', patreon: 'https://www.patreon.com/' };
+const PP_TEXT_FIELD = { pinterest: 'description', instagram: 'caption', google: 'content', linkedin: 'liText', shopify: 'shopifyText', bluesky: 'bskyText', tiktok: 'tiktokText',
+  youtube: 'ytText', facebook: 'fbText', twitter: 'twitterText', tumblr: 'tumblrText', kofi: 'kofiText', patreon: 'patreonText' };
+function _ppPostText(post, pid) {
+  let t = post[PP_TEXT_FIELD[pid]] || post.caption || post.content || post.description || '';
+  if ((pid === 'instagram' || pid === 'pinterest') && post.hashtags && !/(^|\s)#\w/.test(t)) t += (t ? '\n\n' : '') + post.hashtags;
+  return t;
+}
+async function _ppCopy(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) {
+    try { const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;top:0'; document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok; } catch (e2) { return false; }
+  }
+}
+async function _ppSaveImage(post, pid) {
+  const res = await fetch(post.image);
+  const blob = await res.blob();
+  const ext = /gif/.test(blob.type) ? 'gif' : /jpe?g/.test(blob.type) ? 'jpg' : 'png';
+  let name = post.imageName || (pid + '-post.' + ext);
+  if (!/\.[a-z0-9]{2,4}$/i.test(name)) name += '.' + ext;
+  // Inside PostPilot Studio: use the chosen download folder (📁)
+  const P = window.parent;
+  if (P && P !== window && typeof P.xfSaveBlob === 'function') return await P.xfSaveBlob(blob, name, false, true);
+  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  return { folder: null, name };
+}
+function _ppToast(html, ms) {
+  let el = document.getElementById('pp-toast');
+  if (!el) { el = document.createElement('div'); el.id = 'pp-toast'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); }
+  el.innerHTML = html; el.classList.add('show'); clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), ms || 9000);
+  return el;
+}
+async function postOnPlatform(postId, pid, btn) {
+  pid = pid || state.activePlatform;
+  const post = (state.posts[pid] || []).find(p => String(p.id) === String(postId));
+  if (!post) return;
+  const name = (PLATFORMS[pid] && PLATFORMS[pid].name) || pid;
+  if (btn && btn.classList) btn.classList.add('pp-busy');
+  // 1. Caption on the clipboard first, while this page still has focus
+  const text = _ppPostText(post, pid);
+  const copied = text ? await _ppCopy(text) : false;
+  // 2. The image, saved so you can upload (or drag) it
+  let saved = null;
+  if (post.image) { try { saved = await _ppSaveImage(post, pid); } catch (e) { saved = null; } }
+  // 3. Open the platform
+  const url = PP_OPEN_URLS[pid];
+  const w = url ? window.open(url, '_blank') : null;
+  if (w) { try { w.opener = null; } catch (e) {} }
+  if (btn && btn.classList) btn.classList.remove('pp-busy');
+  const parts = [];
+  if (saved) parts.push(`<b>${escapeHtml(saved.name)}</b> is in your ${saved.folder ? '<b>' + escapeHtml(saved.folder) + '</b> folder' : 'Downloads'}: upload it (or drag it in)`);
+  else if (post.image) parts.push('Couldn\u2019t save the image; use the Edit window to download it');
+  if (copied) parts.push('then paste the caption with <b>Ctrl+V</b>');
+  let msg = `${escapeHtml(name)}${w ? ' opened' : ''}. ` + (parts.join(', ') || 'No caption or image on this post yet') + '.';
+  if (!w && url) msg += ` Your browser blocked the new tab: <a href="${url}" target="_blank" rel="noopener">open ${escapeHtml(name)}</a>.`;
+  const el = _ppToast(`<div>${msg}</div><div class="pp-toast-actions">` +
+    (pid === 'pinterest' && post.title ? `<button type="button" data-a="title">📋 Copy pin title</button>` : '') +
+    (post.publishStatus !== 'published' ? `<button type="button" data-a="done">✓ Mark as posted</button>` : '') + `</div>`, 12000);
+  el.querySelectorAll('.pp-toast-actions button').forEach(b => b.addEventListener('click', async () => {
+    if (b.dataset.a === 'title') { if (await _ppCopy(post.title)) b.textContent = '✓ Title copied'; }
+    else { updatePostStatus(post.id, pid, 'published'); el.classList.remove('show'); }
+  }));
+}
+(function _ppStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .pp-post-btn { display: inline-flex; align-items: center; gap: 5px; color: #fff !important; font-weight: 700 !important; }
+    .pp-post-btn svg { flex-shrink: 0; }
+    .pp-busy { opacity: .55; pointer-events: none; cursor: progress; }
+    .post-thumb.pp-can-post { cursor: pointer; }
+    .post-thumb.pp-can-post:hover { outline: 2px solid rgba(255,255,255,.35); outline-offset: 1px; }
+    #pp-toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 16px); opacity: 0; z-index: 99999; max-width: min(560px, calc(100vw - 32px));
+      background: #15122b; color: #eef; border: 1px solid #f5a623; border-radius: 10px; padding: 11px 16px; font: 500 12.5px/1.5 system-ui, sans-serif;
+      box-shadow: 0 8px 30px rgba(0,0,0,.5); transition: opacity .2s, transform .2s; pointer-events: none; }
+    #pp-toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+    #pp-toast a { color: #f5a623; font-weight: 700; }
+    .pp-toast-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .pp-toast-actions:empty { display: none; }
+    .pp-toast-actions button { background: #f5a623; color: #1a1206; border: none; border-radius: 7px; font: 700 11.5px system-ui, sans-serif; padding: 6px 10px; cursor: pointer; }
+    .pp-post-btn:focus-visible, .pp-toast-actions button:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
+  `;
+  document.head.appendChild(st);
+})();
 function _draftTextFields(draft) {
   let header = draft.srcHeader, content = draft.srcContent;
   if (header == null && content == null && draft.fromBrandCreator && draft.notes && draft.notes.includes(' · ')) {
