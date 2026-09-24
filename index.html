@@ -3343,7 +3343,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v59</span>
+              <span class="sb-version">v60</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -4708,6 +4708,7 @@ Your message, caption, or call to action goes right here.</textarea
               <button class="tb-btn" onclick="clearSel()" title="Deselect all">☐ None</button>
               <div class="tb-sep"></div>
               <button id="btn-preview" onclick="togglePreview()" title="Open full preview panel">🔍 Preview</button>
+            <span class="xf-folder"><button type="button" class="xf-folder-btn" id="xf-folder-btn" onclick="xfPickFolder()">📁 <span id="xf-folder-name">Downloads</span></button><button type="button" class="xf-folder-x" id="xf-folder-x" onclick="xfResetFolder()" title="Go back to the Downloads folder" aria-label="Go back to the Downloads folder" hidden>✕</button></span>
             </div>
           </div>
         </div>
@@ -8554,7 +8555,7 @@ Your message, caption, or call to action goes right here.</textarea
         }
         const file = _mpFileName(idx, pk);
         const saveIt = !info.paste || !copied;
-        if (saveIt) _mpDownload(blob, file);
+        const saved = saveIt ? await xfSaveBlob(blob, file, false, true) : null;
         const w = info.url ? window.open(info.url, "_blank") : null;
         if (w) {
           try {
@@ -8563,6 +8564,7 @@ Your message, caption, or call to action goes right here.</textarea
         }
         let msg;
         if (info.paste && copied) msg = `Image copied. Paste it into your ${nm} post with <b>Ctrl+V</b>.`;
+        else if (saved && saved.folder) msg = `<b>${escHtml(saved.name)}</b> is in your <b>${escHtml(saved.folder)}</b> folder. Upload it (or drag it in) on ${nm}.`;
         else msg = `<b>${escHtml(file)}</b> is in your Downloads. Upload it (or drag it in) on ${nm}.`;
         if (!w && info.url) msg += ` Your browser blocked the new tab: <a href="${info.url}" target="_blank" rel="noopener">open ${nm}</a>.`;
         _mpToast(msg, 7000);
@@ -8571,8 +8573,8 @@ Your message, caption, or call to action goes right here.</textarea
         if (btn) btn.classList.add("mp-busy");
         try {
           const blob = await _mpBlob(idx, pk);
-          _mpDownload(blob, _mpFileName(idx, pk));
-          _mpToast(`Saved <b>${escHtml(_mpFileName(idx, pk))}</b>.`);
+          const r = await xfSaveBlob(blob, _mpFileName(idx, pk), false, true);
+          _mpToast(r.folder ? `Saved <b>${escHtml(r.name)}</b> to your <b>${escHtml(r.folder)}</b> folder.` : `Saved <b>${escHtml(r.name)}</b> to Downloads.`);
         } catch (e) {
           _mpToast("Couldn't save that one. Please try again.");
         }
@@ -9169,6 +9171,440 @@ Your message, caption, or call to action goes right here.</textarea
         document.head.appendChild(st);
       })();
       // ══════════════════════════════════════════
+      // EXPORTS MATCH THE PREVIEW (v60)
+      // The export engine (html2canvas) can't reproduce CSS photo cropping: a photo's
+      // chosen position (Smart Fit framing or your sliders) and zoom were lost, so saved
+      // images could differ from the preview. Right before every export, each photo's
+      // exact on-screen crop is now measured from the live layout and redrawn as a plainly
+      // positioned image. What you see is what you save.
+      // ══════════════════════════════════════════
+      const _xfDims = new Map();
+      function _xfLoadDims(src) {
+        if (!_xfDims.has(src)) {
+          _xfDims.set(
+            src,
+            new Promise((res) => {
+              const im = new Image();
+              if (/^https?:/i.test(src)) im.crossOrigin = "anonymous";
+              im.onload = () => res(im.naturalWidth && im.naturalHeight ? { w: im.naturalWidth, h: im.naturalHeight, img: im } : null);
+              im.onerror = () => res(null);
+              im.src = src;
+            }),
+          );
+          if (_xfDims.size > 40) _xfDims.delete(_xfDims.keys().next().value);
+        }
+        return _xfDims.get(src);
+      }
+      // Split a CSS list on top-level commas (not the ones inside url(...) or gradients)
+      function _xfSplit(v) {
+        const out = [];
+        let depth = 0,
+          cur = "";
+        for (const ch of v || "") {
+          if (ch === "(") depth++;
+          else if (ch === ")") depth--;
+          if (ch === "," && depth === 0) {
+            out.push(cur.trim());
+            cur = "";
+          } else cur += ch;
+        }
+        if (cur.trim()) out.push(cur.trim());
+        return out;
+      }
+      function _xfUrl(layer) {
+        const m = /^url\((['"]?)([\s\S]*)\1\)$/.exec((layer || "").trim());
+        return m ? m[2] : null;
+      }
+      function _xfLen(v, box) {
+        if (!v || v === "auto") return null;
+        if (v.endsWith("%")) return (parseFloat(v) / 100) * box;
+        if (v.endsWith("px")) return parseFloat(v);
+        return null;
+      }
+      // Drawn size of an image, the way CSS background-size / object-fit computes it
+      function _xfFit(iw, ih, bw, bh, size) {
+        size = (size || "auto").trim();
+        if (size === "cover" || size === "contain" || size === "scale-down") {
+          let s = size === "cover" ? Math.max(bw / iw, bh / ih) : Math.min(bw / iw, bh / ih);
+          if (size === "scale-down") s = Math.min(1, s);
+          return { dw: iw * s, dh: ih * s };
+        }
+        if (size === "fill") return { dw: bw, dh: bh };
+        if (size === "none") return { dw: iw, dh: ih };
+        const parts = size.split(/\s+/);
+        const w = _xfLen(parts[0], bw),
+          h = _xfLen(parts[1] || "auto", bh);
+        if (w != null && h != null) return { dw: w, dh: h };
+        if (w != null) return { dw: w, dh: (w * ih) / iw };
+        if (h != null) return { dw: (h * iw) / ih, dh: h };
+        return { dw: iw, dh: ih };
+      }
+      // Offset on one axis, the way CSS background-position / object-position computes it
+      function _xfPos(v, box, d) {
+        v = (v || "50%").trim();
+        if (v === "left" || v === "top") return 0;
+        if (v === "right" || v === "bottom") return box - d;
+        if (v === "center") return (box - d) / 2;
+        if (v.endsWith("%")) return ((box - d) * parseFloat(v)) / 100;
+        if (v.endsWith("px")) return parseFloat(v);
+        const m = /calc\(\s*(-?[\d.]+)%\s*([+-])\s*([\d.]+)px\s*\)/.exec(v);
+        if (m) return ((box - d) * parseFloat(m[1])) / 100 + (m[2] === "-" ? -1 : 1) * parseFloat(m[3]);
+        return (box - d) / 2;
+      }
+      function _xfLiftChildren(node, keep) {
+        Array.from(node.children).forEach((c) => {
+          if (keep.includes(c)) return;
+          if (getComputedStyle(c).position === "static") c.style.position = "relative";
+          if (!c.style.zIndex) c.style.zIndex = "1";
+        });
+      }
+      // The photo's exact visible crop, drawn into a canvas the size of its box (with any
+      // brightness/saturation filters applied), so the export engine only has to copy pixels
+      function _xfCrop(d, x, y, dw, dh, bw, bh, filter) {
+        const k = Math.min(3, Math.max(1, d.w / dw)); // keep the photo's own sharpness, up to 3x
+        const c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(bw * k));
+        c.height = Math.max(1, Math.round(bh * k));
+        const ctx = c.getContext("2d");
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        if (filter && filter !== "none") ctx.filter = filter;
+        ctx.drawImage(d.img, x * k, y * k, dw * k, dh * k);
+        return c;
+      }
+      const _xfBakeableFilter = (f) => f && f !== "none" && !/drop-shadow|url\(/.test(f);
+      // CSS background photos → a canvas under the box's content, holding the exact on-screen crop
+      async function _xfBakeBackgrounds(root) {
+        const jobs = [];
+        [root, ...root.querySelectorAll("*")].forEach((node) => {
+          if (node.tagName === "IMG" || node.tagName === "CANVAS") return;
+          const cs = getComputedStyle(node);
+          if (!cs.backgroundImage || !cs.backgroundImage.includes("url(")) return;
+          const layers = _xfSplit(cs.backgroundImage);
+          const urlIdx = layers.map((l, i) => (_xfUrl(l) ? i : -1)).filter((i) => i >= 0);
+          if (urlIdx.length !== 1) return;
+          const li = urlIdx[0];
+          const pick = (v) => {
+            const a = _xfSplit(v);
+            return a.length ? a[li % a.length] : "";
+          };
+          const size = pick(cs.backgroundSize);
+          // Repeating only matters when the photo doesn't cover the box
+          if (pick(cs.backgroundRepeat) !== "no-repeat" && size !== "cover") return;
+          const bw = node.clientWidth,
+            bh = node.clientHeight;
+          if (!bw || !bh) return;
+          jobs.push({ node, layers, li, src: _xfUrl(layers[li]), size, px: pick(cs.backgroundPositionX), py: pick(cs.backgroundPositionY), bw, bh });
+        });
+        const dims = await Promise.all(jobs.map((j) => _xfLoadDims(j.src)));
+        jobs.forEach((j, k) => {
+          const d = dims[k];
+          if (!d) return;
+          const { dw, dh } = _xfFit(d.w, d.h, j.bw, j.bh, j.size);
+          const c = _xfCrop(d, _xfPos(j.px, j.bw, dw), _xfPos(j.py, j.bh, dh), dw, dh, j.bw, j.bh);
+          const node = j.node;
+          if (getComputedStyle(node).position === "static") node.style.position = "relative";
+          const above = j.layers.slice(0, j.li),
+            below = j.layers.slice(j.li + 1);
+          node.style.backgroundImage = below.length ? below.join(", ") : "none";
+          if (below.length) {
+            node.style.backgroundSize = "100% 100%";
+            node.style.backgroundPosition = "0 0";
+          }
+          c.style.cssText = `position:absolute;left:0;top:0;width:${j.bw}px;height:${j.bh}px;border-radius:inherit;z-index:0;pointer-events:none;display:block;`;
+          node.insertBefore(c, node.firstChild);
+          const keep = [c];
+          if (above.length) {
+            const ov = document.createElement("div");
+            ov.style.cssText = `position:absolute;inset:0;border-radius:inherit;z-index:0;pointer-events:none;background-image:${above.join(", ")};background-size:100% 100%;`;
+            c.after(ov);
+            keep.push(ov);
+          }
+          _xfLiftChildren(node, keep);
+        });
+      }
+      // <img> with object-fit → a canvas of exactly the same size and place, holding the exact crop
+      async function _xfBakeImgs(root) {
+        const imgs = [...root.querySelectorAll("img")].filter((im) => {
+          const f = getComputedStyle(im).objectFit;
+          return f && f !== "fill" && (im.currentSrc || im.getAttribute("src"));
+        });
+        const dims = await Promise.all(imgs.map((im) => _xfLoadDims(im.currentSrc || im.getAttribute("src"))));
+        imgs.forEach((im, k) => {
+          const d = dims[k];
+          if (!d) return;
+          const cs = getComputedStyle(im);
+          const bw = im.clientWidth,
+            bh = im.clientHeight;
+          if (!bw || !bh) return;
+          const { dw, dh } = _xfFit(d.w, d.h, bw, bh, cs.objectFit);
+          const [ox, oy] = (cs.objectPosition || "50% 50%").split(/\s+(?![^(]*\))/);
+          const bake = _xfBakeableFilter(cs.filter);
+          const c = _xfCrop(d, _xfPos(ox, bw, dw), _xfPos(oy || "50%", bh, dh), dw, dh, bw, bh, bake ? cs.filter : null);
+          c.style.cssText = im.style.cssText;
+          c.style.removeProperty("object-fit");
+          c.style.removeProperty("object-position");
+          if (bake) c.style.removeProperty("filter");
+          c.style.width = bw + "px";
+          c.style.height = bh + "px";
+          if (im.className) c.className = im.className;
+          im.replaceWith(c);
+        });
+      }
+      // Boxes that are simply moved by a transform (e.g. centered with translate(-50%)) get the
+      // move converted into their real position: html2canvas draws the contents of a moved box
+      // that clips its contents in the wrong place (the half-width shift in Circle Focus)
+      function _xfFlattenMoves(root) {
+        const plans = [];
+        root.querySelectorAll("*").forEach((el) => {
+          const cs = getComputedStyle(el);
+          const m = /^matrix\(([^)]+)\)$/.exec(cs.transform || "");
+          if (!m) return;
+          const [a, b, c, d, e, f] = m[1].split(",").map(parseFloat);
+          if (Math.abs(a - 1) > 1e-6 || Math.abs(d - 1) > 1e-6 || Math.abs(b) > 1e-6 || Math.abs(c) > 1e-6) return; // scaled/rotated: leave it
+          plans.push({ el, pos: cs.position, left: parseFloat(cs.left) || 0, top: parseFloat(cs.top) || 0, w: cs.width, h: cs.height, e, f });
+        });
+        plans.forEach(({ el, pos, left, top, w, h, e, f }) => {
+          if (pos === "absolute" || pos === "fixed" || pos === "relative" || pos === "sticky") {
+            el.style.width = w;
+            el.style.height = h;
+            el.style.left = left + e + "px";
+            el.style.top = top + f + "px";
+            el.style.right = "auto";
+            el.style.bottom = "auto";
+          } else {
+            el.style.position = "relative";
+            el.style.left = e + "px";
+            el.style.top = f + "px";
+          }
+          el.style.transform = "none";
+        });
+      }
+      // Soft glows (a plain-colored shape with filter: blur) — html2canvas ignores blur and draws a
+      // hard-edged shape, so draw the glow already blurred
+      function _xfBakeGlows(root) {
+        root.querySelectorAll("*").forEach((el) => {
+          const cs = getComputedStyle(el);
+          const bm = /blur\(\s*([\d.]+)px\s*\)/.exec(cs.filter || "");
+          if (!bm || el.children.length || (cs.backgroundImage && cs.backgroundImage !== "none")) return;
+          const col = cs.backgroundColor;
+          if (!col || /rgba\([^)]*,\s*0\)$/.test(col) || col === "transparent") return;
+          const w = el.offsetWidth,
+            h = el.offsetHeight;
+          if (!w || !h) return;
+          const blur = parseFloat(bm[1]),
+            pad = Math.ceil(blur * 3);
+          const c = document.createElement("canvas");
+          c.width = w + pad * 2;
+          c.height = h + pad * 2;
+          const ctx = c.getContext("2d");
+          ctx.filter = `blur(${blur}px)`;
+          ctx.fillStyle = col;
+          const r = parseFloat(cs.borderTopLeftRadius) || 0;
+          ctx.beginPath();
+          if (r >= Math.min(w, h) / 2 - 0.5 || /%/.test(el.style.borderRadius || "")) ctx.ellipse(pad + w / 2, pad + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+          else if (ctx.roundRect) ctx.roundRect(pad, pad, w, h, r);
+          else ctx.rect(pad, pad, w, h);
+          ctx.fill();
+          c.style.cssText = `position:absolute;left:${-pad}px;top:${-pad}px;width:${w + pad * 2}px;height:${h + pad * 2}px;pointer-events:none;`;
+          el.style.background = "transparent";
+          el.style.filter = "none";
+          el.style.borderRadius = "0";
+          el.appendChild(c);
+        });
+      }
+      // Replaces fixBgImagesForCanvas + fixObjectFitForCanvas before every html2canvas capture
+      async function xfPrepareForCanvas(root, quiet) {
+        if (!quiet) window._xfBusyUntil = performance.now() + 6000;
+        try {
+          fitTextBatch([root]);
+        } catch (e) {}
+        try {
+          await _xfBakeBackgrounds(root);
+        } catch (e) {
+          console.warn("Export photo prep (backgrounds) failed:", e);
+        }
+        try {
+          await _xfBakeImgs(root);
+        } catch (e) {
+          console.warn("Export photo prep (images) failed:", e);
+        }
+        try {
+          _xfBakeGlows(root);
+          _xfFlattenMoves(root);
+        } catch (e) {
+          console.warn("Export layout prep failed:", e);
+        }
+      }
+
+      // ══════════════════════════════════════════
+      // YOUR DOWNLOAD FOLDER (v60)
+      // Pick a folder once (📁 in the toolbar); every save goes there. The browser
+      // remembers it between visits and may ask once per visit to allow saving to it.
+      // ══════════════════════════════════════════
+      function _xfDb() {
+        return new Promise((res, rej) => {
+          const r = indexedDB.open("bpc_fs", 1);
+          r.onupgradeneeded = () => r.result.createObjectStore("handles");
+          r.onsuccess = () => res(r.result);
+          r.onerror = () => rej(r.error);
+        });
+      }
+      async function _xfStoreDir(h) {
+        try {
+          const db = await _xfDb();
+          await new Promise((res, rej) => {
+            const tx = db.transaction("handles", "readwrite");
+            if (h) tx.objectStore("handles").put(h, "saveDir");
+            else tx.objectStore("handles").delete("saveDir");
+            tx.oncomplete = res;
+            tx.onerror = () => rej(tx.error);
+          });
+        } catch (e) {
+          console.warn("Couldn't remember the download folder:", e);
+        }
+      }
+      async function _xfLoadDir() {
+        try {
+          const db = await _xfDb();
+          return await new Promise((res) => {
+            const q = db.transaction("handles", "readonly").objectStore("handles").get("saveDir");
+            q.onsuccess = () => res(q.result || null);
+            q.onerror = () => res(null);
+          });
+        } catch (e) {
+          return null;
+        }
+      }
+      let _xfPerm = "none";
+      async function _xfFolderReady(ask) {
+        if (!fsDir) return false;
+        try {
+          let st = await fsDir.queryPermission({ mode: "readwrite" });
+          if (st !== "granted" && ask) st = await fsDir.requestPermission({ mode: "readwrite" });
+          _xfPerm = st === "granted" ? "granted" : "prompt";
+        } catch (e) {
+          _xfPerm = "prompt";
+        }
+        _xfSyncFolderUI();
+        return _xfPerm === "granted";
+      }
+      // A free file name in the folder: "name.png", then "name (2).png", "name (3).png"…
+      async function _xfUniqueHandle(dir, name) {
+        const dot = name.lastIndexOf(".");
+        const base = dot > 0 ? name.slice(0, dot) : name,
+          ext = dot > 0 ? name.slice(dot) : "";
+        for (let n = 1; n < 1000; n++) {
+          const nm = n === 1 ? name : `${base} (${n})${ext}`;
+          try {
+            await dir.getFileHandle(nm);
+          } catch (e) {
+            if (e && e.name === "NotFoundError") return dir.getFileHandle(nm, { create: true });
+            throw e;
+          }
+        }
+        return dir.getFileHandle(`${base} (${Date.now()})${ext}`, { create: true });
+      }
+      // Save a file into your folder, or (no folder / not allowed) as a normal download
+      async function xfSaveBlob(blob, name, noFallback, quiet) {
+        if (fsDir && (await _xfFolderReady(true))) {
+          try {
+            const fh = await _xfUniqueHandle(fsDir, name);
+            const w = await fh.createWritable();
+            await w.write(blob);
+            await w.close();
+            if (!quiet) _mpToast(`Saved <b>${escHtml(fh.name)}</b> to your <b>${escHtml(fsDir.name)}</b> folder.`);
+            return { folder: fsDir.name, name: fh.name };
+          } catch (e) {
+            console.warn("Saving to your folder failed:", e);
+          }
+        }
+        if (noFallback) return { folder: null, name };
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+        if (fsDir && !quiet) _mpToast(`Couldn't save into <b>${escHtml(fsDir.name)}</b>, so it went to Downloads. Click 📁 to reconnect the folder.`);
+        return { folder: null, name };
+      }
+      async function xfPickFolder() {
+        if (!window.showDirectoryPicker) {
+          _mpToast("This browser can't save into a chosen folder, so images go to Downloads. Chrome or Edge on a computer can.");
+          return;
+        }
+        // A remembered folder that only needs this visit's permission: reconnect in one click
+        if (fsDir && _xfPerm !== "granted" && (await _xfFolderReady(true))) {
+          _mpToast(`Saving to your <b>${escHtml(fsDir.name)}</b> folder.`);
+          return;
+        }
+        try {
+          const opts = { id: "postpilot-images", mode: "readwrite" };
+          if (fsDir) opts.startIn = fsDir;
+          const h = await window.showDirectoryPicker(opts);
+          fsDir = h;
+          _xfPerm = "granted";
+          await _xfStoreDir(h);
+          _xfSyncFolderUI();
+          _mpToast(`Images will now save to your <b>${escHtml(h.name)}</b> folder.`);
+        } catch (e) {
+          if (e && e.name !== "AbortError") _mpToast("Couldn't use that folder. Please pick another one.");
+        }
+      }
+      function xfResetFolder() {
+        fsDir = null;
+        _xfPerm = "none";
+        _xfStoreDir(null);
+        _xfSyncFolderUI();
+        _mpToast("Images will go to your browser's Downloads folder.");
+      }
+      function _xfSyncFolderUI() {
+        const btn = document.getElementById("xf-folder-btn"),
+          nm = document.getElementById("xf-folder-name"),
+          x = document.getElementById("xf-folder-x");
+        if (nm) nm.textContent = fsDir ? fsDir.name : "Downloads";
+        if (btn) {
+          btn.classList.toggle("set", !!fsDir);
+          btn.classList.toggle("needs", !!fsDir && _xfPerm !== "granted");
+          btn.title = !fsDir
+            ? "Images save to your browser's Downloads folder. Click to choose a folder."
+            : _xfPerm === "granted"
+              ? `Images save to your ${fsDir.name} folder. Click to choose a different one.`
+              : `Images save to your ${fsDir.name} folder. Your browser asks once per visit; click to allow it now.`;
+        }
+        if (x) x.hidden = !fsDir;
+        const fn = document.getElementById("folderName");
+        if (fn) fn.value = fsDir ? fsDir.name : "Default downloads folder";
+        const st = document.getElementById("folder-status");
+        if (st) st.innerHTML = fsDir ? `✓ Saving directly to: <strong>${escHtml(fsDir.name)}</strong>` : "";
+      }
+      // The sidebar's existing "Choose…" button now uses the same folder
+      pickFolder = xfPickFolder;
+      _xfLoadDir().then((h) => {
+        if (h && !fsDir) {
+          fsDir = h;
+          _xfFolderReady(false);
+        } else _xfSyncFolderUI();
+      });
+
+      (function _xfStyles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          .xf-folder { display: inline-flex; align-items: center; gap: 6px; }
+          .xf-folder-btn { display: inline-flex; align-items: center; gap: 6px; max-width: 220px; padding: 6px 11px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font: 600 12px "DM Sans", sans-serif; cursor: pointer; }
+          .xf-folder-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .xf-folder-btn.set { border-color: var(--hi); }
+          .xf-folder-btn.needs::after { content: "Allow"; font-size: 10px; font-weight: 700; color: #1a1206; background: var(--hi); border-radius: 999px; padding: 1px 6px; }
+          .xf-folder-x { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 2px 4px; }
+          .xf-folder-x:hover { color: var(--text); }
+          .xf-folder-btn:focus-visible, .xf-folder-x:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+        `;
+        document.head.appendChild(st);
+      })();
+      // ══════════════════════════════════════════
       // COPY TO CLIPBOARD
       // ══════════════════════════════════════════
       async function copyCardToClipboard(idx, btn) {
@@ -9276,8 +9712,7 @@ Your message, caption, or call to action goes right here.</textarea
         wrap.innerHTML = applyGifOverlay(templates[idx](pal, fw, fh));
         area.innerHTML = "";
         area.appendChild(wrap);
-        fixBgImagesForCanvas(wrap);
-        fixObjectFitForCanvas(wrap);
+        await xfPrepareForCanvas(wrap);
 
         const canvas1x = await html2canvas(wrap, {
           width:  fw,
@@ -9434,6 +9869,11 @@ Your message, caption, or call to action goes right here.</textarea
           return; // user cancelled
         }
 
+        // Your chosen download folder (📁 in the toolbar)
+        if (fsDir) {
+          const r = await xfSaveBlob(_dataUrlToBlob(dataUrl, mimeType), chosenName, true);
+          if (r.folder) return;
+        }
         // Try native Save As dialog (HTTPS / supported browsers)
         if (_hasFilePicker()) {
           try {
@@ -9479,6 +9919,8 @@ Your message, caption, or call to action goes right here.</textarea
           return; // user cancelled
         }
 
+        // No folder picked in the dialog: use your chosen download folder
+        if (!dirHandle && fsDir && (await _xfFolderReady(true))) dirHandle = fsDir;
         // Rebuild filenames using the chosen prefix
         const jobs = canvasJobs.map(({ canvas, filename }, i) => {
           const isGif = filename.toLowerCase().endsWith('.gif');
@@ -9493,7 +9935,7 @@ Your message, caption, or call to action goes right here.</textarea
             try {
               const mimeType = isGif ? 'image/gif' : 'image/png';
               const dataUrl  = isGif ? canvas : setPngDpi(canvas.toDataURL('image/png'), 300);
-              const fh = await dirHandle.getFileHandle(filename, { create: true });
+              const fh = await _xfUniqueHandle(dirHandle, filename);
               const w  = await fh.createWritable();
               await w.write(_dataUrlToBlob(dataUrl, mimeType));
               await w.close();
@@ -9501,6 +9943,7 @@ Your message, caption, or call to action goes right here.</textarea
               console.warn('Batch save failed for', filename, e);
             }
           }
+          _mpToast(`Saved ${jobs.length} image${jobs.length === 1 ? "" : "s"} to your <b>${escHtml(dirHandle.name)}</b> folder.`);
           return;
         }
 
@@ -11611,6 +12054,11 @@ Your message, caption, or call to action goes right here.</textarea
         // Small delay so the grid render settles first
         setTimeout(async () => {
           _historyPending = false;
+          // Don't share the hidden export area with an export that's in progress
+          if (performance.now() < (window._xfBusyUntil || 0)) {
+            setTimeout(_addToHistory, 1500);
+            return;
+          }
           if (typeof html2canvas === "undefined" || !templates.length) return;
           try {
             const pl = PLATS[S.platform];
@@ -11625,8 +12073,7 @@ Your message, caption, or call to action goes right here.</textarea
             wrap.innerHTML = applyGifOverlay(templates[tmplIdx](pal, fw, fh));
             area.innerHTML = "";
             area.appendChild(wrap);
-            fixBgImagesForCanvas(wrap);
-            fixObjectFitForCanvas(wrap);
+            await xfPrepareForCanvas(wrap, true);
             // Render at full size
             const fullCanvas = await html2canvas(wrap, {
               width: fw,
@@ -12802,8 +13249,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
         wrap.innerHTML = tmplArray[idx](pal, fw, fh); // intentionally no GIF overlay
         area.innerHTML = "";
         area.appendChild(wrap);
-        fixBgImagesForCanvas(wrap);
-        fixObjectFitForCanvas(wrap);
+        await xfPrepareForCanvas(wrap);
         const canvas = await html2canvas(wrap, {
           scrollX: 0,
           scrollY: 0,
@@ -12841,8 +13287,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
 
         area.innerHTML = "";
         area.appendChild(wrap);
-        fixBgImagesForCanvas(wrap);
-        fixObjectFitForCanvas(wrap);
+        await xfPrepareForCanvas(wrap);
 
         // Capture at 1x so browser flex/grid layout matches what the preview shows,
         // then upscale to 2x manually for a sharper scheduler image
