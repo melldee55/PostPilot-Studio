@@ -3343,7 +3343,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v66</span>
+              <span class="sb-version">v69</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -8670,6 +8670,16 @@ Your message, caption, or call to action goes right here.</textarea
         });
         return r;
       };
+      // A ticked platform must stand out on the dark picker: very dark brand colors (X, Threads) highlight in blue
+      function _pfShow(c) {
+        const m = /^#?([0-9a-f]{6})$/i.exec(String(c || "").trim());
+        if (!m) return c;
+        const n = parseInt(m[1], 16),
+          r = (n >> 16) & 255,
+          g = (n >> 8) & 255,
+          b = n & 255;
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b < 60 ? "#1d9bf0" : c;
+      }
       // "Send to PostPilot" starts with the platforms chosen for this post
       // Platforms the Scheduler can hold (Threads isn't one: it uses Open ↗ and 📋 Caption)
       const MP_SCHEDULER = new Set(["pinterest", "instagram", "google", "linkedin", "shopify", "bluesky", "tiktok", "youtube", "facebook", "twitter", "tumblr", "kofi", "patreon"]);
@@ -9682,7 +9692,7 @@ Your message, caption, or call to action goes right here.</textarea
       // ══════════════════════════════════════════
       const PC_LIMITS = { instagram: 2200, linkedin: 3000, pinterest: 500, google: 1500, twitter: 280, threads: 500, bluesky: 300 };
       const PC_PIN_TITLE_LIMIT = 100;
-      const PC_LINKED = new Set(["pinterest", "google", "linkedin", "bluesky", "shopify"]);
+      const PC_LINKED = new Set(["instagram", "pinterest", "google", "linkedin", "bluesky", "shopify"]);
       const PC_TAGGY = new Set(["instagram", "facebook", "linkedin", "pinterest", "tiktok", "twitter", "threads", "bluesky"]);
       const PC_PLAT = {
         instagram: "instagram", ig: "instagram", insta: "instagram", facebook: "facebook", fb: "facebook", meta: "facebook",
@@ -15533,14 +15543,14 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
           ${PF_PLATFORMS.map((p) => {
             const checked = _pfSelectedPlatforms.has(p.id);
             return `<button class="pf-plat-btn" onclick="togglePfPlatform('${p.id}')"
-              style="border-color:${checked ? p.color : "rgba(255,255,255,.1)"};
-                     background:${checked ? p.color + "22" : "rgba(255,255,255,.03)"};
-                     color:${checked ? p.color : "#8b8fa8"};
+              style="border-color:${checked ? _pfShow(p.color) : "rgba(255,255,255,.1)"};
+                     background:${checked ? _pfShow(p.color) + "22" : "rgba(255,255,255,.03)"};
+                     color:${checked ? _pfShow(p.color) : "#8b8fa8"};
                      flex-direction:column;align-items:center;gap:4px;padding:8px 4px 6px;">
-              <span style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;color:${checked ? p.color : "#8b8fa8"}">${platIcon(p.id, 18)}</span>
+              <span style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;color:${checked ? _pfShow(p.color) : "#8b8fa8"}">${platIcon(p.id, 18)}</span>
               <div style="font-size:10px;font-weight:600;text-align:center;line-height:1.2;">${p.name}</div>
               <div style="font-size:8.5px;font-weight:400;opacity:.65;text-align:center;">${p.ratio}</div>
-              ${checked ? `<div style="width:6px;height:6px;border-radius:50%;background:${p.color};margin-top:1px;"></div>` : ""}
+              ${checked ? `<div style="font-size:12px;font-weight:800;line-height:1;color:${_pfShow(p.color)}">✓</div>` : ""}
             </button>`;
           }).join("")}
         </div>
@@ -22943,7 +22953,7 @@ function defaultForm(platform) {
     // Pinterest
     title: '', description: '', board: '', boardId: '', destinationUrl: '', hashtags: '',
     // Instagram
-    caption: '', location: '', altText: '',
+    caption: '', location: '', altText: '', igLink: '',
     // Google
     postType: "What's New", content: '', ctaType: 'None', ctaUrl: '',
     eventTitle: '', eventStart: '', eventEnd: '',
@@ -23191,6 +23201,11 @@ function playChime() {
 
 function checkForLivePosts() {
   const now = new Date();
+  // Keep Up Next's times fresh (not while you're typing somewhere)
+  setTimeout(() => {
+    const a = document.activeElement;
+    if (state.activeView === 'scheduled' && !state.showComposer && !state.showIncomingModal && !(a && /INPUT|TEXTAREA|SELECT/.test(a.tagName))) render();
+  }, 0);
   Object.values(PLATFORMS).forEach(platform => {
     (state.posts[platform.id] || []).forEach(post => {
       if (!post.scheduledDate) return;
@@ -23200,11 +23215,11 @@ function checkForLivePosts() {
       if (postTime <= now && !state.notifiedPostIds.has(id)) {
         state.notifiedPostIds.add(id);
         saveNotifiedIds();
-        if (platform.id === 'pinterest' || platform.id === 'google' || platform.id === 'linkedin') {
+        if ((platform.id === 'pinterest' || platform.id === 'google' || platform.id === 'linkedin') && _ppHasKey(platform.id)) {
           triggerPublish(post.id, platform.id);
         } else {
-          // Instagram — no auto-publish yet, just notify
-          if (state.notificationsEnabled) fireNotification(post, platform, true);
+          // No API key for this platform yet: don't try to publish, remind you to post it
+          _ppRemind(post, platform);
         }
       }
     });
@@ -24071,6 +24086,8 @@ function renderScheduleBadges(post, platform) {
 }
 
 async function triggerPublish(postId, platformId) {
+  // No API key yet: open the platform with the post ready to paste/upload instead of trying to publish
+  if (!_ppHasKey(platformId)) { postOnPlatform(postId, platformId); return; }
   const platform = PLATFORMS[platformId];
   const postArr  = state.posts[platformId] || [];
   const post     = postArr.find(p => String(p.id) === String(postId));
@@ -27109,7 +27126,7 @@ function render() {
         ${state.activeView === 'calendar' ? renderCalendarView() :
           state.tagSearchMode ? renderTagSearchResults() : ''}
         ${state.activeView === 'analytics' ? renderAnalyticsView() : ''}
-        ${state.activeView === 'drafts' ? renderDraftsView(platform) : state.activeView === 'calendar' || state.activeView === 'analytics' ? '' : `
+        ${state.activeView === 'drafts' ? renderDraftsView(platform) : state.activeView === 'calendar' || state.activeView === 'analytics' ? '' : renderUpNext() + `
         ${renderTagCoverageChart()}
         <div class="stats-row">
           <div class="stat-card">
@@ -27318,6 +27335,7 @@ function render() {
                   ${post.tags && post.tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">${post.tags.map(t => `<span class="post-tag-pill" onclick="event.stopPropagation();toggleTagFilter('${escapeHtml(t)}')" style="cursor:pointer" title="Filter by ${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
                   ${post.publishedAt ? `<div style="margin-top:4px;font-size:11px;color:var(--text-muted)">Published ${new Date(post.publishedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>` : ''}
                   ${post.publishStatus==='failed' ? `<div style="margin-top:4px;font-size:11px;color:var(--text-danger)" title="${escapeHtml(post.publishError||'')}">Error: ${escapeHtml((post.publishError||'Unknown error').substring(0,50))}</div>` : ''}
+                  ${post.igLink && platform.id === 'instagram' ? `<div style="margin-top:4px"><a href="${escapeHtml(post.igLink)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="pp-blog-link" title="${escapeHtml(post.igLink)}">🔗 Blog link: ${escapeHtml(post.igLink.replace(/^https?:\/\//, ''))}</a></div>` : ''}
                   ${post.liveUrl ? `
                     <div style="margin-top:5px">
                       <a href="${escapeHtml(post.liveUrl)}" target="_blank" rel="noopener"
@@ -27714,6 +27732,10 @@ function renderInstagramFields(form, platform) {
         <label class="form-label">Alt Text (Accessibility)</label>
         <input type="text" id="f-alttext" placeholder="Describe the image" value="${escapeHtml(form.altText)}" oninput="updateFormField('altText',this.value)"/>
       </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="f-ig-link">Blog Link <span style="font-weight:400;color:var(--text-muted)">(for your link in bio or a Story link sticker; links in captions aren't clickable on Instagram)</span></label>
+      <input type="text" inputmode="url" id="f-ig-link" placeholder="https://youngdouglasinsurance.com/blogs/…" value="${escapeHtml(form.igLink || '')}" oninput="updateFormField('igLink',this.value)"/>
     </div>
   `;
 }
@@ -29122,6 +29144,7 @@ function closeComposer() {
   state.editingPostId = null;
   state.editingDraftId = null;
   state._formOpenSig = null;
+  state.multiPlatforms = new Set(); // 'also schedule to' never carries over to the next post
   state.deleteConfirmInComposer = false;
   state.form = null;
   setTimeout(() => recalcStreak(state.activePlatform), 120);
@@ -29164,7 +29187,7 @@ function _pcFieldsFor(pid, src) {
     out.title = src.pinTitle || src.header || '';
     out.description = caps.pinterest || caps.all || src.content || '';
     if (link) out.destinationUrl = link;
-  } else if (pid === 'instagram') out.caption = cap;
+  } else if (pid === 'instagram') { out.caption = cap; if (link) out.igLink = link; }
   else if (pid === 'google') {
     out.content = caps.google || caps.all || src.content || '';
     if (link) { out.ctaType = 'LEARN_MORE'; out.ctaUrl = link; }
@@ -29189,6 +29212,7 @@ function _pcShowPlatform(pid) {
 const PP_OPEN_URLS = { instagram: 'https://www.instagram.com/', facebook: 'https://www.facebook.com/', linkedin: 'https://www.linkedin.com/feed/?shareActive=true',
   pinterest: 'https://www.pinterest.com/pin-creation-tool/', tiktok: 'https://www.tiktok.com/upload', youtube: 'https://studio.youtube.com/', google: 'https://business.google.com/',
   twitter: 'https://x.com/compose/post', bluesky: 'https://bsky.app/', shopify: 'https://admin.shopify.com/', tumblr: 'https://www.tumblr.com/new', kofi: 'https://ko-fi.com/', patreon: 'https://www.patreon.com/' };
+const PP_LINK_FIELD = { instagram: 'igLink', pinterest: 'destinationUrl', google: 'ctaUrl', linkedin: 'liArticleUrl', bluesky: 'bskyUrl', shopify: 'shopifyUrl' };
 const PP_TEXT_FIELD = { pinterest: 'description', instagram: 'caption', google: 'content', linkedin: 'liText', shopify: 'shopifyText', bluesky: 'bskyText', tiktok: 'tiktokText',
   youtube: 'ytText', facebook: 'fbText', twitter: 'twitterText', tumblr: 'tumblrText', kofi: 'kofiText', patreon: 'patreonText' };
 function _ppPostText(post, pid) {
@@ -29246,9 +29270,11 @@ async function postOnPlatform(postId, pid, btn) {
   if (!w && url) msg += ` Your browser blocked the new tab: <a href="${url}" target="_blank" rel="noopener">open ${escapeHtml(name)}</a>.`;
   const el = _ppToast(`<div>${msg}</div><div class="pp-toast-actions">` +
     (pid === 'pinterest' && post.title ? `<button type="button" data-a="title">📋 Copy pin title</button>` : '') +
+    (post[PP_LINK_FIELD[pid]] ? `<button type="button" data-a="link">📋 Copy ${pid === 'instagram' ? 'blog link' : 'link'}</button>` : '') +
     (post.publishStatus !== 'published' ? `<button type="button" data-a="done">✓ Mark as posted</button>` : '') + `</div>`, 12000);
   el.querySelectorAll('.pp-toast-actions button').forEach(b => b.addEventListener('click', async () => {
     if (b.dataset.a === 'title') { if (await _ppCopy(post.title)) b.textContent = '✓ Title copied'; }
+    else if (b.dataset.a === 'link') { if (await _ppCopy(post[PP_LINK_FIELD[pid]])) b.textContent = '✓ Link copied'; }
     else { updatePostStatus(post.id, pid, 'published'); el.classList.remove('show'); }
   }));
 }
@@ -29258,6 +29284,8 @@ async function postOnPlatform(postId, pid, btn) {
     .pp-post-btn { display: inline-flex; align-items: center; gap: 5px; color: #fff !important; font-weight: 700 !important; }
     .pp-post-btn svg { flex-shrink: 0; }
     .pp-busy { opacity: .55; pointer-events: none; cursor: progress; }
+    .pp-blog-link { font-size: 11px; color: #e1306c; text-decoration: none; display: inline-flex; align-items: center; gap: 3px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pp-blog-link:hover { text-decoration: underline; }
     .post-thumb.pp-can-post { cursor: pointer; }
     .post-thumb.pp-can-post:hover { outline: 2px solid rgba(255,255,255,.35); outline-offset: 1px; }
     #pp-toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 16px); opacity: 0; z-index: 99999; max-width: min(560px, calc(100vw - 32px));
@@ -29270,6 +29298,162 @@ async function postOnPlatform(postId, pid, btn) {
     .pp-toast-actions button { background: #f5a623; color: #1a1206; border: none; border-radius: 7px; font: 700 11.5px system-ui, sans-serif; padding: 6px 10px; cursor: pointer; }
     .pp-post-btn:focus-visible, .pp-toast-actions button:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
   `;
+  document.head.appendChild(st);
+})();
+// ── API keys: a platform only auto-publishes once its key (and IDs) are added ──
+function _ppHasKey(pid) {
+  const k = state.apiKeys || {};
+  const has = (v) => !!(v && String(v).trim());
+  if (pid === 'google') return has(k.google) && has(k.googleAccountId) && has(k.googleLocationId);
+  return has(k[pid]);
+}
+// ── "Time to post" reminders (instead of trying to publish without keys) ──
+function _ppRemind(post, platform) {
+  let box = document.getElementById('pp-remind');
+  if (!box) { box = document.createElement('div'); box.id = 'pp-remind'; box.setAttribute('role', 'status'); box.setAttribute('aria-live', 'polite'); document.body.appendChild(box); }
+  const id = 'rem-' + String(post.id).replace(/[^a-z0-9_-]/gi, '');
+  if (document.getElementById(id)) return;
+  const raw = (typeof getPostSummary === 'function' ? getPostSummary(post) : '') || post.title || post.caption || 'Your post';
+  const card = document.createElement('div');
+  card.className = 'pp-rem'; card.id = id; card.style.borderLeftColor = platform.color;
+  card.innerHTML = `<button type="button" class="pp-rem-x" aria-label="Dismiss">✕</button>
+    <div class="pp-rem-title">⏰ Time to post on <b style="color:${platform.color}">${escapeHtml(platform.name)}</b></div>
+    <div class="pp-rem-text">${escapeHtml(String(raw).slice(0, 90))}</div>
+    <div class="pp-rem-actions"><button type="button" class="pp-rem-go" style="background:${platform.color}">Post ↗</button><button type="button" class="pp-rem-done">✓ Posted</button></div>`;
+  card.querySelector('.pp-rem-x').onclick = () => card.remove();
+  card.querySelector('.pp-rem-go').onclick = (e) => postOnPlatform(post.id, platform.id, e.currentTarget);
+  card.querySelector('.pp-rem-done').onclick = () => { updatePostStatus(post.id, platform.id, 'published'); card.remove(); };
+  box.prepend(card);
+  if (state.notificationsEnabled !== false) {
+    try { playNotificationSound(); } catch (e) {}
+    try {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const n = new Notification('Time to post on ' + platform.name, { body: String(raw).slice(0, 120), tag: id });
+        n.onclick = () => { try { window.focus(); if (window.parent && window.parent !== window) { window.parent.focus(); window.parent.studioTab && window.parent.studioTab('scheduler'); } } catch (e) {} };
+      }
+    } catch (e) {}
+  }
+}
+// ── Up Next: posts that are due, overdue, or coming in the next 24 hours, across every platform ──
+function renderUpNext() {
+  const now = Date.now(), soon = now + 24 * 3600 * 1000, items = [];
+  Object.values(PLATFORMS).forEach(pl => {
+    if (state.hiddenPlatforms && state.hiddenPlatforms.has(pl.id)) return;
+    (state.posts[pl.id] || []).forEach(post => {
+      if (!post.scheduledDate || post.publishStatus === 'published') return;
+      const t = new Date(post.scheduledDate + 'T' + (post.scheduledTime || '00:00')).getTime();
+      if (!isNaN(t) && t <= soon) items.push({ post, pl, t });
+    });
+  });
+  if (!items.length) return '';
+  items.sort((a, b) => a.t - b.t);
+  const when = (t) => {
+    const d = t - now, m = Math.round(Math.abs(d) / 60000);
+    if (d <= 0) return m <= 1 ? 'Due now' : m < 60 ? `Due ${m} min ago` : `Overdue ${Math.round(m / 60)} h`;
+    return m < 60 ? `In ${m} min` : `In ${Math.floor(m / 60)} h ${m % 60} min`;
+  };
+  const clock = (t) => new Date(t).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+  return `<div class="upnext" role="region" aria-label="Up Next">
+    <div class="upnext-head">⏰ Up Next <span class="upnext-count">${items.length}</span><span class="upnext-sub">due now, overdue, or in the next 24 hours</span></div>
+    ${items.slice(0, 10).map(({ post, pl, t }) => `
+      <div class="upnext-row${t <= now ? ' due' : ''}" style="border-left-color:${pl.color}">
+        <div class="upnext-thumb">${post.image ? `<img src="${escapeHtml(post.image)}" alt=""/>` : pl.icon.replace('width="20" height="20"', 'width="16" height="16"')}</div>
+        <div class="upnext-body">
+          <div class="upnext-top"><span style="color:${pl.color};font-weight:700">${escapeHtml(pl.name)}</span><span class="upnext-when${t <= now ? ' due' : ''}">${when(t)}</span><span class="upnext-clock">${clock(t)}</span></div>
+          <div class="upnext-text">${escapeHtml(((typeof getPostSummary === 'function' ? getPostSummary(post) : '') || post.title || post.caption || '').slice(0, 110))}</div>
+        </div>
+        <div class="upnext-actions">
+          <button class="btn-edit pp-post-btn" style="background:${pl.color}" onclick="postOnPlatform('${post.id}','${pl.id}',this)" title="Copies the caption, saves the image and opens ${pl.name}">Post ↗</button>
+          <button class="btn-edit" onclick="updatePostStatus('${post.id}','${pl.id}','published')" title="Mark as posted">✓ Posted</button>
+          <button class="btn-edit" onclick="switchPlatform('${pl.id}');openComposer('${post.id}')" style="background:var(--bg-elevated)">Edit</button>
+        </div>
+      </div>`).join('')}
+    ${items.length > 10 ? `<div class="upnext-more">+ ${items.length - 10} more coming up</div>` : ''}
+  </div>`;
+}
+(function _upStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .upnext { border: 1px solid rgba(245,166,35,.45); background: rgba(245,166,35,.06); border-radius: 12px; padding: 12px 12px 8px; margin: 0 0 14px; }
+    .upnext-head { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 14px; margin-bottom: 8px; flex-wrap: wrap; }
+    .upnext-count { background: #f5a623; color: #1a1206; border-radius: 999px; padding: 0 8px; font-size: 11px; }
+    .upnext-sub { font-weight: 500; font-size: 11px; color: var(--text-muted, #8b8fa8); }
+    .upnext-row { display: flex; align-items: center; gap: 10px; padding: 8px; margin-bottom: 6px; border-radius: 9px; border-left: 3px solid; background: rgba(255,255,255,.03); }
+    .upnext-row.due { background: rgba(245,166,35,.1); }
+    .upnext-thumb { width: 44px; height: 44px; border-radius: 7px; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.05); }
+    .upnext-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .upnext-body { flex: 1; min-width: 0; }
+    .upnext-top { display: flex; gap: 8px; align-items: baseline; font-size: 12px; flex-wrap: wrap; }
+    .upnext-when { font-weight: 700; color: var(--text-muted, #8b8fa8); }
+    .upnext-when.due { color: #f5a623; }
+    .upnext-clock { color: var(--text-muted, #8b8fa8); font-size: 11px; }
+    .upnext-text { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+    .upnext-actions { display: flex; gap: 5px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+    .upnext-more { font-size: 11px; color: var(--text-muted, #8b8fa8); padding: 2px 4px 4px; }
+    #pp-remind { position: fixed; right: 16px; bottom: 16px; z-index: 99998; display: flex; flex-direction: column; gap: 8px; max-width: min(360px, calc(100vw - 32px)); }
+    .pp-rem { position: relative; background: #15122b; color: #eef; border: 1px solid rgba(245,166,35,.5); border-left: 4px solid; border-radius: 10px; padding: 10px 30px 10px 12px; font: 500 12.5px/1.45 system-ui, sans-serif; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+    .pp-rem-title { font-weight: 700; }
+    .pp-rem-text { color: #b8bcd6; margin: 3px 0 8px; }
+    .pp-rem-actions { display: flex; gap: 6px; }
+    .pp-rem-actions button { border: none; border-radius: 7px; font: 700 11.5px system-ui, sans-serif; padding: 6px 10px; cursor: pointer; color: #fff; }
+    .pp-rem-done { background: #2e2a4a !important; }
+    .pp-rem-x { position: absolute; top: 6px; right: 8px; background: none; border: none; color: #8b8fa8; cursor: pointer; font-size: 13px; }
+    .pp-rem-actions button:focus-visible, .pp-rem-x:focus-visible, .upnext-actions button:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
+  `;
+  document.head.appendChild(st);
+})();
+// ── Same post, same platform, same day = a duplicate ──
+function _ppSig(post, pid) {
+  const img = String(post.image || post.imageOriginal || '');
+  let s = img.length + ':';
+  if (img) [0.1, 0.3, 0.5, 0.7, 0.9].forEach(f => { const i = Math.floor(img.length * f); s += img.slice(i, i + 24); });
+  s += ':' + img.slice(-24);
+  const txt = String(post[PP_TEXT_FIELD[pid]] || post.caption || post.content || post.description || post.title || '').trim().replace(/\s+/g, ' ');
+  return s + '|' + txt;
+}
+const _ppEmptySig = (sig) => /^0::\|$/.test(sig);
+function _ppFindDuplicates() {
+  const dups = [];
+  const rank = (a, b) => (a.publishStatus === 'published' ? 0 : 1) - (b.publishStatus === 'published' ? 0 : 1)
+    || (a.liveUrl ? 0 : 1) - (b.liveUrl ? 0 : 1)
+    || String(a.scheduledTime || '').localeCompare(String(b.scheduledTime || ''))
+    || (Number(a.id) || 0) - (Number(b.id) || 0);
+  Object.keys(state.posts || {}).forEach(pid => {
+    const seen = new Set();
+    (state.posts[pid] || []).filter(p => p.scheduledDate).slice().sort(rank).forEach(p => {
+      const sig = _ppSig(p, pid);
+      if (_ppEmptySig(sig)) return;
+      const k = p.scheduledDate + '#' + sig;
+      if (seen.has(k)) dups.push({ pid, id: p.id }); else seen.add(k);
+    });
+  });
+  return dups;
+}
+function ppRemoveDuplicates() {
+  const dups = _ppFindDuplicates();
+  if (!dups.length) return;
+  const drop = new Set(dups.map(d => d.pid + '|' + String(d.id)));
+  const next = {};
+  Object.keys(state.posts).forEach(pid => { next[pid] = (state.posts[pid] || []).filter(p => !drop.has(pid + '|' + String(p.id))); });
+  state.posts = next;
+  savePosts(state.posts);
+  showToast(`Removed ${dups.length} duplicate post${dups.length === 1 ? '' : 's'}. Your calendar counts are accurate now.`);
+  render();
+}
+function _ppDupNotice() {
+  const n = _ppFindDuplicates().length;
+  if (!n) return '';
+  return `<div class="dup-note" role="alert"><span>⚠ <b>${n} duplicate post${n === 1 ? '' : 's'}</b>: the same post is scheduled twice on the same day, so your counts are off.</span>
+    <button type="button" class="btn-edit" onclick="ppRemoveDuplicates()" title="Keeps the copy you've posted (or the earliest one) and removes the rest">Remove duplicates</button></div>`;
+}
+const _ppOrigCalendar = renderCalendarView;
+renderCalendarView = function () { return _ppDupNotice() + _ppOrigCalendar.apply(this, arguments); };
+const _ppOrigUpNext = renderUpNext;
+renderUpNext = function () { return _ppDupNotice() + _ppOrigUpNext.apply(this, arguments); };
+(function _dupStyles() {
+  const st = document.createElement('style');
+  st.textContent = `.dup-note { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; border: 1px solid rgba(239,68,68,.55); background: rgba(239,68,68,.08); color: var(--text-primary, #eef); border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; font-size: 12.5px; }
+    .dup-note .btn-edit { background: #ef4444 !important; color: #fff !important; font-weight: 700; }`;
   document.head.appendChild(st);
 })();
 function _draftTextFields(draft) {
@@ -29501,7 +29685,7 @@ function syncFormFromDOM() {
   // platform fields
   const fields = {
     pinterest: [['f-title','title'],['f-description','description'],['f-board','board'],['f-desturl','destinationUrl'],['f-hashtags','hashtags']],
-    instagram: [['f-caption','caption'],['f-hashtags','hashtags'],['f-location','location'],['f-alttext','altText']],
+    instagram: [['f-caption','caption'],['f-hashtags','hashtags'],['f-location','location'],['f-alttext','altText'],['f-ig-link','igLink']],
     google: [['f-event-title','eventTitle'],['f-content','content'],['f-cta','ctaType'],['f-ctaurl','ctaUrl'],
              ['f-evstart','eventStart'],['f-evend','eventEnd'],['f-ofstart','eventStart'],['f-ofend','eventEnd'],
              ['f-coupon','couponCode'],['f-redurl','redemptionUrl'],['f-ofterms','offerTerms']],
@@ -29647,6 +29831,23 @@ function savePost(addToQueue = false) {
   const platformPosts = state.posts[state.activePlatform];
   const isNew = !state.editingPostId;
   if (isNew && platformPosts.length >= MAX_POSTS) { showToast(`Max ${MAX_POSTS} posts per platform.`, 'error'); return; }
+  // The exact same post is already on this platform that day: don't add it twice
+  if (isNew && form.scheduledDate) {
+    const _sig = _ppSig(form, state.activePlatform);
+    if (!_ppEmptySig(_sig) && platformPosts.some(p => p.scheduledDate === form.scheduledDate && _ppSig(p, state.activePlatform) === _sig)) {
+      const pname = PLATFORMS[state.activePlatform].name;
+      if (state.editingDraftId != null) {
+        const dp = state.activePlatform;
+        state.drafts = { ...state.drafts, [dp]: (state.drafts[dp] || []).filter(d => String(d.id) !== String(state.editingDraftId)) };
+        saveDrafts(state.drafts);
+        closeComposer();
+        showToast(`That post is already scheduled on ${pname} for that day, so the extra draft was removed.`);
+      } else {
+        showToast(`This post is already scheduled on ${pname} for that day. Pick another day to post it again.`, 'error');
+      }
+      return;
+    }
+  }
 
   if (form.scheduledDate) {
     const dailyLimit = getDailyLimit(state.activePlatform);
@@ -29690,6 +29891,8 @@ function savePost(addToQueue = false) {
         description: form.description || '',
         hashtags: form.hashtags || '',
       };
+      // Already scheduled there that day (e.g. from a draft): don't add a second copy
+      if (targetPosts.some(p => p.scheduledDate === copy.scheduledDate && _ppSig(p, pid) === _ppSig(copy, pid))) return;
       updated[pid] = sortPosts([...targetPosts, copy]);
     });
     state.multiPlatforms = new Set(); // reset after scheduling
@@ -29697,6 +29900,12 @@ function savePost(addToQueue = false) {
 
   state.posts = updated;
   savePosts(updated);
+  // Scheduled from a draft: the draft has become this post, so it leaves Drafts (no duplicate)
+  if (isNew && state.editingDraftId != null) {
+    const dp = state.activePlatform;
+    state.drafts = { ...state.drafts, [dp]: (state.drafts[dp] || []).filter(d => String(d.id) !== String(state.editingDraftId)) };
+    saveDrafts(state.drafts);
+  }
   closeComposer();
   if (addToQueue) {
     showToast(isNew ? 'Added to Auto-Queue!' : 'Post moved to Auto-Queue!');
