@@ -3343,7 +3343,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v70</span>
+              <span class="sb-version">v71</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -27294,9 +27294,12 @@ function render() {
           <div class="post-list">
             ${(() => {
               const q = state.postSearch;
-              const filtered = currentPosts.filter(p => !p.manualUpload && matchesPostSearch(p, q));
-              if (filtered.length === 0 && q) return `<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">No posts match "<strong>${escapeHtml(q)}</strong>"</div>`;
-              return filtered.map(post => {
+              const _all = currentPosts.filter(p => !p.manualUpload && matchesPostSearch(p, q));
+              const _showAll = !!(state.showAllPosts && state.showAllPosts[state.activePlatform]);
+              const _mode = (q || state.bulkMode || (state.activeTagFilter && state.activeTagFilter.length)) ? 'none' : _showAll ? 'all' : 'next';
+              const filtered = _mode === 'next' ? _ppNextUp(_all, 3) : _all;
+              if (_all.length === 0 && q) return `<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">No posts match "<strong>${escapeHtml(q)}</strong>"</div>`;
+              return _ppListHead(_all, filtered, _mode) + filtered.map(post => {
               const isSelected = (state.bulkSelected||new Set()).has(String(post.id));
               const overdue = isPostOverdue(post);
               const statusBorder = post.publishStatus==='published'?'#22c55e':post.publishStatus==='failed'?'#ef4444':overdue?'#f59e0b':post.scheduledDate?platform.color:'#4b5078';
@@ -28793,7 +28796,9 @@ function confirmBatchSchedule() {
     const dateStr = current.toISOString().split('T')[0];
     const newPost = {
       ...defaultForm(platform),
+      ...(draft.formSnapshot ? draft.formSnapshot : _draftTextFields(draft)), // keep the draft's captions and links
       id: Date.now() + i,
+      publishStatus: 'scheduled',
       platform,
       image: draft.imageFull || draft.imageFull,
       imageOriginal: draft.imageFull,
@@ -28817,6 +28822,10 @@ function confirmBatchSchedule() {
   }
 
   savePosts(state.posts);
+  // The drafts that were scheduled leave Drafts (no duplicates)
+  const _done = new Set(selected.slice(0, scheduled).map(d => String(d.id)));
+  state.drafts = { ...state.drafts, [platform]: (state.drafts[platform] || []).filter(d => !_done.has(String(d.id))) };
+  saveDrafts(state.drafts);
   state.showBatchScheduleModal = false;
   state.draftSelectMode = false;
   state.selectedDrafts = new Set();
@@ -29334,48 +29343,8 @@ function _ppRemind(post, platform) {
     } catch (e) {}
   }
 }
-// ── Up Next: the next 3 posts on the platform you're viewing, soonest first ──
-// Today's posts stay at the top (marked Due) until you post them or mark them posted.
-function renderUpNext() {
-  const pid = state.activePlatform, pl = PLATFORMS[pid];
-  if (!pl) return '';
-  const now = Date.now();
-  const today0 = new Date(); today0.setHours(0, 0, 0, 0);
-  const items = (state.posts[pid] || [])
-    .filter(p => p.scheduledDate && p.publishStatus !== 'published')
-    .map(p => ({ post: p, t: new Date(p.scheduledDate + 'T' + (p.scheduledTime || '00:00')).getTime() }))
-    .filter(x => !isNaN(x.t) && x.t >= today0.getTime())
-    .sort((a, b) => a.t - b.t)
-    .slice(0, 3);
-  const when = (t) => {
-    const d = t - now, m = Math.round(Math.abs(d) / 60000);
-    if (d <= 0) return m <= 1 ? 'Due now' : m < 60 ? `Due ${m} min ago` : `Due ${Math.round(m / 60)} h ago`;
-    if (m < 60) return `In ${m} min`;
-    if (m < 24 * 60) return `In ${Math.floor(m / 60)} h ${m % 60} min`;
-    const days = Math.round((new Date(t).setHours(0, 0, 0, 0) - today0.getTime()) / 86400000);
-    return days <= 1 ? 'Tomorrow' : `In ${days} days`;
-  };
-  const clock = (t) => new Date(t).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  const head = `<div class="upnext-head">⏰ Up Next on <span style="color:${pl.color}">${escapeHtml(pl.name)}</span>` +
-    (items.length ? `<span class="upnext-sub">the next ${items.length === 1 ? 'post' : items.length + ' posts'}, soonest first</span>` : '') + `</div>`;
-  if (!items.length) return `<div class="upnext upnext-empty" role="region" aria-label="Up Next on ${escapeHtml(pl.name)}">${head}<div class="upnext-none">Nothing coming up on ${escapeHtml(pl.name)} yet.</div></div>`;
-  return `<div class="upnext" role="region" aria-label="Up Next on ${escapeHtml(pl.name)}">${head}
-    ${items.map(({ post, t }, i) => `
-      <div class="upnext-row${t <= now ? ' due' : ''}" style="border-left-color:${pl.color}" data-post-id="${post.id}">
-        <div class="upnext-rank" style="color:${pl.color}">${i + 1}</div>
-        <div class="upnext-thumb">${post.image ? `<img src="${escapeHtml(post.image)}" alt=""/>` : pl.icon.replace('width="20" height="20"', 'width="16" height="16"')}</div>
-        <div class="upnext-body">
-          <div class="upnext-top"><span class="upnext-when${t <= now ? ' due' : ''}">${when(t)}</span><span class="upnext-clock">${clock(t)}</span></div>
-          <div class="upnext-text">${escapeHtml(((typeof getPostSummary === 'function' ? getPostSummary(post) : '') || post.title || post.caption || '').slice(0, 110))}</div>
-        </div>
-        <div class="upnext-actions">
-          <button class="btn-edit pp-post-btn" style="background:${pl.color}" onclick="postOnPlatform('${post.id}','${pl.id}',this)" title="Copies the caption, saves the image and opens ${pl.name}">Post ↗</button>
-          <button class="btn-edit" onclick="updatePostStatus('${post.id}','${pl.id}','published')" title="Mark as posted">✓ Posted</button>
-          <button class="btn-edit" onclick="openComposer('${post.id}')" style="background:var(--bg-elevated)">Edit</button>
-        </div>
-      </div>`).join('')}
-  </div>`;
-}
+// Up Next now lives in the post list itself (the platform's next 3 posts); this slot only carries notices
+function renderUpNext() { return ''; }
 (function _upStyles() {
   const st = document.createElement('style');
   st.textContent = `
@@ -29462,6 +29431,64 @@ renderUpNext = function () { return _ppDupNotice() + _ppOrigUpNext.apply(this, a
   const st = document.createElement('style');
   st.textContent = `.dup-note { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; border: 1px solid rgba(239,68,68,.55); background: rgba(239,68,68,.08); color: var(--text-primary, #eef); border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; font-size: 12.5px; }
     .dup-note .btn-edit { background: #ef4444 !important; color: #fff !important; font-weight: 700; }`;
+  document.head.appendChild(st);
+})();
+// ── The post list shows the platform's next 3 posts (Show all for the rest) ──
+function _ppNextUp(all, n) {
+  const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+  const tt = (p) => new Date(p.scheduledDate + 'T' + (p.scheduledTime || '00:00')).getTime();
+  const dated = all.filter(p => p.scheduledDate && p.publishStatus !== 'published' && tt(p) >= today0.getTime()).sort((a, b) => tt(a) - tt(b));
+  const queued = all.filter(p => !p.scheduledDate && p.publishStatus !== 'published');
+  return dated.concat(queued).slice(0, n);
+}
+function _ppListHead(all, shown, mode) {
+  const pl = PLATFORMS[state.activePlatform];
+  if (!pl || mode === 'none') return '';
+  const name = `<span style="color:${pl.color}">${escapeHtml(pl.name)}</span>`;
+  if (mode === 'next') {
+    const more = all.length - shown.length;
+    return `<div class="upnext-bar"><span>⏰ <b>Up Next on ${name}</b> · ${shown.length ? `the next ${shown.length === 1 ? 'post' : shown.length + ' posts'}, soonest first` : 'nothing coming up yet'}</span>` +
+      (more > 0 ? `<button type="button" class="btn-edit" onclick="ppToggleShowAll()">Show all ${all.length} posts</button>` : '') + `</div>`;
+  }
+  return `<div class="upnext-bar"><span>All <b>${all.length}</b> ${name} posts</span><button type="button" class="btn-edit" onclick="ppToggleShowAll()">Show only the next 3</button></div>`;
+}
+function ppToggleShowAll() {
+  state.showAllPosts = Object.assign({}, state.showAllPosts || {});
+  state.showAllPosts[state.activePlatform] = !state.showAllPosts[state.activePlatform];
+  render();
+}
+// ── Drafts that were already scheduled or queued ──
+function _ppImgSig(img) {
+  img = String(img || '');
+  if (!img) return '';
+  let s = img.length + ':';
+  [0.1, 0.3, 0.5, 0.7, 0.9].forEach(f => { const i = Math.floor(img.length * f); s += img.slice(i, i + 24); });
+  return s + img.slice(-24);
+}
+function _ppUsedDrafts(pid) {
+  const sigs = new Set((state.posts[pid] || []).map(p => _ppImgSig(p.image || p.imageOriginal)).filter(Boolean));
+  if (!sigs.size) return [];
+  return (state.drafts[pid] || []).filter(d => { const s = _ppImgSig(d.imageFull || d.imageThumb); return s && sigs.has(s); });
+}
+function ppRemoveUsedDrafts() {
+  const pid = state.activePlatform, used = new Set(_ppUsedDrafts(pid).map(d => String(d.id)));
+  if (!used.size) return;
+  state.drafts = { ...state.drafts, [pid]: (state.drafts[pid] || []).filter(d => !used.has(String(d.id))) };
+  saveDrafts(state.drafts);
+  showToast(`Cleared ${used.size} draft${used.size === 1 ? '' : 's'} that ${used.size === 1 ? 'was' : 'were'} already scheduled or queued.`);
+  render();
+}
+const _ppOrigDraftsView = renderDraftsView;
+renderDraftsView = function (platform) {
+  const n = _ppUsedDrafts(state.activePlatform).length;
+  const note = n ? `<div class="dup-note" role="alert"><span>⚠ <b>${n} draft${n === 1 ? ' is' : 's are'} already scheduled or queued</b> on this platform (the same image is in your queue).</span>
+    <button type="button" class="btn-edit" onclick="ppRemoveUsedDrafts()">Clear ${n === 1 ? 'it' : 'them'}</button></div>` : '';
+  return note + _ppOrigDraftsView.apply(this, arguments);
+};
+(function _nextStyles() {
+  const st = document.createElement('style');
+  st.textContent = `.upnext-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; padding: 8px 12px; margin: 0 0 10px; border: 1px solid rgba(245,166,35,.45); background: rgba(245,166,35,.06); border-radius: 10px; }
+    .upnext-bar .btn-edit { background: var(--bg-elevated); }`;
   document.head.appendChild(st);
 })();
 function _draftTextFields(draft) {
