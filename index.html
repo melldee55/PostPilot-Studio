@@ -3343,7 +3343,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v71</span>
+              <span class="sb-version">v74</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -3426,6 +3426,7 @@
           </div>
         </div>
         <button type="button" class="pc-brief-btn" onclick="pcOpenBrief()" title="Or press Ctrl+V anywhere in the Post Creator">📋 Paste post content</button>
+        <button type="button" class="pc-brief-btn pb-open-btn" onclick="pbOpen()" title="Make 10 different Pinterest pins in one go">📌 Pinterest batch (10 pins)</button>
         <div class="mp-hint">Pick every platform this post is for</div>
         <div class="mp-chips" id="mp-chips" role="group" aria-label="Platforms for this post"></div>
         <div class="mp-view" id="mp-view" style="display: none">
@@ -8670,6 +8671,11 @@ Your message, caption, or call to action goes right here.</textarea
         });
         return r;
       };
+      // After "Save to Drafts": where the posts went
+      function _pfDraftsToast(pids, n) {
+        const names = (pids || []).map((p) => _mpName(p)).join(", ");
+        _mpToast(`🗂 Saved ${n === 1 ? "this post" : n + " posts"} to Drafts in PostPilot: <b>${names}</b>. Schedule ${n === 1 ? "it" : "them"} from each platform's Drafts whenever you're ready.`, 9000);
+      }
       // A ticked platform must stand out on the dark picker: very dark brand colors (X, Threads) highlight in blue
       function _pfShow(c) {
         const m = /^#?([0-9a-f]{6})$/i.exec(String(c || "").trim());
@@ -8898,6 +8904,7 @@ Your message, caption, or call to action goes right here.</textarea
         }, 30);
       }
       function usClose() {
+        window._usPickHook = null;
         const ov = document.getElementById("us-overlay");
         if (ov) ov.style.display = "none";
         if (_us.opener && _us.opener.focus) {
@@ -9127,6 +9134,20 @@ Your message, caption, or call to action goes right here.</textarea
         });
       }
       function usUsePhoto(i, slot, advance) {
+        // Picking for something else (a Pinterest batch pin): hand the photo over instead of filling a slot
+        if (window._usPickHook) {
+          const p0 = _us.results[i];
+          if (!p0) return;
+          if (p0.links && p0.links.download_location) {
+            fetch(p0.links.download_location, { headers: { Authorization: "Client-ID " + _usKey(), "Accept-Version": "v1" } }).catch(() => {});
+          }
+          const src0 = p0.urls.raw + (p0.urls.raw.includes("?") ? "&" : "?") + "w=2400&h=2400&fit=max&q=82&fm=jpg";
+          const hook = window._usPickHook;
+          window._usPickHook = null;
+          usClose();
+          hook(src0, { id: p0.id, name: (p0.user && p0.user.name) || "", link: (p0.user && p0.user.links && p0.user.links.html) || "", page: (p0.links && p0.links.html) || "" });
+          return;
+        }
         const p = _us.results[i];
         if (!p || !US_SLOTS.some((s) => s.key === slot)) return;
         // Unsplash asks apps to report every photo that gets used
@@ -10202,6 +10223,9 @@ Post:
         "paste",
         (e) => {
           const el = e.target;
+          // While the Pinterest batch window is open, pastes belong to its pins, never to your main post
+          const pbw = document.getElementById("pb-overlay");
+          if (pbw && pbw.style.display === "flex") return;
           if (el && el.closest && el.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']")) return;
           if (document.getElementById("studio-gate") && !document.body.classList.contains("unlocked")) return;
           const text = e.clipboardData && e.clipboardData.getData("text/plain");
@@ -10830,7 +10854,7 @@ Post:
           return sb - sa || a - b;
         });
       }
-      function mixOpenPicker(orig, pid) {
+      function mixOpenPicker(orig, pid, onPick) {
         let ov = document.getElementById("mix-overlay");
         if (!ov) {
           ov = document.createElement("div");
@@ -10857,11 +10881,12 @@ Post:
             }
           });
         }
-        const cur = mixIdx(orig, pid);
+        document.body.appendChild(ov); // on top of any other window (e.g. the Pinterest batch)
+        const cur = onPick ? orig : mixIdx(orig, pid);
         document.getElementById("mix-title").textContent = `Choose the ${_mpName(pid)} layout`;
-        document.getElementById("mix-sub").textContent = `For post layout #${orig + 1} ${NAMES[orig] || ""}. The best layouts for ${_mpName(pid)} come first.`;
+        document.getElementById("mix-sub").textContent = onPick ? `The best layouts for ${_mpName(pid)} come first.` : `For post layout #${orig + 1} ${NAMES[orig] || ""}. The best layouts for ${_mpName(pid)} come first.`;
         const rb = document.getElementById("mix-restore");
-        rb.hidden = cur === orig;
+        rb.hidden = !!onPick || cur === orig;
         rb.textContent = `↺ Use the original (#${orig + 1})`;
         rb.onclick = () => {
           mixClosePicker();
@@ -10896,9 +10921,14 @@ Post:
           }
           box.appendChild(inner);
           cell.appendChild(box);
-          const tags = (picks.has(i) ? `<span class="mix-best">★ Best</span>` : "") + (i === orig ? `<span class="mix-tag">Original</span>` : "") + (i === cur && i !== orig ? `<span class="mix-tag on">In use</span>` : "");
+          const tags = (picks.has(i) ? `<span class="mix-best">★ Best</span>` : "") + (i === orig ? `<span class="mix-tag">${onPick ? "Current" : "Original"}</span>` : "") + (i === cur && i !== orig ? `<span class="mix-tag on">In use</span>` : "");
           cell.insertAdjacentHTML("beforeend", `<div class="mix-name">${i + 1}. ${escHtml(NAMES[i] || "")}</div><div class="mix-tags">${tags}</div>`);
           cell.addEventListener("click", () => {
+            if (onPick) {
+              mixClosePicker();
+              onPick(i);
+              return;
+            }
             mixClosePicker();
             mixSet(orig, pid, i);
             _mpToast(i === orig ? `${_mpName(pid)} uses the original layout.` : `${_mpName(pid)} now uses <b>#${i + 1} ${escHtml(NAMES[i] || "")}</b>. ↺ Restore puts #${orig + 1} back.`);
@@ -10940,6 +10970,643 @@ Post:
           .mp-pv-send { background: none; border: 1px solid var(--border); color: var(--text); border-radius: 6px; font: 600 11px "DM Sans", sans-serif; padding: 3px 8px; cursor: pointer; }
           .mp-pv-send:hover { border-color: var(--hi); }
           .mix-restore:focus-visible, .mp-pv-layout:focus-visible, .mp-pv-send:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+        `;
+        document.head.appendChild(st);
+      })();
+      // ══════════════════════════════════════════
+      // PINTEREST BATCH (v74)
+      // Ten pins made in one sitting. Each pin has its own content (paste your usual post content),
+      // its own photo and its own layout. Save them all, send them all to Pinterest Drafts,
+      // or schedule them all on Pinterest's next open days.
+      // ══════════════════════════════════════════
+      const PB_N = 10;
+      const PB_KEY = "bpc_pinbatch_v1";
+      const _pb = { slots: [], sel: 0, busy: false, loaded: false, opener: null };
+      const _pbEmpty = () => ({ header: "", body: "", pinTitle: "", desc: "", link: "", alt: "", photo: "", credit: null, layout: null });
+      const _pbFilled = (s) => !!(s && (s.header || s.body || s.pinTitle || s.desc));
+
+      // ── Your main post is never touched: a pin borrows the post settings only while it is drawn ──
+      const PB_SWAP = ["header", "content", "bg", "bgX", "bgY", "bgScale", "bgFit", "bgInfo", "bg2", "bg3", "fnPrefix", "platform"];
+      let _pbBusy = 0;
+      const _pbDeferred = { save: false, sync: false, render: false };
+      function _pbApply(slot) {
+        const saved = {};
+        PB_SWAP.forEach((k) => (saved[k] = S[k]));
+        S.header = slot.header || "";
+        S.content = slot.body || "";
+        if (slot.photo) {
+          S.bg = slot.photo;
+          S.bgX = 50;
+          S.bgY = 50;
+          S.bgScale = 100;
+          S.bgFit = "cover";
+          S.bgInfo = null;
+        }
+        S.bg2 = "";
+        S.bg3 = "";
+        S.fnPrefix = headerToPrefix(slot.header || "") || saved.fnPrefix || "BrandPost";
+        S.platform = "pinterest";
+        return saved;
+      }
+      function _pbRestore(saved) {
+        PB_SWAP.forEach((k) => (S[k] = saved[k]));
+      }
+      function _pbFlush() {
+        if (_pbBusy) return;
+        if (_pbDeferred.save) {
+          _pbDeferred.save = false;
+          debounceSave();
+        }
+        if (_pbDeferred.sync) {
+          _pbDeferred.sync = false;
+          bpcScheduleSync();
+        }
+        if (_pbDeferred.render) {
+          _pbDeferred.render = false;
+          render();
+        }
+      }
+      function _pbWithSync(slot, fn) {
+        const saved = _pbApply(slot);
+        _pbBusy++;
+        try {
+          return fn();
+        } finally {
+          _pbRestore(saved);
+          _pbBusy--;
+          _pbFlush();
+        }
+      }
+      async function _pbWith(slot, fn) {
+        const saved = _pbApply(slot);
+        _pbBusy++;
+        try {
+          return await fn();
+        } finally {
+          _pbRestore(saved);
+          _pbBusy--;
+          _pbFlush();
+        }
+      }
+      // While a pin is borrowing the settings: nothing is saved, synced, redrawn or added to Recent
+      const _pbOrig = { saveToStorage, bpcSyncToGitHub, render, _addToHistory };
+      saveToStorage = function () {
+        if (_pbBusy) {
+          _pbDeferred.save = true;
+          return;
+        }
+        return _pbOrig.saveToStorage.apply(this, arguments);
+      };
+      bpcSyncToGitHub = async function () {
+        if (_pbBusy) {
+          _pbDeferred.sync = true;
+          return;
+        }
+        return _pbOrig.bpcSyncToGitHub.apply(this, arguments);
+      };
+      render = function () {
+        if (_pbBusy) {
+          _pbDeferred.render = true;
+          return;
+        }
+        return _pbOrig.render.apply(this, arguments);
+      };
+      _addToHistory = function () {
+        if (_pbBusy) return;
+        return _pbOrig._addToHistory.apply(this, arguments);
+      };
+
+      // ── Saved between visits (photos you upload are kept in the browser's database) ──
+      function _pbDb() {
+        return new Promise((res, rej) => {
+          const r = indexedDB.open("bpc_pinbatch", 1);
+          r.onupgradeneeded = () => r.result.createObjectStore("photos");
+          r.onsuccess = () => res(r.result);
+          r.onerror = () => rej(r.error);
+        });
+      }
+      async function _pbPut(i, data) {
+        try {
+          const db = await _pbDb();
+          await new Promise((res) => {
+            const tx = db.transaction("photos", "readwrite");
+            if (data) tx.objectStore("photos").put(data, i);
+            else tx.objectStore("photos").delete(i);
+            tx.oncomplete = res;
+            tx.onerror = res;
+          });
+        } catch (e) {}
+      }
+      async function _pbGetAll() {
+        try {
+          const db = await _pbDb();
+          return await new Promise((res) => {
+            const out = {};
+            const rq = db.transaction("photos").objectStore("photos").openCursor();
+            rq.onsuccess = () => {
+              const c = rq.result;
+              if (c) {
+                out[c.key] = c.value;
+                c.continue();
+              } else res(out);
+            };
+            rq.onerror = () => res(out);
+          });
+        } catch (e) {
+          return {};
+        }
+      }
+      let _pbSaveTimer = null;
+      function _pbSave() {
+        clearTimeout(_pbSaveTimer);
+        _pbSaveTimer = setTimeout(() => {
+          try {
+            localStorage.setItem(PB_KEY, JSON.stringify(_pb.slots.map((s) => ({ ...s, photo: /^data:/.test(s.photo || "") ? "idb" : s.photo || "" }))));
+          } catch (e) {}
+        }, 250);
+      }
+      async function _pbLoad() {
+        if (_pb.loaded) return;
+        _pb.loaded = true;
+        let saved = [];
+        try {
+          saved = JSON.parse(localStorage.getItem(PB_KEY) || "[]") || [];
+        } catch (e) {}
+        const photos = await _pbGetAll();
+        _pb.slots = Array.from({ length: PB_N }, (_, i) => {
+          const s = Object.assign(_pbEmpty(), saved[i] || {});
+          s.photo = s.photo === "idb" ? photos[i] || "" : s.photo || "";
+          return s;
+        });
+        const firstEmpty = _pb.slots.findIndex((s) => !_pbFilled(s));
+        _pb.sel = firstEmpty >= 0 ? firstEmpty : 0;
+      }
+
+      // ── Layouts: Pinterest's best layouts, a different one for every pin ──
+      async function _pbEnsureLayouts() {
+        if (_pb.slots.every((s) => Number.isInteger(s.layout) && templates[s.layout])) return;
+        const have = (S.platform === "pinterest" && typeof _tmplScores !== "undefined" && _tmplScores && Object.keys(_tmplScores).length) || (_mpScores.pinterest && Object.keys(_mpScores.pinterest).length);
+        if (!have && typeof _mpScorePlatform === "function") {
+          _pbStatus("Finding the best Pinterest layouts…");
+          try {
+            const res = await _mpScorePlatform("pinterest", _mpJob);
+            if (res) {
+              _mpScores.pinterest = res.scores;
+              _mpPicks.pinterest = res.picks;
+            }
+          } catch (e) {}
+        }
+        const order = _mixOrder("pinterest");
+        const used = new Set(_pb.slots.map((s) => s.layout).filter((x) => Number.isInteger(x) && templates[x]));
+        _pb.slots.forEach((s) => {
+          if (Number.isInteger(s.layout) && templates[s.layout]) return;
+          const n = order.find((i) => !used.has(i));
+          s.layout = n;
+          used.add(n);
+        });
+        _pbSave();
+      }
+      function pbNewLayouts() {
+        if (_pb.busy) return;
+        const cur = new Set(_pb.slots.map((s) => s.layout));
+        const pool = _mixOrder("pinterest")
+          .slice(0, 40)
+          .filter((i) => !cur.has(i))
+          .sort(() => Math.random() - 0.5);
+        _pb.slots.forEach((s, k) => {
+          if (pool[k] != null) s.layout = pool[k];
+        });
+        _pbSave();
+        _pbRenderAll();
+        _pbStatus("New layouts picked from Pinterest's best. ⟳ on a pin chooses one yourself.");
+      }
+      function pbPickLayout(i) {
+        const slot = _pb.slots[i];
+        if (!slot || _pb.busy) return;
+        _pbWithSync(slot, () =>
+          mixOpenPicker(slot.layout, "pinterest", (n) => {
+            slot.layout = n;
+            _pbSave();
+            _pbRenderCard(i);
+            _pbStatus(`Pin ${i + 1} now uses layout #${n + 1} ${escHtml(NAMES[n] || "")}.`);
+          }),
+        );
+      }
+
+      // ── Content: paste your usual post content into a pin ──
+      function pbFill(i, text) {
+        const s = _pb.slots[i];
+        if (!s || !text || !text.trim()) return;
+        let b = {};
+        try {
+          b = pcParseBrief(text) || {};
+        } catch (e) {}
+        const pinCap = b.captions && b.captions.pinterest;
+        if (b.headline || b.body || pinCap || b.pintitle) {
+          s.header = b.headline || s.header;
+          s.body = b.body || s.body;
+          s.pinTitle = b.pintitle || s.pinTitle;
+          s.desc = pinCap || s.desc;
+          s.link = (b.links && b.links.pinterest) || b.link || s.link;
+          s.alt = (b.alts && b.alts.pinterest) || b.summary || s.alt;
+        } else {
+          // Plain text: first line is the headline, the rest is the image text
+          const lines = text.trim().split(/\n+/);
+          s.header = lines[0].slice(0, 140);
+          s.body = lines.slice(1).join(" ").slice(0, 400);
+        }
+        _pbSave();
+        _pbRenderCard(i);
+        const after = _pb.slots.findIndex((x, k) => k > i && !_pbFilled(x));
+        const next = after >= 0 ? after : _pb.slots.findIndex((x) => !_pbFilled(x));
+        _pb.sel = next >= 0 ? next : i;
+        _pbMarkSel();
+        _pbStatus(`Pin ${i + 1} filled${s.pinTitle ? ": <b>" + escHtml(s.pinTitle) + "</b>" : ""}. ${next >= 0 ? "Next up: pin " + (next + 1) + "." : "All 10 pins have content."}`);
+      }
+      async function pbPasteInto(i) {
+        try {
+          const text = await navigator.clipboard.readText();
+          if (!text || !text.trim()) return _pbStatus("Your clipboard is empty. Copy the post content first.");
+          pbFill(i, text);
+        } catch (e) {
+          _pb.sel = i;
+          _pbMarkSel();
+          _pbStatus(`Press <b>Ctrl+V</b> to paste into pin ${i + 1} (your browser needs the keyboard for this).`);
+        }
+      }
+      function pbPasteNext() {
+        const n = _pb.slots.findIndex((x) => !_pbFilled(x));
+        pbPasteInto(n >= 0 ? n : _pb.sel);
+      }
+      function pbClearSlot(i) {
+        if (_pb.busy) return;
+        const keep = _pb.slots[i].layout;
+        _pb.slots[i] = Object.assign(_pbEmpty(), { layout: keep });
+        _pbPut(i, null);
+        _pbSave();
+        _pbRenderCard(i);
+      }
+      function pbClearAll() {
+        if (_pb.busy || !confirm("Clear the content and photos of all 10 pins? Layouts stay.")) return;
+        _pb.slots = _pb.slots.map((s, i) => {
+          _pbPut(i, null);
+          return Object.assign(_pbEmpty(), { layout: s.layout });
+        });
+        _pb.sel = 0;
+        _pbSave();
+        _pbRenderAll();
+      }
+
+      // ── Photos: each pin can have its own ──
+      function pbUpload(i) {
+        const inp = document.createElement("input");
+        inp.type = "file";
+        inp.accept = "image/*";
+        inp.onchange = () => {
+          const f = inp.files && inp.files[0];
+          if (!f) return;
+          const r = new FileReader();
+          r.onload = () => {
+            const im = new Image();
+            im.onload = () => {
+              const k = Math.min(1, 2000 / Math.max(im.naturalWidth, im.naturalHeight));
+              const c = document.createElement("canvas");
+              c.width = Math.round(im.naturalWidth * k);
+              c.height = Math.round(im.naturalHeight * k);
+              c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+              const data = c.toDataURL("image/jpeg", 0.88);
+              _pb.slots[i].photo = data;
+              _pb.slots[i].credit = null;
+              _pbPut(i, data);
+              _pbSave();
+              _pbRenderCard(i);
+            };
+            im.src = r.result;
+          };
+          r.readAsDataURL(f);
+        };
+        inp.click();
+      }
+      function pbUnsplash(i) {
+        window._usPickHook = (src, credit) => {
+          _pb.slots[i].photo = src;
+          _pb.slots[i].credit = credit || null;
+          _pbPut(i, null);
+          _pbSave();
+          _pbRenderCard(i);
+          _pbStatus(`Pin ${i + 1} photo by ${escHtml((credit && credit.name) || "Unsplash")} on Unsplash.`);
+        };
+        usOpen("bg");
+        const us = document.getElementById("us-overlay");
+        if (us) document.body.appendChild(us); // above the batch window
+      }
+      function pbUseMain(i) {
+        _pb.slots[i].photo = "";
+        _pb.slots[i].credit = null;
+        _pbPut(i, null);
+        _pbSave();
+        _pbRenderCard(i);
+      }
+
+      // ── Drawing the batch window ──
+      function _pbStatus(html) {
+        const el = document.getElementById("pb-status");
+        if (el) el.innerHTML = html || _pbCountText();
+      }
+      function _pbCountText() {
+        const n = _pb.slots.filter(_pbFilled).length;
+        return `${n} of ${PB_N} pins have content.`;
+      }
+      function _pbMarkSel() {
+        document.querySelectorAll("#pb-grid .pb-slot").forEach((el) => el.classList.toggle("sel", +el.dataset.i === _pb.sel));
+      }
+      function _pbCardHtml(i) {
+        const s = _pb.slots[i];
+        const lay = Number.isInteger(s.layout) ? `#${s.layout + 1} ${escHtml(NAMES[s.layout] || "")}` : "…";
+        const src = s.photo ? (s.credit ? `📷 ${escHtml(s.credit.name || "Unsplash")}` : "Own photo") : "Main photo";
+        const v = (f) => escHtml(s[f] || "");
+        return `<div class="pb-slot${i === _pb.sel ? " sel" : ""}${_pbFilled(s) ? " filled" : ""}" data-i="${i}">
+            <div class="pb-top"><span class="pb-num">${i + 1}</span><span class="pb-lay" title="${lay}">${lay}</span><button type="button" class="pb-mini" onclick="pbPickLayout(${i})" title="Choose another layout for pin ${i + 1}" aria-label="Choose another layout for pin ${i + 1}">⟳</button></div>
+            <div class="pb-thumb${_pbFilled(s) ? "" : " empty"}" id="pb-thumb-${i}" onclick="pbSelect(${i})"></div>
+            <div class="pb-photo"><button type="button" class="pb-mini" onclick="pbUpload(${i})">🖼 Photo</button><button type="button" class="pb-mini" onclick="pbUnsplash(${i})">🔍 Unsplash</button>${s.photo ? `<button type="button" class="pb-mini" onclick="pbUseMain(${i})" title="Use your main photo instead" aria-label="Use your main photo for pin ${i + 1}">↺</button>` : ""}<span class="pb-src">${src}</span></div>
+            <input class="pb-in" data-f="header" value="${v("header")}" placeholder="Headline on the pin" aria-label="Pin ${i + 1} headline"/>
+            <input class="pb-in" data-f="pinTitle" value="${v("pinTitle")}" placeholder="Pin title" aria-label="Pin ${i + 1} title"/>
+            <details class="pb-more"><summary>Image text, description, link, alt</summary>
+              <textarea class="pb-in" data-f="body" rows="2" placeholder="Image text" aria-label="Pin ${i + 1} image text">${v("body")}</textarea>
+              <textarea class="pb-in" data-f="desc" rows="3" placeholder="Pin description" aria-label="Pin ${i + 1} description">${v("desc")}</textarea>
+              <input class="pb-in" data-f="link" value="${v("link")}" placeholder="Link" aria-label="Pin ${i + 1} link"/>
+              <input class="pb-in" data-f="alt" value="${v("alt")}" placeholder="Alt text" aria-label="Pin ${i + 1} alt text"/>
+            </details>
+            <div class="pb-acts"><button type="button" class="pb-mini" onclick="pbPasteInto(${i})">📋 Paste</button><button type="button" class="pb-mini" onclick="pbClearSlot(${i})">✕ Clear</button></div>
+          </div>`;
+      }
+      function _pbDrawThumb(i) {
+        const box = document.getElementById("pb-thumb-" + i);
+        const slot = _pb.slots[i];
+        if (!box || !slot || !Number.isInteger(slot.layout)) return;
+        const pl = PLATS.pinterest;
+        const sc = 150 / pl.w;
+        box.style.height = Math.round(pl.h * sc) + "px";
+        box.innerHTML = "";
+        const inner = document.createElement("div");
+        inner.style.cssText = `position:absolute;left:0;top:0;width:${pl.w}px;height:${pl.h}px;transform:scale(${sc});transform-origin:top left;pointer-events:none;`;
+        box.appendChild(inner);
+        _pbWithSync(slot, () => {
+          try {
+            inner.innerHTML = applyGifOverlay(templates[slot.layout](PAL(), pl.w, pl.h));
+            fitTextBatch([inner]);
+          } catch (e) {
+            inner.innerHTML = "";
+          }
+        });
+      }
+      function _pbRenderCard(i) {
+        const el = document.querySelector(`#pb-grid .pb-slot[data-i="${i}"]`);
+        if (!el) return;
+        el.outerHTML = _pbCardHtml(i);
+        _pbDrawThumb(i);
+        _pbStatus();
+      }
+      function _pbRenderAll() {
+        const g = document.getElementById("pb-grid");
+        if (!g) return;
+        g.innerHTML = _pb.slots.map((_, i) => _pbCardHtml(i)).join("");
+        _pb.slots.forEach((_, i) => _pbDrawThumb(i));
+        _pbStatus();
+      }
+      function pbSelect(i) {
+        _pb.sel = i;
+        _pbMarkSel();
+        _pbStatus(`Pin ${i + 1} selected: press <b>Ctrl+V</b> to paste its content.`);
+      }
+      function _pbLock(on) {
+        document.querySelectorAll("#pb-overlay .pb-act, #pb-overlay .us-more, #pb-overlay .pb-mini, #pb-overlay .us-x").forEach((b) => (b.disabled = !!on));
+        document.getElementById("pb-overlay").classList.toggle("pb-working", !!on);
+      }
+      function _pbBuild() {
+        if (document.getElementById("pb-overlay")) return;
+        const ov = document.createElement("div");
+        ov.id = "pb-overlay";
+        ov.className = "us-overlay";
+        ov.setAttribute("role", "dialog");
+        ov.setAttribute("aria-modal", "true");
+        ov.setAttribute("aria-labelledby", "pb-title");
+        ov.innerHTML = `<div class="us-modal pb-modal">
+            <div class="us-head"><div><div class="us-title" id="pb-title">📌 Pinterest batch</div>
+              <div class="mix-sub">10 pins, each with its own content, photo and layout. Copy a post's content and press <b>Ctrl+V</b>: it fills the selected pin, then moves to the next empty one.</div></div>
+              <div class="mix-head-actions"><button type="button" class="us-more" onclick="pbPasteNext()">📋 Paste into next pin</button><button type="button" class="us-more" onclick="pbNewLayouts()">⟳ New layouts</button><button type="button" class="us-more" onclick="pbClearAll()">Clear all</button><button type="button" class="us-x" aria-label="Close" onclick="pbClose()">✕</button></div></div>
+            <div class="pb-grid" id="pb-grid"></div>
+            <div class="pb-foot"><span class="pb-status" id="pb-status" role="status" aria-live="polite"></span>
+              <button type="button" class="pb-act" onclick="pbSaveAll()">⬇ Save all as images</button>
+              <button type="button" class="pb-act" onclick="pbSend(false)">🗂 Send to Pinterest Drafts</button>
+              <button type="button" class="pb-act pb-primary" onclick="pbSend(true)">📅 Schedule on open days</button></div>
+          </div>`;
+        document.body.appendChild(ov);
+        ov.addEventListener("mousedown", (e) => (ov._down = e.target === ov));
+        ov.addEventListener("click", (e) => {
+          if (e.target === ov && ov._down) pbClose();
+          ov._down = false;
+          const card = e.target.closest && e.target.closest(".pb-slot");
+          if (card && !e.target.closest("button,input,textarea,summary,details")) pbSelect(+card.dataset.i);
+        });
+        ov.addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && !_pb.busy) {
+            e.stopPropagation();
+            pbClose();
+          }
+        });
+        ov.addEventListener("focusin", (e) => {
+          const card = e.target.closest && e.target.closest(".pb-slot");
+          if (card && +card.dataset.i !== _pb.sel) {
+            _pb.sel = +card.dataset.i;
+            _pbMarkSel();
+          }
+        });
+        const redraw = {};
+        ov.addEventListener("input", (e) => {
+          const f = e.target.dataset && e.target.dataset.f;
+          const card = e.target.closest && e.target.closest(".pb-slot");
+          if (!f || !card) return;
+          const i = +card.dataset.i;
+          _pb.slots[i][f] = e.target.value;
+          _pbSave();
+          card.classList.toggle("filled", _pbFilled(_pb.slots[i]));
+          if (f === "header" || f === "body") {
+            clearTimeout(redraw[i]);
+            redraw[i] = setTimeout(() => {
+              const t = document.getElementById("pb-thumb-" + i);
+              if (t) t.classList.toggle("empty", !_pbFilled(_pb.slots[i]));
+              _pbDrawThumb(i);
+            }, 300);
+          }
+          _pbStatus();
+        });
+      }
+      // Ctrl+V anywhere in the batch window (outside the text boxes) fills the selected pin.
+      // Listens on the window, which hears a paste before any page handler, so your main post never gets it.
+      window.addEventListener(
+        "paste",
+        (e) => {
+          const ov = document.getElementById("pb-overlay");
+          if (!ov || ov.style.display !== "flex") return;
+          const us = document.getElementById("us-overlay");
+          if (us && us.style.display === "flex") return;
+          if (e.target && e.target.closest && e.target.closest("input,textarea,[contenteditable]")) return;
+          const text = e.clipboardData && e.clipboardData.getData("text/plain");
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          if (text && text.trim()) pbFill(_pb.sel, text);
+        },
+        true,
+      );
+      async function pbOpen() {
+        _pbBuild();
+        const ov = document.getElementById("pb-overlay");
+        document.body.appendChild(ov);
+        _pb.opener = document.activeElement;
+        ov.style.display = "flex";
+        await _pbLoad();
+        _pbRenderAll();
+        await _pbEnsureLayouts();
+        _pbRenderAll();
+        setTimeout(() => {
+          const t = document.querySelector("#pb-overlay .us-more");
+          if (t) t.focus();
+        }, 30);
+      }
+      function pbClose() {
+        if (_pb.busy) return;
+        const ov = document.getElementById("pb-overlay");
+        if (ov) ov.style.display = "none";
+        if (_pb.opener && _pb.opener.focus) _pb.opener.focus();
+      }
+
+      // ── Save, send to Drafts, or schedule on open days ──
+      function _pbList() {
+        return _pb.slots.map((s, i) => [s, i]).filter(([s]) => _pbFilled(s) && Number.isInteger(s.layout));
+      }
+      async function pbSaveAll() {
+        const list = _pbList();
+        if (!list.length) return _pbStatus("Paste content into at least one pin first.");
+        if (_pb.busy) return;
+        _pb.busy = true;
+        _pbLock(true);
+        _mpCancel();
+        let n = 0;
+        try {
+          for (const [s, i] of list) {
+            _pbStatus(`Saving pin ${i + 1}… (${n + 1} of ${list.length})`);
+            const name = _pbWithSync(s, () => _mpFileName(s.layout, "pinterest"));
+            const blob = await _pbWith(s, () => _mpBlob(s.layout, "pinterest"));
+            await xfSaveBlob(blob, name, false, true);
+            n++;
+          }
+          _pbStatus(`Saved ${n} pin${n === 1 ? "" : "s"} as images.`);
+        } catch (e) {
+          _pbStatus("Couldn't save: " + escHtml(e.message || String(e)));
+        } finally {
+          _pb.busy = false;
+          _pbLock(false);
+          _mpScheduleScoring();
+        }
+      }
+      async function pbSend(scheduleOpen) {
+        const list = _pbList();
+        if (!list.length) return _pbStatus("Paste content into at least one pin first.");
+        if (_pb.busy) return;
+        _pb.busy = true;
+        _pbLock(true);
+        _mpCancel();
+        let sw = null;
+        try {
+          const f = document.getElementById("sched-frame");
+          const w = f && f.contentWindow;
+          if (w && typeof w._ppItemsToDrafts === "function") sw = w;
+        } catch (e) {}
+        let n = 0;
+        try {
+          for (const [s, i] of list) {
+            _pbStatus(`${scheduleOpen ? "Scheduling" : "Sending"} pin ${i + 1}… (${n + 1} of ${list.length})`);
+            const name = _pbWithSync(s, () => _mpFileName(s.layout, "pinterest"));
+            const c = await _pbWith(s, () => renderToCanvasForPlatform(s.layout, "pinterest"));
+            if (!c) continue;
+            const img = await compressForQueue(c);
+            const item = {
+              id: Date.now() + Math.random(),
+              toDrafts: true,
+              scheduleOpen: !!scheduleOpen,
+              dataUrl: img,
+              platformImages: { pinterest: img },
+              gifDataUrl: null,
+              imageName: name,
+              platformNames: { pinterest: name },
+              platform: "pinterest",
+              selectedPlatforms: ["pinterest"],
+              templateName: NAMES[s.layout] || "",
+              header: s.header || "",
+              content: s.body || "",
+              captions: s.desc ? { pinterest: s.desc } : {},
+              pinTitle: s.pinTitle || "",
+              link: s.link || "",
+              links: s.link ? { pinterest: s.link } : {},
+              altText: s.alt || "",
+              alts: s.alt ? { pinterest: s.alt } : {},
+              format: "png",
+              sentAt: new Date().toISOString(),
+              accountId: (typeof _pfAccounts !== "undefined" && _pfAccounts[_pfActiveAccount] && _pfAccounts[_pfActiveAccount].id) || "acct1",
+              accountName: typeof activePfAccountName === "function" ? activePfAccountName() : "",
+            };
+            if (sw) sw._ppItemsToDrafts([item]);
+            else {
+              const key = activePfQueueKey();
+              const q = JSON.parse(localStorage.getItem(key) || "[]");
+              q.push(item);
+              localStorage.setItem(key, JSON.stringify(q.slice(-10)));
+            }
+            n++;
+          }
+          const msg = scheduleOpen
+            ? `📅 ${n} pin${n === 1 ? "" : "s"} scheduled on Pinterest's next open days, at Pinterest's default time. The Scheduler lists the dates.`
+            : `🗂 ${n} pin${n === 1 ? "" : "s"} sent to Pinterest Drafts. Schedule them from Drafts (or Plan my week) whenever you're ready.`;
+          _pbStatus(msg);
+          _mpToast(msg, 9000);
+        } catch (e) {
+          _pbStatus("Couldn't send: " + escHtml(e.message || String(e)));
+        } finally {
+          _pb.busy = false;
+          _pbLock(false);
+          _mpScheduleScoring();
+        }
+      }
+      (function _pbStyles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          .pb-open-btn { margin-top: 6px; }
+          .pb-modal { width: min(1180px, 100%); }
+          .pb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 12px; padding: 4px 18px 12px; overflow-y: auto; }
+          .pb-slot { display: flex; flex-direction: column; gap: 5px; padding: 8px; border: 2px solid var(--border); border-radius: 10px; background: var(--panel); min-width: 0; }
+          .pb-slot.sel { border-color: var(--hi); box-shadow: 0 0 0 2px var(--hi-dim); }
+          .pb-slot.filled .pb-num { background: #22c55e; color: #fff; }
+          .pb-top { display: flex; align-items: center; gap: 6px; font-size: 10.5px; }
+          .pb-num { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--border); font-weight: 800; font-size: 11px; flex-shrink: 0; }
+          .pb-lay { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+          .pb-thumb { position: relative; width: 150px; margin: 0 auto; overflow: hidden; border-radius: 6px; background: #111; box-shadow: 0 2px 10px rgba(0,0,0,.45); cursor: pointer; }
+          .pb-thumb.empty::after { content: "Paste content"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10,8,24,.72); color: #fff; font: 700 12px "DM Sans", sans-serif; }
+          .pb-photo, .pb-acts { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+          .pb-src { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+          .pb-mini { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 6px; font: 600 10.5px "DM Sans", sans-serif; padding: 3px 7px; cursor: pointer; }
+          .pb-mini:hover { border-color: var(--hi); }
+          .pb-in { width: 100%; box-sizing: border-box; background: var(--bg, #0e0b22); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; font: 500 11.5px "DM Sans", sans-serif; resize: vertical; }
+          .pb-more summary { font-size: 10.5px; color: var(--muted); cursor: pointer; padding: 2px 0; }
+          .pb-more[open] { display: flex; flex-direction: column; gap: 5px; }
+          .pb-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 18px 16px; border-top: 1px solid var(--border); }
+          .pb-status { flex: 1; min-width: 200px; font-size: 12px; color: var(--muted); }
+          .pb-act { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 8px; font: 700 12px "DM Sans", sans-serif; padding: 8px 12px; cursor: pointer; }
+          .pb-act:hover { border-color: var(--hi); }
+          .pb-primary { background: #e60023; border-color: #e60023; color: #fff; }
+          .pb-working .pb-grid { opacity: .6; pointer-events: none; }
+          .pb-mini:focus-visible, .pb-act:focus-visible, .pb-in:focus-visible { outline: 2px solid var(--hi); outline-offset: 1px; }
+          button:disabled.pb-act, button:disabled.pb-mini { opacity: .5; cursor: progress; }
         `;
         document.head.appendChild(st);
       })();
@@ -15633,6 +16300,8 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
       </div>
       <div style="display:flex;gap:8px;">
         <button onclick="pfPickerBack()" style="flex:1;padding:9px;border-radius:7px;border:1px solid rgba(255,255,255,.1);background:transparent;color:#8b8fa8;font-family:'DM Sans',sans-serif;font-size:12.5px;cursor:pointer;">← Back</button>
+        <button onclick="confirmPfSend(true)" title="Puts each platform's image and caption in its Drafts in PostPilot, to schedule later"
+          style="flex:2;padding:9px;border-radius:7px;border:1px solid ${activePfAccountColor()};background:transparent;color:#fff;font-family:'DM Sans',sans-serif;font-size:12.5px;font-weight:700;cursor:pointer;">🗂 Save to Drafts</button>
         <button onclick="confirmPfSend()"
           style="flex:2;padding:9px;border-radius:7px;border:none;
                  background:${activePfAccountColor()};color:#fff;
@@ -15681,7 +16350,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
         }
       }
 
-      async function confirmPfSend() {
+      async function confirmPfSend(toDrafts) {
         if (!_pfSelectedPlatforms.size || _pfPickerIdx === null) return;
         const isBatch = Array.isArray(_pfPickerIdx);
         const indices = isBatch ? _pfPickerIdx : [_pfPickerIdx];
@@ -15728,6 +16397,8 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
             const trimmed = existing.slice(-8);
             const queueItem = {
               id: Date.now() + Math.random(),
+              toDrafts: !!toDrafts, // straight to each platform's Drafts
+              platformNames: Object.fromEntries(selectedPlatforms.map((pid) => [pid, _mpFileName(mixIdx(idx, pid), pid)])), // your file names per platform
               dataUrl,
               platformImages,
               gifDataUrl,
@@ -15748,6 +16419,15 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
               accountId: _pfAccounts[_pfActiveAccount]?.id || "acct1",
               accountName: activePfAccountName(),
             };
+            // Inside PostPilot Studio, give "Save to Drafts" posts straight to the Scheduler (the queue below stays as a backup;
+            // the Scheduler skips anything already in Drafts, so nothing is saved twice)
+            if (toDrafts) {
+              try {
+                const _sf = document.getElementById("sched-frame");
+                const _sw = _sf && _sf.contentWindow;
+                if (_sw && typeof _sw._ppItemsToDrafts === "function") _sw._ppItemsToDrafts([queueItem]);
+              } catch (e) {}
+            }
             trimmed.push(queueItem);
             let writeOk = false;
             const fallbacks = [0.6, 0.5, 0.4, 0.3];
@@ -15792,7 +16472,8 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
         }
         // Show branded success popup
         const acct = _pfAccounts[_pfActiveAccount];
-        showPfSuccessPopup(
+        if (toDrafts) _pfDraftsToast(selectedPlatforms, indices.length);
+        else showPfSuccessPopup(
           acct ? acct.name : activePfAccountName(),
           acct ? acct.logo : "",
           acct ? acct.color : "#7b3499",
@@ -23317,7 +23998,7 @@ async function autoSaveItemsToDrafts(wsId, items) {
       for (const pid of platforms) {
         const existing = drafts[pid] || [];
         if (existing.length >= MAX_DRAFTS) continue;
-        const imageName = (item.imageName || 'BrandPost').replace(/\.[^.]+$/, '') + '_' + pid + (fmt === 'gif' ? '.gif' : '.png');
+        const imageName = _ppItemName(item, pid, fmt);
         if (existing.some(d => d.imageName === imageName && d.fromBrandCreator)) continue; // duplicate guard
         const imageData = await getImageForPlatform(item, pid, fmt);
         const dims = PLATFORM_DIMENSIONS[pid];
@@ -23426,9 +24107,17 @@ function checkIncomingQueue() {
           localStorage.removeItem('postflow_incoming_queue');
         } catch {}
       }
-      const items = JSON.parse(raw);
+      let items = JSON.parse(raw) || [];
+      // "Save to Drafts" posts skip the incoming window and go straight to each platform's Drafts
+      const _toDrafts = items.filter(it => it && it.toDrafts);
+      if (_toDrafts.length) {
+        items = items.filter(it => !(it && it.toDrafts));
+        try { if (items.length) localStorage.setItem(PF_QUEUE_KEY(), JSON.stringify(items)); else localStorage.removeItem(PF_QUEUE_KEY()); } catch (e) {}
+        _ppItemsToDrafts(_toDrafts);
+      }
       if (items && items.length && !state.showIncomingModal) {
         state.incomingQueue = items;
+        state._pfShownIds = new Set(items.map(it => String(it && it.id)));
         const first = items[0];
         // Use the platforms the user explicitly chose in Brand Creator, or fall back to suggested platform
         const defaultPlatforms = first.selectedPlatforms && first.selectedPlatforms.length
@@ -23464,8 +24153,8 @@ function checkIncomingQueue() {
 }
 
 function dismissIncoming() {
-  try { localStorage.removeItem(PF_QUEUE_KEY()); } catch(e) {}
   state.incomingQueue = [];
+  _ppQueueWriteBack(); // drop the posts shown here; keep any sent meanwhile
   state.showIncomingModal = false;
   state.incomingSelection = { platforms: new Set(), format: 'png' };
   render();
@@ -23481,7 +24170,7 @@ function skipIncomingItem() {
       platforms: new Set([next.platform && PLATFORMS[next.platform] ? next.platform : 'pinterest']),
       format: next.format || 'png',
     };
-    try { localStorage.setItem(PF_QUEUE_KEY(), JSON.stringify(state.incomingQueue)); } catch(e) {}
+    _ppQueueWriteBack();
     render();
   }
 }
@@ -23642,7 +24331,7 @@ async function scheduleIncomingNow() {
         platform: pid,
         imageFull: imageData,
         imageThumb: imageData,
-        imageName: (item.imageName || 'BrandPost').replace(/\.[^.]+$/, '') + '_' + pid + (fmt === 'gif' ? '.gif' : '.png'),
+        imageName: _ppItemName(item, pid, fmt),
         notes: [item.header, item.content].filter(Boolean).join(' · ').substring(0, 200),
           srcHeader: item.header || '',
           srcContent: item.content || '',
@@ -23673,7 +24362,7 @@ async function scheduleIncomingNow() {
   state.form = {
     ...defaultForm(firstPid),
     image: firstImageData,
-    imageName: (item.imageName || 'BrandPost').replace(/\.[^.]+$/, '') + '_' + firstPid + (fmt === 'gif' ? '.gif' : '.png'),
+    imageName: _ppItemName(item, firstPid, fmt),
     title: item.header || '',
     description: item.content || '',
     caption: [item.header, item.content].filter(Boolean).join('\n'),
@@ -23686,9 +24375,9 @@ async function scheduleIncomingNow() {
   _markComposerOpened();
   state.showIncomingModal = false;
   state.incomingQueue.shift();
-  try { localStorage.setItem(PF_QUEUE_KEY(), JSON.stringify(state.incomingQueue)); } catch(e) {}
+  _ppQueueWriteBack();
   if (!state.incomingQueue.length) {
-    try { localStorage.removeItem(PF_QUEUE_KEY()); } catch(e) {}
+    _ppQueueWriteBack();
   }
   render();
 
@@ -26940,6 +27629,7 @@ function render() {
           <button onclick="openSettings()" title="API Key Settings" style="background:var(--bg-elevated);border:1px solid var(--border-light);border-radius:var(--radius-sm);width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:var(--text-secondary);transition:background var(--transition)" onmouseenter="this.style.background='var(--bg-hover)'" onmouseleave="this.style.background='var(--bg-elevated)'">⚙️</button>
         </div>
         <button onclick="switchView('calendar')" title="Open Calendar" style="margin-top:8px;width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 10px;background:${state.activeView==='calendar'?'rgba(245,158,11,.12)':'var(--bg-elevated)'};border:1px solid ${state.activeView==='calendar'?'#f59e0b':'var(--border-light)'};border-radius:var(--radius-sm);cursor:pointer;font-size:12px;font-weight:600;color:${state.activeView==='calendar'?'#f59e0b':'var(--text-secondary)'};transition:all .15s;font-family:inherit;" onmouseenter="this.style.background='rgba(245,158,11,.15)'" onmouseleave="this.style.background=state.activeView==='calendar'?'rgba(245,158,11,.12)':'var(--bg-elevated)'">📅 Calendar</button>
+        ${renderComingUp()}
 
         <!_PPESC_-- ── ACTIVE BRAND DISPLAY (click to open Settings to switch) ────── -->
         ${(() => {
@@ -27384,7 +28074,7 @@ function render() {
     ${state.showComposer ? renderComposerModal(platform) : ''}
 
     <!_PPESC_-- BATCH SCHEDULE MODAL -->
-    ${state.showBatchScheduleModal ? renderBatchScheduleModal() : ''}
+    ${state.showBatchScheduleModal ? renderBatchScheduleModal() : ''}${state.showPlanWeek ? renderPlanWeek() : ''}${state.showToday ? renderTodayList() : ''}
 
     <!_PPESC_-- HASHTAG SET MODAL -->
     ${state.showHashtagSetModal ? renderHashtagSetModal() : ''}
@@ -27486,6 +28176,7 @@ function renderComposerModal(platform) {
               </select>
             </div>
           </div>
+          ${_ppOpenDaysHtml(form)}
           <div class="form-group" style="margin-top:-6px">
             <label class="form-label">Timezone</label>
             <select id="f-tz" onchange="updateFormField('timezone',this.value)" style="font-size:12px">
@@ -28780,6 +29471,7 @@ function confirmBatchSchedule() {
   const selected  = drafts.filter(d => state.selectedDrafts.has(String(d.id)));
   const { startDate, time, spacing } = state.batchScheduleForm;
   if (!startDate) { showToast('Please set a start date.', 'error'); return; }
+  const _plan = _ppBatchPlan(platform, selected.length, startDate, spacing, time); // same days the preview shows
 
   const spacingDays = { daily: 1, 'every2': 2, weekly: 7, 'mwf': null };
   const mwf = [1, 3, 5]; // Mon Wed Fri
@@ -28793,7 +29485,7 @@ function confirmBatchSchedule() {
       showToast(`Hit post limit (${MAX_POSTS}) after scheduling ${scheduled} posts.`, 'error');
       break;
     }
-    const dateStr = current.toISOString().split('T')[0];
+    const dateStr = _plan[i] || current.toISOString().split('T')[0];
     const newPost = {
       ...defaultForm(platform),
       ...(draft.formSnapshot ? draft.formSnapshot : _draftTextFields(draft)), // keep the draft's captions and links
@@ -28852,12 +29544,13 @@ function renderBatchScheduleModal() {
         <div class="form-group">
           <label class="form-label">Post Time</label>
           <select onchange="updateBatchScheduleForm('time',this.value)">
-            ${['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00'].map(t=>`<option value="${t}" ${t===time?'selected':''}>${t}</option>`).join('')}
+            ${_ppTimeOpts(time).map(t=>`<option value="${t}" ${t===time?'selected':''}>${t}</option>`).join('')}
           </select>
         </div>
         <div class="form-group">
           <label class="form-label">Posting Frequency</label>
           <select onchange="updateBatchScheduleForm('spacing',this.value)">
+            <option value="open"    ${spacing==='open'   ?'selected':''}>Open days only (skip busy days)</option>
             <option value="daily"   ${spacing==='daily'  ?'selected':''}>Daily</option>
             <option value="every2"  ${spacing==='every2' ?'selected':''}>Every 2 days</option>
             <option value="mwf"     ${spacing==='mwf'    ?'selected':''}>Mon / Wed / Fri</option>
@@ -28866,8 +29559,9 @@ function renderBatchScheduleModal() {
         </div>
         <div style="font-size:11.5px;color:var(--text-muted);background:var(--bg-elevated);border-radius:7px;padding:10px 12px;line-height:1.6">
           ${count} draft${count!==1?'s':''} will be scheduled starting <strong style="color:var(--text-primary)">${startDate||'—'}</strong>
-          at <strong style="color:var(--text-primary)">${time}</strong>, ${spacing==='daily'?'every day':spacing==='every2'?'every 2 days':spacing==='mwf'?'Mon/Wed/Fri':'weekly'}.
+          at <strong style="color:var(--text-primary)">${time}</strong>, ${spacing==='open'?'one per open day (days that already have a post are skipped)':spacing==='daily'?'every day':spacing==='every2'?'every 2 days':spacing==='mwf'?'Mon/Wed/Fri':'weekly'}.
         </div>
+        ${_ppBatchPreview()}
       </div>
       <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;padding:16px 20px">
         <button class="btn-cancel" onclick="closeBatchScheduleModal()">Cancel</button>
@@ -29489,6 +30183,400 @@ renderDraftsView = function (platform) {
   const st = document.createElement('style');
   st.textContent = `.upnext-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; padding: 8px 12px; margin: 0 0 10px; border: 1px solid rgba(245,166,35,.45); background: rgba(245,166,35,.06); border-radius: 10px; }
     .upnext-bar .btn-edit { background: var(--bg-elevated); }`;
+  document.head.appendChild(st);
+})();
+// ── Posts sent with "Save to Drafts": each platform's version goes straight into its Drafts ──
+// The file name for a platform's image: the Creator's own naming when it sent one (…_0001_Pinterest.png)
+function _ppItemName(item, pid, fmt) {
+  const nm = item.platformNames && item.platformNames[pid];
+  if (nm) return fmt === 'gif' ? nm.replace(/\.png$/i, '.gif') : nm;
+  return (item.imageName || 'BrandPost').replace(/\.[^.]+$/, '') + '_' + pid + (fmt === 'gif' ? '.gif' : '.png');
+}
+// Rewrite the incoming queue without losing anything: drop only the posts this window has handled,
+// keep every post that arrived after it opened
+function _ppQueueWriteBack() {
+  try {
+    const key = PF_QUEUE_KEY();
+    const shown = state._pfShownIds || new Set();
+    const still = new Set((state.incomingQueue || []).map(it => String(it && it.id)));
+    const stored = JSON.parse(localStorage.getItem(key) || '[]') || [];
+    const keep = stored.filter(it => { const id = String(it && it.id); return !shown.has(id) || still.has(id); });
+    if (keep.length) localStorage.setItem(key, JSON.stringify(keep)); else localStorage.removeItem(key);
+  } catch (e) {}
+}
+let _ppDraftPending = [], _ppDraftBusy = false;
+async function _ppItemsToDrafts(items) {
+  _ppDraftPending.push(...items);
+  if (_ppDraftBusy) return; // the running pass picks these up (it re-checks after every save)
+  _ppDraftBusy = true;
+  try {
+    while (_ppDraftPending.length) {
+      const batch = _ppDraftPending.splice(0);
+      const added = {}, sched = {};
+      let n = 0;
+      for (const item of batch) {
+        const pids = ((item.selectedPlatforms && item.selectedPlatforms.length) ? item.selectedPlatforms : [item.platform || 'pinterest']).filter(pid => PLATFORMS[pid]);
+        const fmt = item.format || 'png';
+        for (const pid of pids) {
+          if (item.scheduleOpen) { await _ppScheduleItemOpen(item, pid, fmt, sched); continue; }
+          const existing = state.drafts[pid] || [];
+          if (existing.length >= MAX_DRAFTS) continue;
+          const imageName = _ppItemName(item, pid, fmt);
+          if (existing.some(d => d.imageName === imageName && d.fromBrandCreator)) continue; // already in Drafts
+          const imageData = await getImageForPlatform(item, pid, fmt);
+          const dims = PLATFORM_DIMENSIONS[pid];
+          const draft = {
+            id: Date.now() + Math.random(), platform: pid, imageFull: imageData, imageThumb: imageData, imageName,
+            notes: [item.header, item.content].filter(Boolean).join(' · ').substring(0, 200),
+            srcHeader: item.header || '', srcContent: item.content || '', srcCaptions: item.captions || null, srcPinTitle: item.pinTitle || '',
+            srcLink: item.link || '', srcAlt: item.altText || '', srcLinks: item.links || null, srcAlts: item.alts || null,
+            uploadedAt: new Date().toISOString(), fromBrandCreator: true, templateName: item.templateName || '', format: fmt,
+            dimensions: dims ? dims.w + 'x' + dims.h : '',
+          };
+          state.drafts = { ...state.drafts, [pid]: [...(state.drafts[pid] || []), draft] };
+          _pcShowPlatform(pid);
+          added[pid] = (added[pid] || 0) + 1;
+          n++;
+        }
+      }
+      if (n) {
+        await saveDrafts(state.drafts); // anything that arrives meanwhile is handled by the next loop
+        render();
+        showToast('🗂 ' + n + ' draft' + (n === 1 ? '' : 's') + ' saved from the Post Creator: ' + Object.keys(added).map(p => PLATFORMS[p].name + (added[p] > 1 ? ' ×' + added[p] : '')).join(', ') + '.');
+      }
+      if (Object.keys(sched).length) {
+        await savePosts(state.posts);
+        render();
+        const k = Object.keys(sched)[0], total = Object.values(sched).reduce((a, d) => a + d.length, 0);
+        showToast('📅 Scheduled ' + total + ' post' + (total === 1 ? '' : 's') + ' on open days: ' + Object.keys(sched).map(p => PLATFORMS[p].name + ' ' + sched[p].map(_ppNiceDay).join(', ')).join(' · ') + ' at ' + _ppClock(ppDefaultTime(k)) + '.');
+      }
+    }
+  } catch (e) {
+    console.error('Save to Drafts failed', e);
+    showToast('Couldn\u2019t save those posts to Drafts: ' + (e.message || e), 'error');
+  } finally {
+    _ppDraftBusy = false;
+  }
+}
+// ── Open days: days with nothing scheduled on a platform ──
+function _ppDayStr(d) { const p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
+function _ppBusyDays(pid, excludeId) {
+  const m = new Map();
+  (state.posts[pid] || []).forEach(p => { if (p.scheduledDate && String(p.id) !== String(excludeId)) m.set(p.scheduledDate, (m.get(p.scheduledDate) || 0) + 1); });
+  return m;
+}
+const _ppNiceDay = (s) => new Date(s + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+// Where each of n posts goes, from startDate; 'open' skips days that already have a post (and today if the time has passed)
+function _ppBatchPlan(pid, n, startDate, spacing, time) {
+  const out = [];
+  if (!startDate) return out;
+  const cur = new Date(startDate + 'T00:00:00');
+  if (spacing === 'open') {
+    const busy = _ppBusyDays(pid), today = _ppDayStr(new Date());
+    const late = time && new Date(today + 'T' + time) <= new Date();
+    for (let g = 0; out.length < n && g < 800; g++) {
+      const s = _ppDayStr(cur);
+      if (!busy.get(s) && !(s === today && late)) out.push(s);
+      cur.setDate(cur.getDate() + 1);
+    }
+    return out;
+  }
+  const step = { daily: 1, every2: 2, weekly: 7 }[spacing] || 1;
+  for (let i = 0; i < n; i++) {
+    out.push(_ppDayStr(cur));
+    if (spacing === 'mwf') { do { cur.setDate(cur.getDate() + 1); } while (![1, 3, 5].includes(cur.getDay())); }
+    else cur.setDate(cur.getDate() + step);
+  }
+  return out;
+}
+// Composer: the platform's next open days, one click to pick
+function _ppOpenDaysInner(form) {
+  const pid = state.activePlatform, pl = PLATFORMS[pid];
+  if (!pl) return '';
+  const busy = _ppBusyDays(pid, state.editingPostId);
+  const days = [], cur = new Date(); cur.setHours(0, 0, 0, 0);
+  for (let g = 0; days.length < 6 && g < 400; g++) { const s = _ppDayStr(cur); if (!busy.get(s)) days.push(s); cur.setDate(cur.getDate() + 1); }
+  const sel = form && form.scheduledDate, n = sel ? busy.get(sel) || 0 : 0;
+  return `<div class="od-row"><span class="od-label">Open days on ${escapeHtml(pl.name)}:</span>` +
+    days.map(s => `<button type="button" class="od-chip${s === sel ? ' on' : ''}" onclick="ppPickOpenDay('${s}')" title="Nothing is scheduled on ${escapeHtml(pl.name)} this day">${_ppNiceDay(s)}</button>`).join('') + `</div>` +
+    (n ? `<div class="od-warn">⚠ ${_ppNiceDay(sel)} already has ${n} ${escapeHtml(pl.name)} post${n > 1 ? 's' : ''}. Pick an open day to spread things out.</div>` : '') + _ppDefTimeLine();
+}
+function _ppOpenDaysHtml(form) { return `<div class="open-days" id="open-days-box">${_ppOpenDaysInner(form)}</div>`; }
+function _ppRefreshOpenDays() { const b = document.getElementById('open-days-box'); if (b) b.innerHTML = _ppOpenDaysInner(state.form); }
+function ppPickOpenDay(s) {
+  const el = document.getElementById('f-date');
+  if (el) el.value = s;
+  updateFormField('scheduledDate', s);
+}
+const _ppOrigUpdateField = updateFormField;
+updateFormField = function (field, value) {
+  const r = _ppOrigUpdateField.apply(this, arguments);
+  if (field === 'scheduledDate') setTimeout(_ppRefreshOpenDays, 0);
+  return r;
+};
+// Batch Schedule: open days by default, and a preview of where each post goes
+const _ppOrigOpenBatch = openBatchScheduleModal;
+openBatchScheduleModal = function () {
+  const r = _ppOrigOpenBatch.apply(this, arguments);
+  state.batchScheduleForm = { ...(state.batchScheduleForm || {}), spacing: 'open', time: ppDefaultTime(state.activePlatform), startDate: (state.batchScheduleForm && state.batchScheduleForm.startDate) || _ppDayStr(new Date()) };
+  render();
+  return r;
+};
+// Changing the start date, time or frequency redraws the window so the preview is always current
+const _ppOrigBatchForm = updateBatchScheduleForm;
+updateBatchScheduleForm = function (key, val) {
+  const r = _ppOrigBatchForm.apply(this, arguments);
+  render();
+  return r;
+};
+function _ppBatchPreview() {
+  const pid = state.activePlatform;
+  const drafts = (state.drafts[pid] || []).filter(d => state.selectedDrafts.has(String(d.id)));
+  const f = state.batchScheduleForm || {};
+  if (!drafts.length || !f.startDate) return '';
+  const plan = _ppBatchPlan(pid, drafts.length, f.startDate, f.spacing, f.time);
+  const busy = _ppBusyDays(pid);
+  return `<div class="bp-prev"><div class="bp-head">Where they'll go</div>` + drafts.map((d, i) => {
+    const n = busy.get(plan[i]) || 0;
+    return `<div class="bp-row"><img src="${escapeHtml(d.imageThumb || d.imageFull || '')}" alt=""/><span class="bp-name">${escapeHtml(String(d.srcHeader || d.notes || d.imageName || 'Draft').slice(0, 42))}</span>` +
+      `<span class="bp-date${n ? ' busy' : ''}">${plan[i] ? _ppNiceDay(plan[i]) : '—'}${n ? ' · ⚠ already has ' + n : ''}</span></div>`;
+  }).join('') + `</div>`;
+}
+(function _odStyles() {
+  const st = document.createElement('style');
+  st.textContent = `.open-days { margin-top: 6px; }
+    .od-row { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+    .od-label { font-size: 11px; color: var(--text-muted, #8b8fa8); margin-right: 2px; }
+    .od-chip { border: 1px solid rgba(34,197,94,.5); background: rgba(34,197,94,.08); color: var(--text-primary, #eef); border-radius: 999px; padding: 3px 9px; font: 600 11px system-ui, sans-serif; cursor: pointer; }
+    .od-chip:hover, .od-chip.on { background: rgba(34,197,94,.25); border-color: #22c55e; }
+    .od-chip:focus-visible { outline: 2px solid #22c55e; outline-offset: 2px; }
+    .od-warn { margin-top: 6px; font-size: 11.5px; color: #f5a623; }
+    .bp-prev { border: 1px solid var(--border, rgba(255,255,255,.1)); border-radius: 8px; padding: 8px 10px; max-height: 240px; overflow-y: auto; }
+    .bp-head { font-size: 11px; font-weight: 700; color: var(--text-muted, #8b8fa8); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+    .bp-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; }
+    .bp-row img { width: 28px; height: 28px; object-fit: cover; border-radius: 5px; flex-shrink: 0; }
+    .bp-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bp-date { font-weight: 700; white-space: nowrap; color: #22c55e; }
+    .bp-date.busy { color: #f5a623; }`;
+  document.head.appendChild(st);
+})();
+// ── Default posting time per platform ──
+const PP_TIME_DEFAULTS = { pinterest: '20:00', instagram: '11:00', facebook: '09:00', linkedin: '08:00', google: '10:00', twitter: '12:00', bluesky: '12:00', tiktok: '19:00', youtube: '15:00', shopify: '10:00', tumblr: '19:00', kofi: '18:00', patreon: '18:00' };
+function _ppTimesStore() { try { return JSON.parse(localStorage.getItem(wsKey('pp_default_times')) || '{}') || {}; } catch (e) { return {}; } }
+function ppDefaultTime(pid) { const t = _ppTimesStore()[pid]; return /^\d\d:\d\d$/.test(t || '') ? t : (PP_TIME_DEFAULTS[pid] || '09:00'); }
+function ppSetDefaultTime(pid, t) { if (!/^\d\d:\d\d$/.test(t || '')) return; const m = _ppTimesStore(); m[pid] = t; try { localStorage.setItem(wsKey('pp_default_times'), JSON.stringify(m)); } catch (e) {} }
+function _ppClock(t) { const [h, m] = String(t || '09:00').split(':').map(Number); const d = new Date(); d.setHours(h || 0, m || 0, 0, 0); return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); }
+function _ppTimeOpts(cur) { const l = ['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00']; if (cur && !l.includes(cur)) l.push(cur); return l.sort(); }
+function _ppDefTimeLine() {
+  const pid = state.activePlatform, pl = PLATFORMS[pid];
+  if (!pl) return '';
+  return `<div class="od-def">Default time on ${escapeHtml(pl.name)}: <b>${_ppClock(ppDefaultTime(pid))}</b> <button type="button" class="od-mk" onclick="ppMakeDefaultTime()">☆ Make the time above my default</button></div>`;
+}
+function ppMakeDefaultTime() {
+  const h = document.getElementById('f-hour'), m = document.getElementById('f-min');
+  let t = state.form.scheduledTime || '09:00';
+  if (h && m) t = String(parseInt(h.value, 10) || 0).padStart(2, '0') + ':' + String(parseInt(m.value, 10) || 0).padStart(2, '0');
+  ppSetDefaultTime(state.activePlatform, t);
+  _ppRefreshOpenDays();
+  showToast(PLATFORMS[state.activePlatform].name + '\u2019s default time is now ' + _ppClock(t) + '.');
+}
+// New posts start at the platform's default time
+function _ppApplyDefaultTime() {
+  if (!state.showComposer || state.editingPostId) return;
+  const pid = state.activePlatform, def = (defaultForm(pid) || {}).scheduledTime;
+  if (!state.form.scheduledTime || state.form.scheduledTime === def) { state.form = { ...state.form, scheduledTime: ppDefaultTime(pid) }; render(); }
+}
+const _ppOrigOpenComposer = openComposer;
+openComposer = function () { const r = _ppOrigOpenComposer.apply(this, arguments); _ppApplyDefaultTime(); return r; };
+const _ppOrigFromDraft = scheduleFromDraft;
+scheduleFromDraft = function () { const r = _ppOrigFromDraft.apply(this, arguments); _ppApplyDefaultTime(); return r; };
+const _ppOrigIncomingNow = scheduleIncomingNow;
+scheduleIncomingNow = async function () { const r = await _ppOrigIncomingNow.apply(this, arguments); _ppApplyDefaultTime(); return r; };
+// Posts from the Pinterest batch's "Schedule on open days": straight onto the platform's next open day
+async function _ppScheduleItemOpen(item, pid, fmt, sched) {
+  const imageName = _ppItemName(item, pid, fmt);
+  const posts = state.posts[pid] || [];
+  if (posts.some(p => p.imageName === imageName && p.fromBrandCreator)) return; // already scheduled
+  if (posts.length >= MAX_POSTS) return;
+  const imageData = await getImageForPlatform(item, pid, fmt);
+  const time = ppDefaultTime(pid);
+  const day = _ppBatchPlan(pid, 1, _ppDayStr(new Date()), 'open', time)[0];
+  const src = { platform: pid, srcHeader: item.header || '', srcContent: item.content || '', srcCaptions: item.captions || null, srcPinTitle: item.pinTitle || '',
+    srcLink: item.link || '', srcAlt: item.altText || '', srcLinks: item.links || null, srcAlts: item.alts || null, notes: [item.header, item.content].filter(Boolean).join(' · ').substring(0, 200) };
+  const post = { ...defaultForm(pid), ..._draftTextFields(src), id: Date.now() + Math.random(), platform: pid, image: imageData, imageOriginal: imageData, imageName,
+    scheduledDate: day, scheduledTime: time, publishStatus: 'scheduled', fromBrandCreator: true };
+  state.posts = { ...state.posts, [pid]: sortPosts([...(state.posts[pid] || []), post]) };
+  _pcShowPlatform(pid);
+  (sched[pid] = sched[pid] || []).push(day);
+}
+// ── Plan my week: every platform's drafts onto its open days ──
+function ppOpenPlanWeek() { state.planWeek = Object.assign({ days: 7, skip: {} }, state.planWeek || {}); state.showPlanWeek = true; render(); }
+function ppClosePlanWeek() { state.showPlanWeek = false; render(); }
+function ppPlanToggle(pid, on) { state.planWeek.skip = Object.assign({}, state.planWeek.skip, { [pid]: !on }); render(); }
+function _ppVisible() { return Object.values(PLATFORMS).filter(pl => !(state.hiddenPlatforms && state.hiddenPlatforms.has(pl.id))); }
+function _ppPlanRows() {
+  const pw = state.planWeek || { days: 7, skip: {} };
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const end = new Date(today); end.setDate(end.getDate() + pw.days - 1);
+  const endStr = _ppDayStr(end), rows = [];
+  _ppVisible().forEach(pl => {
+    const drafts = state.drafts[pl.id] || [];
+    if (!drafts.length) return;
+    const time = ppDefaultTime(pl.id);
+    const plan = _ppBatchPlan(pl.id, drafts.length, _ppDayStr(today), 'open', time).map(d => (d && d <= endStr ? d : null));
+    rows.push({ pl, drafts, plan, time, on: !(pw.skip || {})[pl.id] });
+  });
+  return rows;
+}
+function renderPlanWeek() {
+  const pw = state.planWeek || { days: 7 };
+  const rows = _ppPlanRows();
+  const total = rows.reduce((n, r) => n + (r.on ? r.plan.filter(Boolean).length : 0), 0);
+  const sec = (r) => {
+    const fit = r.plan.filter(Boolean).length;
+    return `<div class="pw-sec" style="border-left-color:${r.pl.color}">
+      <div class="pw-head"><label class="pw-on"><input type="checkbox" ${r.on ? 'checked' : ''} onchange="ppPlanToggle('${r.pl.id}', this.checked)"/> <span style="color:${r.pl.color};font-weight:700">${escapeHtml(r.pl.name)}</span></label>
+        <span class="pw-count">${fit} of ${r.drafts.length} draft${r.drafts.length === 1 ? '' : 's'} fit</span>
+        <label class="pw-tl">at <select aria-label="${escapeHtml(r.pl.name)} posting time" onchange="ppSetDefaultTime('${r.pl.id}', this.value); render()">${_ppTimeOpts(r.time).map(t => `<option value="${t}" ${t === r.time ? 'selected' : ''}>${_ppClock(t)}</option>`).join('')}</select></label></div>
+      ${r.on ? `<div class="pw-list">${r.drafts.map((d, i) => `<div class="bp-row"><img src="${escapeHtml(d.imageThumb || d.imageFull || '')}" alt=""/><span class="bp-name">${escapeHtml(String(d.srcHeader || d.notes || d.imageName || 'Draft').slice(0, 48))}</span><span class="bp-date${r.plan[i] ? '' : ' none'}">${r.plan[i] ? _ppNiceDay(r.plan[i]) : 'stays in Drafts'}</span></div>`).join('')}</div>` : ''}
+    </div>`;
+  };
+  return `<div class="overlay" onclick="ppClosePlanWeek()" style="z-index:820"><div class="modal" style="max-width:640px" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="pw-title">
+    <div class="modal-header"><h2 class="modal-title" id="pw-title">🗓 Plan my week</h2><button class="close-btn" onclick="ppClosePlanWeek()" aria-label="Close">×</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;max-height:68vh;overflow-y:auto">
+      <div class="pw-top"><span>Each platform's drafts go onto its open days, one post per day, at that platform's time.</span>
+        <label>Plan <select aria-label="How far ahead to plan" onchange="state.planWeek.days = +this.value; render()">${[7, 14, 30].map(d => `<option value="${d}" ${d === pw.days ? 'selected' : ''}>${d === 7 ? 'this week (7 days)' : 'the next ' + d + ' days'}</option>`).join('')}</select></label></div>
+      ${rows.length ? rows.map(sec).join('') : `<div class="pw-empty">No drafts to plan yet. Send posts to Drafts from the Post Creator (🗂 Save to Drafts), then come back here.</div>`}
+    </div>
+    <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;padding:16px 20px">
+      <button class="btn-cancel" onclick="ppClosePlanWeek()">Cancel</button>
+      <button class="btn-save" ${total ? '' : 'disabled'} onclick="ppConfirmPlanWeek()">Schedule ${total} post${total === 1 ? '' : 's'} →</button>
+    </div></div></div>`;
+}
+function ppConfirmPlanWeek() {
+  const rows = _ppPlanRows().filter(r => r.on);
+  const posts = { ...state.posts }, drafts = { ...state.drafts }, per = {};
+  let n = 0;
+  rows.forEach(r => {
+    const done = new Set();
+    r.drafts.forEach((d, i) => {
+      const day = r.plan[i];
+      if (!day || (posts[r.pl.id] || []).length >= MAX_POSTS) return;
+      const post = { ...defaultForm(r.pl.id), ...(d.formSnapshot ? d.formSnapshot : _draftTextFields(d)), id: Date.now() + Math.random(), publishStatus: 'scheduled', platform: r.pl.id,
+        image: d.imageFull, imageOriginal: d.imageFull, imageName: d.imageName, isVideo: d.isVideo, isGif: d.isGif, tags: d.tags || [], scheduledDate: day, scheduledTime: r.time };
+      posts[r.pl.id] = sortPosts([...(posts[r.pl.id] || []), post]);
+      done.add(String(d.id)); n++; per[r.pl.id] = (per[r.pl.id] || 0) + 1;
+    });
+    drafts[r.pl.id] = (drafts[r.pl.id] || []).filter(d => !done.has(String(d.id)));
+  });
+  state.posts = posts; state.drafts = drafts;
+  savePosts(state.posts); saveDrafts(state.drafts);
+  state.showPlanWeek = false;
+  render();
+  showToast(n ? '🗓 Scheduled ' + n + ' post' + (n === 1 ? '' : 's') + ': ' + Object.keys(per).map(p => PLATFORMS[p].name + ' ×' + per[p]).join(', ') + '.' : 'Nothing to schedule.');
+}
+// ── Today: everything due today, across every platform ──
+function ppOpenToday() { state.showToday = true; render(); }
+function ppCloseToday() { state.showToday = false; render(); }
+function _ppTodayItems() {
+  const today = _ppDayStr(new Date()), items = [];
+  _ppVisible().forEach(pl => (state.posts[pl.id] || []).forEach(p => { if (p.scheduledDate === today) items.push({ p, pl }); }));
+  return items.sort((a, b) => String(a.p.scheduledTime || '').localeCompare(String(b.p.scheduledTime || '')));
+}
+function renderTodayList() {
+  const items = _ppTodayItems(), today = _ppDayStr(new Date());
+  const done = items.filter(x => x.p.publishStatus === 'published').length;
+  let missed = 0;
+  _ppVisible().forEach(pl => (state.posts[pl.id] || []).forEach(p => { if (p.scheduledDate && p.scheduledDate < today && p.publishStatus !== 'published') missed++; }));
+  const row = ({ p, pl }) => {
+    const posted = p.publishStatus === 'published';
+    return `<div class="td-row${posted ? ' done' : ''}" style="border-left-color:${pl.color}">
+      <span class="td-check" aria-label="${posted ? 'Posted' : 'Not posted yet'}">${posted ? '✓' : ''}</span>
+      <span class="td-time">${_ppClock(p.scheduledTime || '00:00')}</span>
+      <span class="td-plat" style="color:${pl.color}">${escapeHtml(pl.name)}</span>
+      ${p.image ? `<img src="${escapeHtml(p.image)}" alt=""/>` : ''}
+      <span class="td-text">${escapeHtml(((typeof getPostSummary === 'function' ? getPostSummary(p) : '') || p.title || p.caption || '').slice(0, 80))}</span>
+      <span class="td-act">${posted ? '<span class="td-ok">Posted</span>' : `<button class="btn-edit pp-post-btn" style="background:${pl.color}" onclick="postOnPlatform('${p.id}','${pl.id}',this)">Post ↗</button><button class="btn-edit" onclick="updatePostStatus('${p.id}','${pl.id}','published')">✓ Posted</button>`}
+        <button class="btn-edit" style="background:var(--bg-elevated)" onclick="ppCloseToday(); switchPlatform('${pl.id}'); openComposer('${p.id}')">Edit</button></span>
+    </div>`;
+  };
+  return `<div class="overlay" onclick="ppCloseToday()" style="z-index:820"><div class="modal" style="max-width:720px" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="td-title">
+    <div class="modal-header"><h2 class="modal-title" id="td-title">📋 Today · ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</h2><button class="close-btn" onclick="ppCloseToday()" aria-label="Close">×</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:8px;max-height:68vh;overflow-y:auto">
+      ${items.length ? `<div class="td-prog"><div class="td-bar"><div style="width:${Math.round(done / items.length * 100)}%"></div></div><span>${done} of ${items.length} posted</span></div>` + items.map(row).join('') : `<div class="pw-empty">Nothing is scheduled for today.</div>`}
+      ${missed ? `<div class="td-miss">⚠ ${missed} post${missed === 1 ? '' : 's'} from earlier days ${missed === 1 ? 'is' : 'are'} still not marked posted.</div>` : ''}
+    </div></div></div>`;
+}
+// ── Gap alerts: platforms with nothing coming up for 3+ days this week ──
+function _ppGaps() {
+  const out = [], start = new Date(); start.setHours(0, 0, 0, 0);
+  const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return _ppDayStr(d); });
+  const wd = (s) => new Date(s + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+  _ppVisible().forEach(pl => {
+    const posts = state.posts[pl.id] || [];
+    if (!posts.length && !(state.drafts[pl.id] || []).length) return; // platforms you don't use stay quiet
+    const busy = new Set(posts.filter(p => p.scheduledDate).map(p => p.scheduledDate));
+    let best = null, cur = null;
+    days.forEach(d => {
+      if (busy.has(d)) { cur = null; return; }
+      cur = cur ? { s: cur.s, e: d, n: cur.n + 1 } : { s: d, e: d, n: 1 };
+      if (!best || cur.n > best.n) best = cur;
+    });
+    if (best && best.n >= 3) out.push({ pl, n: best.n, label: best.n === 7 ? 'in the next 7 days' : wd(best.s) + '–' + wd(best.e) });
+  });
+  return out;
+}
+function renderComingUp() {
+  const today = _ppDayStr(new Date());
+  let pending = 0, drafts = 0;
+  _ppVisible().forEach(pl => {
+    (state.posts[pl.id] || []).forEach(p => { if (p.scheduledDate === today && p.publishStatus !== 'published') pending++; });
+    drafts += (state.drafts[pl.id] || []).length;
+  });
+  const gaps = _ppGaps();
+  return `<div class="cu-card">
+    <button type="button" class="cu-btn" onclick="ppOpenToday()">📋 Today${pending ? ` <span class="cu-n">${pending}</span>` : ''}</button>
+    <button type="button" class="cu-btn" onclick="ppOpenPlanWeek()">🗓 Plan my week${drafts ? ` <span class="cu-n alt">${drafts}</span>` : ''}</button>
+    ${gaps.length ? `<div class="cu-gaps" role="note"><div class="cu-gh">⚠ Gaps coming up</div>${gaps.slice(0, 5).map(g => `<button type="button" class="cu-gap" onclick="ppOpenPlanWeek()" title="Fill it from your drafts"><b style="color:${g.pl.color}">${escapeHtml(g.pl.name)}</b>: nothing ${g.label}</button>`).join('')}</div>` : ''}
+  </div>`;
+}
+(function _cuStyles() {
+  const st = document.createElement('style');
+  st.textContent = `.cu-card { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .cu-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border, rgba(255,255,255,.12)); background: var(--bg-elevated, #1a1733); color: var(--text-primary, #eef); font: 600 12px system-ui, sans-serif; cursor: pointer; }
+    .cu-btn:hover { border-color: #f5a623; }
+    .cu-n { background: #f5a623; color: #1a1206; border-radius: 999px; padding: 0 7px; font-size: 10.5px; font-weight: 800; }
+    .cu-n.alt { background: #22c55e; color: #fff; }
+    .cu-gaps { border: 1px solid rgba(245,166,35,.4); background: rgba(245,166,35,.06); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; }
+    .cu-gh { font-size: 10px; font-weight: 800; color: #f5a623; text-transform: uppercase; letter-spacing: .05em; }
+    .cu-gap { background: none; border: none; text-align: left; color: var(--text-primary, #eef); font: 500 11px system-ui, sans-serif; padding: 1px 0; cursor: pointer; }
+    .cu-gap:hover { text-decoration: underline; }
+    .cu-btn:focus-visible, .cu-gap:focus-visible, .od-mk:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
+    .od-def { margin-top: 6px; font-size: 11.5px; color: var(--text-muted, #8b8fa8); }
+    .od-mk { background: none; border: none; color: #f5a623; font: 700 11px system-ui, sans-serif; cursor: pointer; padding: 0 0 0 4px; }
+    .pw-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted, #8b8fa8); }
+    .pw-sec { border: 1px solid var(--border, rgba(255,255,255,.1)); border-left: 3px solid; border-radius: 9px; padding: 8px 10px; }
+    .pw-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; margin-bottom: 4px; }
+    .pw-on { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+    .pw-count { color: var(--text-muted, #8b8fa8); font-size: 11.5px; flex: 1; }
+    .pw-tl { font-size: 11.5px; color: var(--text-muted, #8b8fa8); }
+    .pw-empty { font-size: 12.5px; color: var(--text-muted, #8b8fa8); padding: 8px 2px; }
+    .bp-date.none { color: var(--text-muted, #8b8fa8); font-weight: 500; }
+    .td-prog { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-muted, #8b8fa8); margin-bottom: 4px; }
+    .td-bar { flex: 1; height: 6px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
+    .td-bar div { height: 100%; background: #22c55e; }
+    .td-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-left: 3px solid; border-radius: 8px; background: rgba(255,255,255,.03); font-size: 12px; }
+    .td-row.done { opacity: .6; }
+    .td-row.done .td-text { text-decoration: line-through; }
+    .td-check { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border, rgba(255,255,255,.25)); display: inline-flex; align-items: center; justify-content: center; color: #22c55e; font-weight: 800; flex-shrink: 0; }
+    .td-row.done .td-check { border-color: #22c55e; }
+    .td-time { font-weight: 700; min-width: 62px; }
+    .td-plat { font-weight: 700; min-width: 70px; }
+    .td-row img { width: 30px; height: 30px; object-fit: cover; border-radius: 5px; }
+    .td-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .td-act { display: flex; gap: 5px; flex-shrink: 0; }
+    .td-ok { color: #22c55e; font-weight: 700; font-size: 11.5px; align-self: center; }
+    .td-miss { font-size: 12px; color: #f5a623; margin-top: 4px; }`;
   document.head.appendChild(st);
 })();
 function _draftTextFields(draft) {
