@@ -3284,6 +3284,9 @@
       #sched-frame { width: 100%; height: 100%; border: none; display: block; }
       body.show-sched #sched-view { visibility: visible; pointer-events: auto; }
       body.show-sched #sidebar, body.show-sched #main { visibility: hidden; }
+      /* Pinterest Batch tab: the batch workspace fills the page under the tab bar */
+      body.show-pins #pb-overlay { top: 48px; z-index: 850; background: var(--main); padding: 14px 18px; align-items: stretch; }
+      body.show-pins #pb-overlay .pb-modal { width: 100%; max-width: none; height: 100%; max-height: none; box-shadow: none; }
       #sched-loader {
         position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
         background: var(--main); color: var(--muted); font-size: 13px; transition: opacity 0.3s;
@@ -3321,6 +3324,7 @@
       <div id="studio-brand">PostPilot Studio</div>
       <div id="studio-tabs" role="tablist" aria-label="Tools">
         <button type="button" class="studio-tab" role="tab" id="stab-creator" aria-selected="true" aria-controls="main" tabindex="0" onclick="studioTab('creator')">🎨 Post Creator</button>
+        <button type="button" class="studio-tab" role="tab" id="stab-pinbatch" aria-selected="false" aria-controls="pb-overlay" tabindex="-1" onclick="studioTab('pinbatch')" title="Make a batch of 10 Pinterest pins">📌 Pinterest Batch</button>
         <button type="button" class="studio-tab" role="tab" id="stab-scheduler" aria-selected="false" aria-controls="sched-view" tabindex="-1" onclick="studioTab('scheduler')">📅 Scheduler <span class="studio-dot" aria-hidden="true"></span></button>
       </div>
     </div>
@@ -3343,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v74</span>
+              <span class="sb-version">v77</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -8894,6 +8898,7 @@ Your message, caption, or call to action goes right here.</textarea
         if (slot && US_SLOTS.some((s) => s.key === slot)) _us.active = slot;
         _us.opener = document.activeElement;
         document.getElementById("us-overlay").style.display = "flex";
+        usTab("search");
         _usRenderKeyRow();
         _usRenderSlots();
         if (!_us.results.length) _usRenderResults(0);
@@ -8902,6 +8907,24 @@ Your message, caption, or call to action goes right here.</textarea
           const f = _usKey() && !_us.editKey ? document.getElementById("us-q") : document.getElementById("us-key");
           if (f) f.focus();
         }, 30);
+      }
+      // Unsplash search, or your recently used photos
+      function usTab(which) {
+        const ov = document.getElementById("us-overlay");
+        if (!ov) return;
+        const rec = which === "recent";
+        _us.tab = rec ? "recent" : "search";
+        ov.classList.toggle("us-on-recent", rec);
+        [["us-tab-search", !rec], ["us-tab-recent", rec]].forEach(([id, on]) => {
+          const b = document.getElementById(id);
+          if (b) {
+            b.classList.toggle("on", on);
+            b.setAttribute("aria-selected", on ? "true" : "false");
+          }
+        });
+        const t = document.getElementById("us-title");
+        if (t) t.textContent = rec ? "Recently used photos" : "Free photos from Unsplash";
+        if (rec && typeof _ruRender === "function") _ruRender();
       }
       function usClose() {
         window._usPickHook = null;
@@ -8927,6 +8950,10 @@ Your message, caption, or call to action goes right here.</textarea
               <div class="us-title" id="us-title">Free photos from Unsplash</div>
               <button type="button" class="us-x" aria-label="Close" onclick="usClose()">✕</button>
             </div>
+            <div class="us-tabs" role="tablist" aria-label="Where photos come from">
+              <button type="button" role="tab" class="us-tab on" id="us-tab-search" aria-selected="true" onclick="usTab('search')">🔍 Unsplash</button>
+              <button type="button" role="tab" class="us-tab" id="us-tab-recent" aria-selected="false" onclick="usTab('recent')">🕘 Recently used</button>
+            </div>
             <div class="us-keyrow" id="us-keyrow"></div>
             <div class="us-search">
               <input id="us-q" type="search" placeholder="Search photos, e.g. happy family new home" aria-label="Search Unsplash photos" />
@@ -8941,6 +8968,7 @@ Your message, caption, or call to action goes right here.</textarea
             <div class="us-slots" id="us-slots" role="radiogroup" aria-label="Slot to fill"></div>
             <div class="us-hint">Click a photo to put it in the highlighted slot; the highlight then moves to the next empty slot. Or use a photo's own <b>BG</b> · <b>2</b> · <b>3</b> buttons.</div>
             <div class="us-results" id="us-results"></div>
+            <div class="us-results" id="us-recent" role="tabpanel" aria-label="Recently used photos"></div>
             <div class="us-foot">
               <button type="button" class="us-more" id="us-more" hidden>Load more</button>
               <span class="us-status" id="us-status" role="status" aria-live="polite"></span>
@@ -10982,11 +11010,11 @@ Post:
       const PB_N = 10;
       const PB_KEY = "bpc_pinbatch_v1";
       const _pb = { slots: [], sel: 0, busy: false, loaded: false, opener: null };
-      const _pbEmpty = () => ({ header: "", body: "", pinTitle: "", desc: "", link: "", alt: "", photo: "", credit: null, layout: null });
+      const _pbEmpty = () => ({ header: "", body: "", pinTitle: "", desc: "", link: "", alt: "", topic: "", photo: "", credit: null, layout: null });
       const _pbFilled = (s) => !!(s && (s.header || s.body || s.pinTitle || s.desc));
 
       // ── Your main post is never touched: a pin borrows the post settings only while it is drawn ──
-      const PB_SWAP = ["header", "content", "bg", "bgX", "bgY", "bgScale", "bgFit", "bgInfo", "bg2", "bg3", "fnPrefix", "platform"];
+      const PB_SWAP = ["header", "content", "bg", "bgX", "bgY", "bgScale", "bgFit", "bgInfo", "bg2", "bg3", "fnPrefix", "platform", "photoCredits"];
       let _pbBusy = 0;
       const _pbDeferred = { save: false, sync: false, render: false };
       function _pbApply(slot) {
@@ -11004,6 +11032,12 @@ Post:
         }
         S.bg2 = "";
         S.bg3 = "";
+        // the pin's photo credit travels with its photo (for Recently used)
+        S.photoCredits = Object.assign({}, saved.photoCredits || {});
+        if (slot.photo) {
+          if (slot.credit) S.photoCredits.bg = slot.credit;
+          else delete S.photoCredits.bg;
+        }
         S.fnPrefix = headerToPrefix(slot.header || "") || saved.fnPrefix || "BrandPost";
         S.platform = "pinterest";
         return saved;
@@ -11193,10 +11227,93 @@ Post:
         );
       }
 
+      // ── A whole batch document: "Pin 1 of 10: topic" sections, each with Image text, Link, title, Description, Alt text ──
+      const PB_LABELS = [
+        ["imageText", /^\s*[*_]*\s*image\s*text\s*[*_]*\s*:\s*(.*)$/i],
+        ["link", /^\s*[*_]*\s*(?:link|url|destination(?:\s*link)?)\s*[*_]*\s*:\s*(.*)$/i],
+        ["pinTitle", /^\s*[*_]*\s*(?:pin\s*)?(?:\(\s*seo\s*rich\s*\)\s*)?title\s*[*_]*\s*:\s*(.*)$/i],
+        ["desc", /^\s*[*_]*\s*description\s*[*_]*\s*:\s*(.*)$/i],
+        ["alt", /^\s*[*_]*\s*(?:seo\s*summary[^:]*alt\s*text|alt\s*text)\s*[*_]*\s*:\s*(.*)$/i],
+      ];
+      function _pbParsePins(text) {
+        const pins = [];
+        let cur = null,
+          field = null;
+        String(text || "")
+          .replace(/\r/g, "")
+          .split("\n")
+          .forEach((raw) => {
+            const h = /^\s*[#>*_\s]*pin\s*(\d+)\s*(?:of\s*\d+)?\s*[*_]*\s*[:\-–—]\s*(.*)$/i.exec(raw);
+            if (h) {
+              cur = { num: +h[1], topic: h[2].replace(/\s*\((?:title|description|\d)[^)]*\)\s*$/i, "").replace(/[*_]+/g, "").trim(), imageText: "", link: "", pinTitle: "", desc: "", alt: "" };
+              pins.push(cur);
+              field = null;
+              return;
+            }
+            if (!cur) return;
+            if (/^\s*[─━—\-_=]{3,}\s*$/.test(raw)) {
+              field = null;
+              return;
+            }
+            for (const [k, re] of PB_LABELS) {
+              const m = re.exec(raw);
+              if (m) {
+                cur[k] = m[1].trim();
+                field = k;
+                return;
+              }
+            }
+            if (field && raw.trim()) cur[field] += (cur[field] ? (field === "desc" ? "\n" : " ") : "") + raw.trim(); // a field that runs onto more lines
+          });
+        return pins.filter((p) => p.imageText || p.pinTitle || p.desc);
+      }
+      // The image text goes on the pin: first sentence as the headline, the rest underneath
+      function _pbSplitImageText(t) {
+        t = String(t || "").trim();
+        const m = /^(.+?[.?!])\s+(\S[\s\S]*)$/.exec(t);
+        return m && m[1].split(/\s+/).length >= 3 ? [m[1], m[2]] : [t, ""];
+      }
+      function pbFillPins(pins, fallbackIndex) {
+        const nums = pins.map((p) => p.num);
+        const max = Math.max(...nums),
+          min = Math.min(...nums);
+        let n = 0;
+        const skipped = [];
+        pins.forEach((p) => {
+          let i;
+          if (pins.length === 1) i = p.num >= 1 && p.num <= PB_N ? p.num - 1 : fallbackIndex;
+          else i = max <= PB_N ? p.num - 1 : p.num - min; // a second batch ("Pin 11 of 20") starts at pin 1
+          if (!(i >= 0 && i < PB_N)) return skipped.push(p.num);
+          const s = _pb.slots[i];
+          const [head, body] = _pbSplitImageText(p.imageText || p.pinTitle);
+          if (_pbFilled(s) && s.header !== head && s.photo) {
+            // new content for a pin that had a photo for something else: start its photo fresh
+            s.photo = "";
+            s.credit = null;
+            _pbPut(i, null);
+          }
+          Object.assign(s, { header: head, body, pinTitle: p.pinTitle, desc: p.desc, link: p.link, alt: p.alt, topic: p.topic });
+          n++;
+        });
+        _pbSave();
+        _pbRenderAll();
+        const next = _pb.slots.findIndex((x) => !_pbFilled(x));
+        _pb.sel = next >= 0 ? next : 0;
+        _pbMarkSel();
+        const needPhotos = _pb.slots.some((x) => _pbFilled(x) && !x.photo);
+        _pbStatus(
+          (n === 1 ? `Pin ${pins[0].num <= PB_N ? pins[0].num : fallbackIndex + 1} filled.` : `Filled ${n} pins from your batch.`) +
+            (skipped.length ? ` Pins ${skipped.join(", ")} didn't fit in the 10 slots.` : "") +
+            (needPhotos ? ` Next: <b>🔍 Find photos for all pins</b>, or pick a photo on any pin.` : ""),
+        );
+      }
+
       // ── Content: paste your usual post content into a pin ──
       function pbFill(i, text) {
         const s = _pb.slots[i];
         if (!s || !text || !text.trim()) return;
+        const pins = _pbParsePins(text);
+        if (pins.length) return pbFillPins(pins, i);
         let b = {};
         try {
           b = pcParseBrief(text) || {};
@@ -11236,7 +11353,7 @@ Post:
       }
       function pbPasteNext() {
         const n = _pb.slots.findIndex((x) => !_pbFilled(x));
-        pbPasteInto(n >= 0 ? n : _pb.sel);
+        pbPasteInto(n >= 0 ? n : _pb.sel); // a whole batch document fills every pin by its number
       }
       function pbClearSlot(i) {
         if (_pb.busy) return;
@@ -11287,6 +11404,59 @@ Post:
         };
         inp.click();
       }
+      // What to search Unsplash for: the pin's audience (from its topic line) plus the season it mentions
+      function _pbQuery(s) {
+        const parts = String(s.topic || "").split("|").map((x) => x.trim()).filter(Boolean);
+        let q = parts.length >= 2 ? parts[1] : parts[0] || "";
+        const text = [s.header, s.body, s.pinTitle, s.desc].join(" ");
+        let season = (/\b(halloween|trick[\s-]or[\s-]treat\w*|trunk[\s-]or[\s-]treat\w*|christmas|thanksgiving|hanukkah|new year|valentine'?s?|easter|fourth of july|back to school|summer|winter|spring|fall|autumn)\b/i.exec(text) || [])[1];
+        if (season && /treat/i.test(season)) season = "halloween";
+        if (!q) q = String(s.pinTitle || s.header || "").replace(/[^\w\s'-]/g, " ").split(/\s+/).filter(Boolean).slice(0, 4).join(" ");
+        return (q + (season && !new RegExp(season, "i").test(q) ? " " + season.toLowerCase() : "")).trim();
+      }
+      async function pbFindPhotos() {
+        if (_pb.busy) return;
+        const key = typeof _usKey === "function" ? _usKey() : "";
+        if (!key) {
+          _pbStatus("Add your free Unsplash key first (the Unsplash window shows where), then try again.");
+          return pbUnsplash(_pb.sel);
+        }
+        const list = _pb.slots.map((s, i) => [s, i]).filter(([s]) => _pbFilled(s) && !s.photo);
+        if (!list.length) return _pbStatus("Every pin with content already has a photo. 🔍 on a pin picks a different one.");
+        _pb.busy = true;
+        _pbLock(true);
+        const used = new Set(_pb.slots.map((s) => s.credit && s.credit.id).filter(Boolean));
+        let n = 0,
+          problem = "";
+        try {
+          for (const [s, i] of list) {
+            const q = _pbQuery(s);
+            _pbStatus(`Finding a photo for pin ${i + 1} (“${escHtml(q)}”)… ${n + 1} of ${list.length}`);
+            const res = await fetch("https://api.unsplash.com/search/photos?query=" + encodeURIComponent(q) + "&per_page=15&content_filter=high&orientation=portrait", { headers: { Authorization: "Client-ID " + key, "Accept-Version": "v1" } });
+            if (!res.ok) {
+              problem = res.status === 403 || res.status === 429 ? "Unsplash's hourly limit was reached; try again later for the rest." : "Unsplash didn't answer (" + res.status + ").";
+              break;
+            }
+            const data = await res.json();
+            const pick = (data.results || []).find((ph) => ph && ph.urls && !used.has(ph.id));
+            if (!pick) continue;
+            used.add(pick.id);
+            if (pick.links && pick.links.download_location) fetch(pick.links.download_location, { headers: { Authorization: "Client-ID " + key, "Accept-Version": "v1" } }).catch(() => {});
+            s.photo = pick.urls.raw + (pick.urls.raw.includes("?") ? "&" : "?") + "w=2400&h=2400&fit=max&q=82&fm=jpg";
+            s.credit = { id: pick.id, name: (pick.user && pick.user.name) || "", link: (pick.user && pick.user.links && pick.user.links.html) || "", page: (pick.links && pick.links.html) || "" };
+            _pbPut(i, null);
+            _pbRenderCard(i);
+            n++;
+          }
+        } catch (e) {
+          problem = "Couldn't reach Unsplash: " + escHtml(e.message || String(e));
+        } finally {
+          _pbSave();
+          _pb.busy = false;
+          _pbLock(false);
+        }
+        _pbStatus(`Found ${n} photo${n === 1 ? "" : "s"}, a different one for each pin. 🔍 on a pin picks another. ${problem}`);
+      }
       function pbUnsplash(i) {
         window._usPickHook = (src, credit) => {
           _pb.slots[i].photo = src;
@@ -11299,6 +11469,27 @@ Post:
         usOpen("bg");
         const us = document.getElementById("us-overlay");
         if (us) document.body.appendChild(us); // above the batch window
+        // Start with a search for this pin's topic
+        const q = document.getElementById("us-q");
+        const want = _pbQuery(_pb.slots[i]);
+        if (q && want) {
+          q.value = want;
+          if (_usKey()) usSearch(false);
+        }
+      }
+      function pbRecent(i) {
+        window._usPickHook = (src, credit) => {
+          _pb.slots[i].photo = src;
+          _pb.slots[i].credit = credit || null;
+          _pbPut(i, /^data:/.test(src) ? src : null);
+          _pbSave();
+          _pbRenderCard(i);
+          _pbStatus(`Pin ${i + 1} now uses a photo you've used before.`);
+        };
+        usOpen("bg");
+        const us = document.getElementById("us-overlay");
+        if (us) document.body.appendChild(us); // above the batch window
+        usTab("recent");
       }
       function pbUseMain(i) {
         _pb.slots[i].photo = "";
@@ -11326,9 +11517,10 @@ Post:
         const src = s.photo ? (s.credit ? `📷 ${escHtml(s.credit.name || "Unsplash")}` : "Own photo") : "Main photo";
         const v = (f) => escHtml(s[f] || "");
         return `<div class="pb-slot${i === _pb.sel ? " sel" : ""}${_pbFilled(s) ? " filled" : ""}" data-i="${i}">
-            <div class="pb-top"><span class="pb-num">${i + 1}</span><span class="pb-lay" title="${lay}">${lay}</span><button type="button" class="pb-mini" onclick="pbPickLayout(${i})" title="Choose another layout for pin ${i + 1}" aria-label="Choose another layout for pin ${i + 1}">⟳</button></div>
+            <div class="pb-top"><span class="pb-num">${i + 1}</span><span class="pb-topic" title="${escHtml(s.topic || "")}">${escHtml((s.topic || "").replace(/\s*\|\s*/g, " · ")) || "Pin " + (i + 1)}</span></div>
             <div class="pb-thumb${_pbFilled(s) ? "" : " empty"}" id="pb-thumb-${i}" onclick="pbSelect(${i})"></div>
-            <div class="pb-photo"><button type="button" class="pb-mini" onclick="pbUpload(${i})">🖼 Photo</button><button type="button" class="pb-mini" onclick="pbUnsplash(${i})">🔍 Unsplash</button>${s.photo ? `<button type="button" class="pb-mini" onclick="pbUseMain(${i})" title="Use your main photo instead" aria-label="Use your main photo for pin ${i + 1}">↺</button>` : ""}<span class="pb-src">${src}</span></div>
+            <div class="pb-photo"><button type="button" class="pb-mini" onclick="pbPickLayout(${i})" title="Choose another layout for pin ${i + 1}">🎨 Layout</button><button type="button" class="pb-mini" onclick="pbUpload(${i})" title="Upload a photo for pin ${i + 1}">🖼 Upload</button><button type="button" class="pb-mini" onclick="pbUnsplash(${i})" title="Find a photo for pin ${i + 1} on Unsplash">🔍 Unsplash</button><button type="button" class="pb-mini" onclick="pbRecent(${i})" title="Use a photo from your recently used photos">🕘 Recent</button>${s.photo ? `<button type="button" class="pb-mini" onclick="pbUseMain(${i})" title="Use your main photo instead" aria-label="Use your main photo for pin ${i + 1}">↺</button>` : ""}</div>
+            <div class="pb-meta"><span class="pb-lay" title="${lay}">Layout ${lay}</span><span class="pb-src">${src}</span></div>
             <input class="pb-in" data-f="header" value="${v("header")}" placeholder="Headline on the pin" aria-label="Pin ${i + 1} headline"/>
             <input class="pb-in" data-f="pinTitle" value="${v("pinTitle")}" placeholder="Pin title" aria-label="Pin ${i + 1} title"/>
             <details class="pb-more"><summary>Image text, description, link, alt</summary>
@@ -11393,8 +11585,8 @@ Post:
         ov.setAttribute("aria-labelledby", "pb-title");
         ov.innerHTML = `<div class="us-modal pb-modal">
             <div class="us-head"><div><div class="us-title" id="pb-title">📌 Pinterest batch</div>
-              <div class="mix-sub">10 pins, each with its own content, photo and layout. Copy a post's content and press <b>Ctrl+V</b>: it fills the selected pin, then moves to the next empty one.</div></div>
-              <div class="mix-head-actions"><button type="button" class="us-more" onclick="pbPasteNext()">📋 Paste into next pin</button><button type="button" class="us-more" onclick="pbNewLayouts()">⟳ New layouts</button><button type="button" class="us-more" onclick="pbClearAll()">Clear all</button><button type="button" class="us-x" aria-label="Close" onclick="pbClose()">✕</button></div></div>
+              <div class="mix-sub">Paste your whole 10-pin document with <b>Ctrl+V</b> and every pin fills at once (or paste one post at a time). Each pin has its own layout and photo.</div></div>
+              <div class="mix-head-actions"><button type="button" class="us-more" onclick="pbPasteNext()">📋 Paste</button><button type="button" class="us-more" onclick="pbFindPhotos()">🔍 Find photos for all pins</button><button type="button" class="us-more" onclick="pbNewLayouts()">⟳ New layouts</button><button type="button" class="us-more" onclick="pbClearAll()">Clear all</button><button type="button" class="us-x" aria-label="Close the Pinterest batch" title="Back to the Post Creator" onclick="pbClose()">✕</button></div></div>
             <div class="pb-grid" id="pb-grid"></div>
             <div class="pb-foot"><span class="pb-status" id="pb-status" role="status" aria-live="polite"></span>
               <button type="button" class="pb-act" onclick="pbSaveAll()">⬇ Save all as images</button>
@@ -11404,13 +11596,14 @@ Post:
         document.body.appendChild(ov);
         ov.addEventListener("mousedown", (e) => (ov._down = e.target === ov));
         ov.addEventListener("click", (e) => {
-          if (e.target === ov && ov._down) pbClose();
+          // As its own tab it's a page, not a popup: clicking the empty edge doesn't close it
+          if (e.target === ov && ov._down && !document.body.classList.contains("show-pins")) pbClose();
           ov._down = false;
           const card = e.target.closest && e.target.closest(".pb-slot");
           if (card && !e.target.closest("button,input,textarea,summary,details")) pbSelect(+card.dataset.i);
         });
         ov.addEventListener("keydown", (e) => {
-          if (e.key === "Escape" && !_pb.busy) {
+          if (e.key === "Escape" && !_pb.busy && !document.body.classList.contains("show-pins")) {
             e.stopPropagation();
             pbClose();
           }
@@ -11465,11 +11658,20 @@ Post:
         document.body.appendChild(ov);
         _pb.opener = document.activeElement;
         ov.style.display = "flex";
+        // In PostPilot Studio the batch is its own tab: 📌 Pinterest Batch
+        if (typeof studioMarkTab === "function") {
+          document.body.classList.remove("show-sched");
+          document.body.classList.add("show-pins");
+          studioMarkTab("pinbatch");
+        }
         await _pbLoad();
         _pbRenderAll();
         await _pbEnsureLayouts();
         _pbRenderAll();
         setTimeout(() => {
+          // Opened from the top tab bar: keyboard focus stays on the tab (arrow keys keep moving between tabs)
+          const a = document.activeElement;
+          if (a && a.closest && a.closest("#studio-tabs")) return;
           const t = document.querySelector("#pb-overlay .us-more");
           if (t) t.focus();
         }, 30);
@@ -11478,6 +11680,10 @@ Post:
         if (_pb.busy) return;
         const ov = document.getElementById("pb-overlay");
         if (ov) ov.style.display = "none";
+        if (document.body.classList.contains("show-pins")) {
+          document.body.classList.remove("show-pins");
+          if (typeof studioMarkTab === "function") studioMarkTab("creator");
+        }
         if (_pb.opener && _pb.opener.focus) _pb.opener.focus();
       }
 
@@ -11589,7 +11795,9 @@ Post:
           .pb-slot.filled .pb-num { background: #22c55e; color: #fff; }
           .pb-top { display: flex; align-items: center; gap: 6px; font-size: 10.5px; }
           .pb-num { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--border); font-weight: 800; font-size: 11px; flex-shrink: 0; }
-          .pb-lay { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+          .pb-topic { flex: 1; min-width: 0; font-weight: 700; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .pb-meta { display: flex; flex-direction: column; gap: 1px; font-size: 10px; color: var(--muted); min-width: 0; }
+          .pb-lay { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
           .pb-thumb { position: relative; width: 150px; margin: 0 auto; overflow: hidden; border-radius: 6px; background: #111; box-shadow: 0 2px 10px rgba(0,0,0,.45); cursor: pointer; }
           .pb-thumb.empty::after { content: "Paste content"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10,8,24,.72); color: #fff; font: 700 12px "DM Sans", sans-serif; }
           .pb-photo, .pb-acts { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
@@ -11607,6 +11815,243 @@ Post:
           .pb-working .pb-grid { opacity: .6; pointer-events: none; }
           .pb-mini:focus-visible, .pb-act:focus-visible, .pb-in:focus-visible { outline: 2px solid var(--hi); outline-offset: 1px; }
           button:disabled.pb-act, button:disabled.pb-mini { opacity: .5; cursor: progress; }
+        `;
+        document.head.appendChild(st);
+      })();
+      // ══════════════════════════════════════════
+      // RECENTLY USED PHOTOS (v76)
+      // Every photo that goes into an image you create (saved, opened, sent, scheduled) is remembered,
+      // so you can use it again in another post: a Pinterest photo in an Instagram post, for example.
+      // Kept in the browser's database (photos can be large), newest first, up to 60.
+      // ══════════════════════════════════════════
+      const RU_MAX = 60;
+      let _ruCache = null;
+      let _ruShown = [];
+      function _ruDb() {
+        return new Promise((res, rej) => {
+          const r = indexedDB.open("bpc_photolib", 1);
+          r.onupgradeneeded = () => r.result.createObjectStore("photos", { keyPath: "id" });
+          r.onsuccess = () => res(r.result);
+          r.onerror = () => rej(r.error);
+        });
+      }
+      async function _ruWrite(fn) {
+        const db = await _ruDb();
+        await new Promise((res, rej) => {
+          const tx = db.transaction("photos", "readwrite");
+          fn(tx.objectStore("photos"));
+          tx.oncomplete = res;
+          tx.onerror = () => rej(tx.error);
+        });
+      }
+      async function ruList() {
+        if (_ruCache) return _ruCache;
+        try {
+          const db = await _ruDb();
+          const all = await new Promise((res) => {
+            const rq = db.transaction("photos").objectStore("photos").getAll();
+            rq.onsuccess = () => res(rq.result || []);
+            rq.onerror = () => res([]);
+          });
+          _ruCache = all.sort((a, b) => b.usedAt - a.usedAt);
+        } catch (e) {
+          _ruCache = [];
+        }
+        return _ruCache;
+      }
+      // One entry per photo: web photos by address (any size of the same Unsplash photo counts once), uploads by content
+      function _ruId(src) {
+        if (/^https?:/i.test(src)) return "u:" + src.split("?")[0];
+        // a fingerprint of the whole photo (two independent hashes), so different photos never merge
+        let a = 0x811c9dc5,
+          b = 5381;
+        for (let i = 0; i < src.length; i++) {
+          const c = src.charCodeAt(i);
+          a = Math.imul(a ^ c, 16777619);
+          b = (Math.imul(b, 33) + c) | 0;
+        }
+        return "d:" + src.length + ":" + (a >>> 0).toString(36) + (b >>> 0).toString(36);
+      }
+      function _ruThumb(src) {
+        if (/images\.unsplash\.com/i.test(src)) return Promise.resolve(src.replace(/([?&])w=\d+/, "$1w=400").replace(/([?&])h=\d+/, "$1h=400"));
+        if (/^https?:/i.test(src)) return Promise.resolve(src);
+        return new Promise((res) => {
+          const im = new Image();
+          im.onload = () => {
+            const k = Math.min(1, 320 / Math.max(im.naturalWidth, im.naturalHeight));
+            const c = document.createElement("canvas");
+            c.width = Math.max(1, Math.round(im.naturalWidth * k));
+            c.height = Math.max(1, Math.round(im.naturalHeight * k));
+            c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+            try {
+              res(c.toDataURL("image/jpeg", 0.8));
+            } catch (e) {
+              res("");
+            }
+          };
+          im.onerror = () => res("");
+          im.src = src;
+        });
+      }
+      const _ruPending = new Map();
+      function ruAdd(src, credit, platform) {
+        if (!src || typeof src !== "string" || !/^(data:image|https?:)/i.test(src)) return Promise.resolve();
+        const id = _ruId(src);
+        const prev = _ruPending.get(id) || Promise.resolve();
+        const job = prev.then(async () => {
+          const list = await ruList();
+          const now = Date.now();
+          let rec = list.find((r) => r.id === id);
+          if (rec) {
+            rec.usedAt = now;
+            rec.uses = (rec.uses || 0) + 1;
+            if (platform) rec.platforms = [platform, ...(rec.platforms || []).filter((p) => p !== platform)].slice(0, 6);
+            if (credit && !rec.credit) rec.credit = credit;
+          } else {
+            rec = { id, src, thumb: (await _ruThumb(src)) || src, credit: credit || null, platforms: platform ? [platform] : [], usedAt: now, uses: 1 };
+            list.unshift(rec);
+          }
+          list.sort((a, b) => b.usedAt - a.usedAt);
+          const drop = list.splice(RU_MAX);
+          try {
+            await _ruWrite((st) => {
+              st.put(rec);
+              drop.forEach((d) => st.delete(d.id));
+            });
+          } catch (e) {}
+          _ruRenderIfOpen();
+        });
+        const tail = job.catch(() => {});
+        _ruPending.set(id, tail);
+        tail.then(() => {
+          if (_ruPending.get(id) === tail) _ruPending.delete(id);
+        });
+        return job;
+      }
+      async function ruRemove(i) {
+        const rec = _ruShown[i];
+        if (!rec) return;
+        _ruCache = (await ruList()).filter((r) => r.id !== rec.id);
+        try {
+          await _ruWrite((st) => st.delete(rec.id));
+        } catch (e) {}
+        _ruRender();
+      }
+      // Remember the photos in every image you create
+      function _ruCapture(platform) {
+        try {
+          const cr = S.photoCredits || {};
+          ["bg", "bg2", "bg3"].forEach((k) => {
+            if (S[k]) ruAdd(S[k], cr[k] || null, platform || S.platform);
+          });
+        } catch (e) {}
+      }
+      const _ruOrig = { renderToCanvasForPlatform, renderToCanvasHiDpi, renderToCanvasNoGif };
+      renderToCanvasForPlatform = function (idx, pid) {
+        _ruCapture(pid);
+        return _ruOrig.renderToCanvasForPlatform.apply(this, arguments);
+      };
+      renderToCanvasHiDpi = function () {
+        _ruCapture(S.platform);
+        return _ruOrig.renderToCanvasHiDpi.apply(this, arguments);
+      };
+      renderToCanvasNoGif = function () {
+        _ruCapture(S.platform);
+        return _ruOrig.renderToCanvasNoGif.apply(this, arguments);
+      };
+
+      // ── The "Recently used" tab of the photo picker ──
+      function _ruWhen(t) {
+        const d = new Date(t),
+          today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const days = Math.round((today - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+        return days <= 0 ? "today" : days === 1 ? "yesterday" : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      }
+      function _ruRenderIfOpen() {
+        const ov = document.getElementById("us-overlay");
+        if (ov && ov.style.display === "flex" && ov.classList.contains("us-on-recent")) _ruRender();
+      }
+      async function _ruRender() {
+        const box = document.getElementById("us-recent");
+        if (!box) return;
+        const list = await ruList();
+        _ruShown = list.slice();
+        if (!list.length) {
+          box.innerHTML = `<div class="us-empty">Photos you use in images you create show up here, so you can use them again in another post.</div>`;
+          return;
+        }
+        box.innerHTML = list
+          .map((r, i) => {
+            const where = (r.platforms || []).map((p) => (typeof _mpName === "function" ? _mpName(p) : p)).join(", ");
+            const by = r.credit && r.credit.name ? ` · 📷 ${escHtml(r.credit.name)}` : "";
+            return `<div class="us-item ru-item" data-i="${i}">
+                <button type="button" class="us-pick" title="Click to put it in ${escHtml(_usLabel(_us.active))}" onclick="ruUse(${i}, _us.active, true)"><img src="${escHtml(r.thumb || r.src)}" alt="" loading="lazy" /></button>
+                <div class="us-item-slots" role="group" aria-label="Put this photo in a slot">${US_SLOTS.map((s) => `<button type="button" title="Put in ${s.label}" aria-label="Put in ${s.label}" onclick="ruUse(${i}, '${s.key}', false)">${s.short}</button>`).join("")}</div>
+                <div class="us-by ru-by">${escHtml(where || "Used")} · ${_ruWhen(r.usedAt)}${by}</div>
+                <button type="button" class="ru-x" title="Remove from recently used" aria-label="Remove from recently used" onclick="ruRemove(${i})">✕</button>
+              </div>`;
+          })
+          .join("");
+      }
+      function ruUse(i, slot, advance) {
+        const rec = _ruShown[i];
+        if (!rec) return;
+        // Picking for a Pinterest batch pin: hand the photo over
+        if (window._usPickHook) {
+          const hook = window._usPickHook;
+          window._usPickHook = null;
+          usClose();
+          hook(rec.src, rec.credit || null);
+          return;
+        }
+        if (!US_SLOTS.some((s) => s.key === slot)) return;
+        S[slot] = rec.src;
+        const cr = Object.assign({}, S.photoCredits || {});
+        if (rec.credit) cr[slot] = rec.credit;
+        else delete cr[slot];
+        S.photoCredits = cr;
+        _smartPending[slot] = true;
+        S[slot + "Info"] = null;
+        updateZonePreview(slot);
+        render();
+        debounceSave();
+        _usStatus(`Added to <b>${_usLabel(slot)}</b> from your recently used photos.`);
+        if (advance) {
+          const at = US_SLOTS.findIndex((s) => s.key === slot);
+          const order = US_SLOTS.slice(at + 1).concat(US_SLOTS.slice(0, at));
+          const next = order.find((s) => !S[s.key]) || order[0];
+          if (next) _us.active = next.key;
+        }
+        _usRenderSlots();
+      }
+      function ruOpen(slot) {
+        usOpen(slot || "bg");
+        usTab("recent");
+      }
+      // A "Recently used photos" button under the Unsplash one in the Background image section
+      function _ruButton() {
+        const us = document.querySelector(`.us-open-btn[onclick="usOpen('bg')"]`);
+        if (!us || document.querySelector(".ru-open-btn")) return;
+        us.insertAdjacentHTML("afterend", `<button type="button" class="us-open-btn ru-open-btn" onclick="ruOpen('bg')" title="Photos from images you've created, to use again">🕘 Recently used photos</button>`);
+      }
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", _ruButton);
+      else _ruButton();
+      (function _ruStyles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          .ru-open-btn { margin-top: 6px; }
+          .us-tabs { display: flex; gap: 6px; padding: 0 18px 10px; }
+          .us-tab { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 999px; padding: 5px 12px; font: 600 12px "DM Sans", sans-serif; cursor: pointer; }
+          .us-tab.on { background: var(--hi); border-color: var(--hi); color: #1a1206; }
+          .us-tab:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+          .us-on-recent .us-search, .us-on-recent #us-keyrow, .us-on-recent #us-results, .us-on-recent #us-more, .us-on-recent .us-brand { display: none !important; }
+          #us-recent { display: none; }
+          .us-on-recent #us-recent { display: grid; }
+          .ru-item { position: relative; }
+          .ru-by { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .ru-x { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; cursor: pointer; opacity: 0; transition: opacity .15s; }
+          .ru-item:hover .ru-x, .ru-x:focus-visible { opacity: 1; }
         `;
         document.head.appendChild(st);
       })();
@@ -33563,25 +34008,40 @@ function renderAnalyticsView() {
         document.getElementById("sched-frame").srcdoc = _schedulerSource();
       }
 
-      function studioTab(id) {
-        const sched = id === "scheduler";
-        document.body.classList.toggle("show-sched", sched);
+      // Highlights a tab (the Pinterest batch uses this when it opens or closes itself)
+      function studioMarkTab(id) {
         document.querySelectorAll(".studio-tab").forEach((t) => {
           const on = t.id === "stab-" + id;
           t.setAttribute("aria-selected", on ? "true" : "false");
           t.tabIndex = on ? 0 : -1;
         });
+      }
+      function studioTab(id) {
+        const pinsOpen = document.body.classList.contains("show-pins");
+        // Pins still saving or scheduling: stay put until they're done
+        if (pinsOpen && id !== "pinbatch" && typeof _pb !== "undefined" && _pb.busy) {
+          studioMarkTab("pinbatch");
+          if (typeof _pbStatus === "function") _pbStatus("Finishing your pins… you can switch as soon as they're done.");
+          return;
+        }
+        if (pinsOpen && id !== "pinbatch" && typeof pbClose === "function") pbClose();
+        const sched = id === "scheduler";
+        document.body.classList.toggle("show-sched", sched);
+        studioMarkTab(id);
         if (sched) document.getElementById("stab-scheduler").classList.remove("has-new");
         document.getElementById("sched-loader").classList.toggle("hidden", _schedLoaded);
+        if (id === "pinbatch" && typeof pbOpen === "function") pbOpen();
         // Coming back to the creator: re-render so thumbnails and rankings are measured fresh
-        if (!sched && _studioStarted) debouncedRender();
+        if (id === "creator" && _studioStarted) debouncedRender();
       }
 
       // Arrow keys move between tabs
       document.getElementById("studio-tabs").addEventListener("keydown", (e) => {
         if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
         e.preventDefault();
-        const next = document.body.classList.contains("show-sched") ? "creator" : "scheduler";
+        const order = ["creator", "pinbatch", "scheduler"];
+        const cur = document.body.classList.contains("show-sched") ? "scheduler" : document.body.classList.contains("show-pins") ? "pinbatch" : "creator";
+        const next = order[(order.indexOf(cur) + (e.key === "ArrowRight" ? 1 : order.length - 1)) % order.length];
         studioTab(next);
         document.getElementById("stab-" + next).focus();
       });
