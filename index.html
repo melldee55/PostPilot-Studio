@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v77</span>
+              <span class="sb-version">v78</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -10257,6 +10257,8 @@ Post:
           if (el && el.closest && el.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']")) return;
           if (document.getElementById("studio-gate") && !document.body.classList.contains("unlocked")) return;
           const text = e.clipboardData && e.clipboardData.getData("text/plain");
+          // A 10-pin Pinterest document belongs to the Pinterest batch, which picks it up next
+          if (typeof _pbParsePins === "function" && text && _pbParsePins(text).length >= 2) return;
           if (!pcLooksLikeBrief(text)) return;
           e.preventDefault();
           e.stopImmediatePropagation();
@@ -11235,6 +11237,7 @@ Post:
         ["desc", /^\s*[*_]*\s*description\s*[*_]*\s*:\s*(.*)$/i],
         ["alt", /^\s*[*_]*\s*(?:seo\s*summary[^:]*alt\s*text|alt\s*text)\s*[*_]*\s*:\s*(.*)$/i],
       ];
+      const _pbClean = (v) => String(v || "").replace(/^[*_\s]+/, "").replace(/[*_\s]+$/, "").trim();
       function _pbParsePins(text) {
         const pins = [];
         let cur = null,
@@ -11258,12 +11261,12 @@ Post:
             for (const [k, re] of PB_LABELS) {
               const m = re.exec(raw);
               if (m) {
-                cur[k] = m[1].trim();
+                cur[k] = _pbClean(m[1]);
                 field = k;
                 return;
               }
             }
-            if (field && raw.trim()) cur[field] += (cur[field] ? (field === "desc" ? "\n" : " ") : "") + raw.trim(); // a field that runs onto more lines
+            if (field && _pbClean(raw)) cur[field] += (cur[field] ? (field === "desc" ? "\n" : " ") : "") + _pbClean(raw); // a field that runs onto more lines
           });
         return pins.filter((p) => p.imageText || p.pinTitle || p.desc);
       }
@@ -11301,12 +11304,33 @@ Post:
         _pb.sel = next >= 0 ? next : 0;
         _pbMarkSel();
         const needPhotos = _pb.slots.some((x) => _pbFilled(x) && !x.photo);
+        const hasKey = typeof _usKey === "function" && !!_usKey();
         _pbStatus(
-          (n === 1 ? `Pin ${pins[0].num <= PB_N ? pins[0].num : fallbackIndex + 1} filled.` : `Filled ${n} pins from your batch.`) +
+          (n === 1 ? `Pin ${pins[0].num <= PB_N ? pins[0].num : fallbackIndex + 1} filled.` : `✓ Filled ${n} pins from your document.`) +
             (skipped.length ? ` Pins ${skipped.join(", ")} didn't fit in the 10 slots.` : "") +
-            (needPhotos ? ` Next: <b>🔍 Find photos for all pins</b>, or pick a photo on any pin.` : ""),
+            (needPhotos && !hasKey ? ` To fill their photos automatically, add your free Unsplash key once: <button type="button" class="pb-mini" onclick="pbSetupPhotos()">🔍 Set up photos</button>` : ""),
         );
+        // Photos fill in by themselves: a different Unsplash photo for each pin
+        if (needPhotos && hasKey) setTimeout(() => pbFindPhotos(), 60);
       }
+      // No Unsplash key yet: open the key box; once it's saved, the photos fill in
+      function pbSetupPhotos() {
+        window._pbWantsPhotos = true;
+        usOpen("bg");
+        const us = document.getElementById("us-overlay");
+        if (us) document.body.appendChild(us);
+      }
+      const _pbOrigSaveKey = typeof usSaveKey === "function" ? usSaveKey : null;
+      if (_pbOrigSaveKey)
+        usSaveKey = function () {
+          const r = _pbOrigSaveKey.apply(this, arguments);
+          if (window._pbWantsPhotos && _usKey()) {
+            window._pbWantsPhotos = false;
+            usClose();
+            setTimeout(() => pbFindPhotos(), 60);
+          }
+          return r;
+        };
 
       // ── Content: paste your usual post content into a pin ──
       function pbFill(i, text) {
@@ -11455,7 +11479,8 @@ Post:
           _pb.busy = false;
           _pbLock(false);
         }
-        _pbStatus(`Found ${n} photo${n === 1 ? "" : "s"}, a different one for each pin. 🔍 on a pin picks another. ${problem}`);
+        const ready = _pb.slots.filter(_pbFilled).length;
+        _pbStatus(problem ? `Found ${n} photo${n === 1 ? "" : "s"}. ${problem}` : `✓ All ${ready} pins are ready (a different photo for each). Look them over, then <b>📅 Schedule on open days</b>.`);
       }
       function pbUnsplash(i) {
         window._usPickHook = (src, credit) => {
@@ -11587,6 +11612,7 @@ Post:
             <div class="us-head"><div><div class="us-title" id="pb-title">📌 Pinterest batch</div>
               <div class="mix-sub">Paste your whole 10-pin document with <b>Ctrl+V</b> and every pin fills at once (or paste one post at a time). Each pin has its own layout and photo.</div></div>
               <div class="mix-head-actions"><button type="button" class="us-more" onclick="pbPasteNext()">📋 Paste</button><button type="button" class="us-more" onclick="pbFindPhotos()">🔍 Find photos for all pins</button><button type="button" class="us-more" onclick="pbNewLayouts()">⟳ New layouts</button><button type="button" class="us-more" onclick="pbClearAll()">Clear all</button><button type="button" class="us-x" aria-label="Close the Pinterest batch" title="Back to the Post Creator" onclick="pbClose()">✕</button></div></div>
+            <div class="pb-drop"><textarea id="pb-paste" rows="2" placeholder="📋 Paste your 10-pin document here (Ctrl+V). All 10 pins fill at once, with their photos." aria-label="Paste your 10-pin Pinterest document"></textarea></div>
             <div class="pb-grid" id="pb-grid"></div>
             <div class="pb-foot"><span class="pb-status" id="pb-status" role="status" aria-live="polite"></span>
               <button type="button" class="pb-act" onclick="pbSaveAll()">⬇ Save all as images</button>
@@ -11615,6 +11641,15 @@ Post:
             _pbMarkSel();
           }
         });
+        // Text dropped or pasted into the paste box some other way still fills the pins
+        ov.addEventListener("input", (e) => {
+          if (e.target.id !== "pb-paste") return;
+          const v = e.target.value;
+          if (_pbParsePins(v).length || /\n/.test(v)) {
+            e.target.value = "";
+            pbFill(_pb.sel, v);
+          }
+        });
         const redraw = {};
         ov.addEventListener("input", (e) => {
           const f = e.target.dataset && e.target.dataset.f;
@@ -11637,22 +11672,50 @@ Post:
       }
       // Ctrl+V anywhere in the batch window (outside the text boxes) fills the selected pin.
       // Listens on the window, which hears a paste before any page handler, so your main post never gets it.
+      // A pin document ("Pin 1 of 10: …") always goes to the batch, wherever you paste it: the paste box,
+      // a pin's text box, the batch page, or anywhere in the Post Creator (the batch opens and fills).
       window.addEventListener(
         "paste",
         (e) => {
-          const ov = document.getElementById("pb-overlay");
-          if (!ov || ov.style.display !== "flex") return;
+          const text = (e.clipboardData && e.clipboardData.getData("text/plain")) || "";
           const us = document.getElementById("us-overlay");
           if (us && us.style.display === "flex") return;
-          if (e.target && e.target.closest && e.target.closest("input,textarea,[contenteditable]")) return;
-          const text = e.clipboardData && e.clipboardData.getData("text/plain");
+          const ov = document.getElementById("pb-overlay");
+          const open = !!(ov && ov.style.display === "flex");
+          const pins = text.trim() ? _pbParsePins(text) : [];
+          const t = e.target;
+          const inBox = !!(t && t.id === "pb-paste");
+          const inField = !!(t && t.closest && t.closest("input,textarea,select,[contenteditable]"));
+          if (!open) {
+            if (pins.length < 2) return;
+            if (document.getElementById("studio-gate") && !document.body.classList.contains("unlocked")) return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            pbOpen(text);
+            return;
+          }
+          if (inField && !inBox && !pins.length) return; // an ordinary paste into a pin's text box
           e.preventDefault();
           e.stopImmediatePropagation();
-          if (text && text.trim()) pbFill(_pb.sel, text);
+          if (inBox) t.value = "";
+          if (text.trim()) pbFill(_pb.sel, text);
         },
         true,
       );
-      async function pbOpen() {
+      // The "Paste post content" window hands a pin document to the batch too
+      const _pbOrigBriefFill = typeof pcFillFromBrief === "function" ? pcFillFromBrief : null;
+      if (_pbOrigBriefFill)
+        pcFillFromBrief = function () {
+          const el = document.getElementById("pc-brief-text");
+          const txt = el ? el.value : "";
+          if (_pbParsePins(txt).length >= 2) {
+            if (typeof pcCloseBrief === "function") pcCloseBrief();
+            pbOpen(txt);
+            return;
+          }
+          return _pbOrigBriefFill.apply(this, arguments);
+        };
+      async function pbOpen(pasted) {
         _pbBuild();
         const ov = document.getElementById("pb-overlay");
         document.body.appendChild(ov);
@@ -11666,13 +11729,14 @@ Post:
         }
         await _pbLoad();
         _pbRenderAll();
+        if (typeof pasted === "string" && pasted.trim()) pbFill(_pb.sel, pasted);
         await _pbEnsureLayouts();
         _pbRenderAll();
         setTimeout(() => {
           // Opened from the top tab bar: keyboard focus stays on the tab (arrow keys keep moving between tabs)
           const a = document.activeElement;
           if (a && a.closest && a.closest("#studio-tabs")) return;
-          const t = document.querySelector("#pb-overlay .us-more");
+          const t = document.getElementById("pb-paste");
           if (t) t.focus();
         }, 30);
       }
@@ -11789,6 +11853,10 @@ Post:
         st.textContent = `
           .pb-open-btn { margin-top: 6px; }
           .pb-modal { width: min(1180px, 100%); }
+          .pb-drop { padding: 0 18px 10px; }
+          #pb-paste { width: 100%; box-sizing: border-box; min-height: 52px; resize: vertical; border: 2px dashed var(--hi); border-radius: 10px; background: var(--hi-dim, rgba(245,166,35,.08)); color: var(--text); padding: 12px 14px; font: 600 13px "DM Sans", sans-serif; }
+          #pb-paste::placeholder { color: var(--text); opacity: .85; }
+          #pb-paste:focus { outline: none; box-shadow: 0 0 0 3px var(--hi-dim, rgba(245,166,35,.25)); }
           .pb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 12px; padding: 4px 18px 12px; overflow-y: auto; }
           .pb-slot { display: flex; flex-direction: column; gap: 5px; padding: 8px; border: 2px solid var(--border); border-radius: 10px; background: var(--panel); min-width: 0; }
           .pb-slot.sel { border-color: var(--hi); box-shadow: 0 0 0 2px var(--hi-dim); }
