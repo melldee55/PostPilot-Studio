@@ -3324,7 +3324,7 @@
       <div id="studio-brand">PostPilot Studio</div>
       <div id="studio-tabs" role="tablist" aria-label="Tools">
         <button type="button" class="studio-tab" role="tab" id="stab-creator" aria-selected="true" aria-controls="main" tabindex="0" onclick="studioTab('creator')">🎨 Post Creator</button>
-        <button type="button" class="studio-tab" role="tab" id="stab-pinbatch" aria-selected="false" aria-controls="pb-overlay" tabindex="-1" onclick="studioTab('pinbatch')" title="Make a batch of 10 Pinterest pins">📌 Pinterest Batch</button>
+        <button type="button" class="studio-tab" role="tab" id="stab-pinbatch" aria-selected="false" aria-controls="pb-overlay" tabindex="-1" onclick="studioTab('pinbatch')" title="Make 10 posts for one platform in one go">📦 Batch</button>
         <button type="button" class="studio-tab" role="tab" id="stab-scheduler" aria-selected="false" aria-controls="sched-view" tabindex="-1" onclick="studioTab('scheduler')">📅 Scheduler <span class="studio-dot" aria-hidden="true"></span></button>
       </div>
     </div>
@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v78</span>
+              <span class="sb-version">v82</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -3430,7 +3430,8 @@
           </div>
         </div>
         <button type="button" class="pc-brief-btn" onclick="pcOpenBrief()" title="Or press Ctrl+V anywhere in the Post Creator">📋 Paste post content</button>
-        <button type="button" class="pc-brief-btn pb-open-btn" onclick="pbOpen()" title="Make 10 different Pinterest pins in one go">📌 Pinterest batch (10 pins)</button>
+        <button type="button" class="pc-brief-btn pb-open-btn" onclick="pbOpen()" title="Make 10 posts for one platform in one go: Pinterest, Instagram, LinkedIn and more">📦 Batch (10 posts)</button>
+        <button type="button" class="pc-brief-btn ti-open-btn" onclick="tiOpen()" title="Weather alerts, headlines and upcoming days, turned into post ideas">📰 Timely ideas</button>
         <div class="mp-hint">Pick every platform this post is for</div>
         <div class="mp-chips" id="mp-chips" role="group" aria-label="Platforms for this post"></div>
         <div class="mp-view" id="mp-view" style="display: none">
@@ -4982,6 +4983,7 @@ Your message, caption, or call to action goes right here.</textarea
         bg2Scale: 100,
         bg3Scale: 100,
         gapColor: "bg",
+        photoCreditOn: true,
         mixes: {},
         showZones: false,
         bgInfo: null,
@@ -6310,6 +6312,7 @@ Your message, caption, or call to action goes right here.</textarea
             bg3Scale: S.bg3Scale,
             gapColor: S.gapColor,
             mixes: S.mixes,
+            photoCreditOn: S.photoCreditOn,
             showZones: S.showZones,
             bgInfo: S.bgInfo,
             bg2Info: S.bg2Info,
@@ -8861,18 +8864,111 @@ Your message, caption, or call to action goes right here.</textarea
       const _us = { q: "", page: 0, totalPages: 0, results: [], active: "bg", busy: false, editKey: false, opener: null };
       const _usA = (s) =>
         String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-      function _usKey() {
+      // ── Up to five Unsplash keys: when one is used up for the hour, the next one takes over ──
+      const US_KEYS_STORE = "bpc_unsplash_keys",
+        US_REST_STORE = "bpc_unsplash_rest";
+      function _usKeys() {
         try {
-          return localStorage.getItem(US_KEY_STORE) || "";
-        } catch (e) {
-          return "";
-        }
+          const a = JSON.parse(localStorage.getItem(US_KEYS_STORE) || "null");
+          if (Array.isArray(a)) return [0, 1, 2, 3, 4].map((n) => String(a[n] || "").trim());
+        } catch (e) {}
+        let one = "";
+        try {
+          one = (localStorage.getItem(US_KEY_STORE) || "").trim();
+        } catch (e) {}
+        return [one, "", "", "", ""];
       }
-      function _usSetKey(k) {
+      function _usSetKeys(arr) {
+        const keys = [0, 1, 2, 3, 4].map((n) => String((arr && arr[n]) || "").trim());
         try {
-          if (k) localStorage.setItem(US_KEY_STORE, k);
+          localStorage.setItem(US_KEYS_STORE, JSON.stringify(keys));
+          const first = keys.find(Boolean) || "";
+          if (first) localStorage.setItem(US_KEY_STORE, first);
           else localStorage.removeItem(US_KEY_STORE);
         } catch (e) {}
+      }
+      const _usHasKeys = () => _usKeys().some(Boolean);
+      const _usKid = (key) => String(key).slice(-10);
+      function _usRest() {
+        try {
+          return JSON.parse(localStorage.getItem(US_REST_STORE) || "{}") || {};
+        } catch (e) {
+          return {};
+        }
+      }
+      function _usResting(key) {
+        const r = _usRest()[_usKid(key)];
+        return r && r.until > Date.now() ? r : null;
+      }
+      function _usRestKey(key, ms, why) {
+        const r = _usRest();
+        r[_usKid(key)] = { until: Date.now() + ms, why: why || "used" };
+        try {
+          localStorage.setItem(US_REST_STORE, JSON.stringify(r));
+        } catch (e) {}
+      }
+      // The key to use right now: the first one that isn't resting
+      function _usKey() {
+        return _usKeys().find((k) => k && !_usResting(k)) || "";
+      }
+      function _usSetKey(k) {
+        const keys = _usKeys();
+        keys[0] = k || "";
+        _usSetKeys(keys);
+      }
+      // Every Unsplash request goes through here: a used-up key rests for the hour and the next key is tried at once
+      async function usFetch(url, opts) {
+        const keys = _usKeys().filter(Boolean);
+        if (!keys.length) {
+          const e = new Error("key");
+          e.status = 401;
+          throw e;
+        }
+        let last = 0,
+          changed = false;
+        const refresh = () => {
+          if (changed && !_us.editKey && document.getElementById("us-keyrow")) _usRenderKeyRow();
+        };
+        for (const key of keys) {
+          if (_usResting(key)) continue;
+          const res = await fetch(url, Object.assign({}, opts || {}, { headers: Object.assign({ Authorization: "Client-ID " + key, "Accept-Version": "v1" }, (opts && opts.headers) || {}) }));
+          if (res.status === 401) {
+            _usRestKey(key, 24 * 3600e3, "rejected");
+            last = 401;
+            changed = true;
+            continue;
+          }
+          if (res.status === 403 || res.status === 429) {
+            _usRestKey(key, 3600e3, "used");
+            last = 429;
+            changed = true;
+            continue;
+          }
+          const left = res.headers && res.headers.get("X-Ratelimit-Remaining");
+          if (left !== null && left !== undefined && left !== "" && +left <= 0) {
+            _usRestKey(key, 3600e3, "used");
+            changed = true;
+          }
+          refresh();
+          return res;
+        }
+        refresh();
+        if (!last) last = keys.some((k) => (_usResting(k) || {}).why === "used") ? 429 : 401;
+        const e = new Error(last === 401 ? "key" : "limit");
+        e.status = last;
+        throw e;
+      }
+      function _usKeySummary() {
+        const keys = _usKeys();
+        const n = keys.filter(Boolean).length;
+        const bits = [];
+        keys.forEach((k, i) => {
+          if (!k) return;
+          const r = _usResting(k);
+          if (r) bits.push(`key ${i + 1} ${r.why === "rejected" ? "wasn't accepted" : "resting until " + new Date(r.until).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`);
+        });
+        const cur = keys.indexOf(_usKey());
+        return `🔑 ${n} key${n === 1 ? "" : "s"} saved${cur >= 0 && n > 1 ? " · using key " + (cur + 1) : ""}${bits.length ? " · " + bits.join(" · ") : ""}.`;
       }
       // Unsplash asks for these referral tags on every link back to them
       function _usRef(url) {
@@ -9000,8 +9096,8 @@ Your message, caption, or call to action goes right here.</textarea
       function _usRenderKeyRow() {
         const row = document.getElementById("us-keyrow");
         if (!row) return;
-        if (_usKey() && !_us.editKey) {
-          row.innerHTML = `<span class="us-keyok">🔑 Your Unsplash key is saved in this browser.</span> <button type="button" class="us-link" id="us-change-key">Change key</button>`;
+        if (_usHasKeys() && !_us.editKey) {
+          row.innerHTML = `<span class="us-keyok">${_usKeySummary()}</span> <button type="button" class="us-link" id="us-change-key">Edit keys</button>`;
           document.getElementById("us-change-key").addEventListener("click", () => {
             _us.editKey = true;
             _usRenderKeyRow();
@@ -9010,33 +9106,50 @@ Your message, caption, or call to action goes right here.</textarea
           return;
         }
         row.innerHTML = `
-          <label class="us-keylabel" for="us-key">Your Unsplash Access Key</label>
-          <div class="us-keyinput">
-            <input id="us-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your Access Key (not the Secret Key)" />
-            <button type="button" class="us-go" id="us-key-save">Save key</button>
-          </div>
+          <label class="us-keylabel" for="us-key">Your Unsplash Access Keys (up to 5: when one is used up for the hour, the next takes over)</label>
+          <div class="us-keys">${[1, 2, 3, 4, 5]
+            .map((n) => {
+              const k = _usKeys()[n - 1];
+              const r = k ? _usResting(k) : null;
+              return `<div class="us-keyinput"><span class="us-keyno">${n}</span><input id="us-key${n === 1 ? "" : "-" + n}" type="password" autocomplete="off" spellcheck="false" value="${_usA(k)}" placeholder="${n === 1 ? "Paste your Access Key (not the Secret Key)" : "Another Access Key (optional)"}" aria-label="Unsplash key ${n}" />${r ? `<span class="us-keyrest">${r.why === "rejected" ? "not accepted" : "resting"}</span>` : ""}</div>`;
+            })
+            .join("")}</div>
+          <div class="us-keyinput"><button type="button" class="us-go" id="us-key-save">Save keys</button></div>
           <div class="us-note">It stays in this browser only and is never uploaded or synced. No key yet? Create a free app at
             <a href="https://unsplash.com/oauth/applications" target="_blank" rel="noopener">unsplash.com/oauth/applications</a> and copy its Access Key.</div>`;
-        const inp = document.getElementById("us-key");
-        inp.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") usSaveKey();
-        });
+        row.querySelectorAll(".us-keys input").forEach((inp) =>
+          inp.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") usSaveKey();
+          }),
+        );
         document.getElementById("us-key-save").addEventListener("click", usSaveKey);
       }
       function usSaveKey() {
-        const inp = document.getElementById("us-key");
-        const v = ((inp && inp.value) || "").trim();
-        if (!v) {
+        const keys = _usKeys();
+        [1, 2, 3, 4, 5].forEach((n) => {
+          const inp = document.getElementById(n === 1 ? "us-key" : "us-key-" + n);
+          if (inp) keys[n - 1] = (inp.value || "").trim();
+        });
+        if (!keys.some(Boolean)) {
           _usStatus("Paste your Access Key first.");
-          if (inp) inp.focus();
+          const f = document.getElementById("us-key");
+          if (f) f.focus();
           return;
         }
-        _usSetKey(v);
+        // A key you (re)enter gets a fresh start
+        const rest = _usRest();
+        keys.forEach((k) => k && delete rest[_usKid(k)]);
+        try {
+          localStorage.setItem(US_REST_STORE, JSON.stringify(rest));
+        } catch (e) {}
+        _usSetKeys(keys);
         _us.editKey = false;
         _usRenderKeyRow();
-        _usStatus("Key saved.");
-        document.getElementById("us-q").focus();
-        if ((document.getElementById("us-q").value || "").trim()) usSearch(false);
+        _usStatus("Keys saved.");
+        const q = document.getElementById("us-q");
+        if (q) q.focus();
+        // A search you'd already typed runs right away
+        if (q && q.value.trim()) usSearch(false);
       }
       function _usRenderSlots() {
         const box = document.getElementById("us-slots");
@@ -9082,7 +9195,7 @@ Your message, caption, or call to action goes right here.</textarea
         try {
           const url =
             "https://api.unsplash.com/search/photos?query=" + encodeURIComponent(q) + "&page=" + page + "&per_page=24&content_filter=high" + (orient ? "&orientation=" + orient : "");
-          const res = await fetch(url, { headers: { Authorization: "Client-ID " + key, "Accept-Version": "v1" } });
+          const res = await usFetch(url);
           if (res.status === 401) throw new Error("key");
           if (res.status === 403 || res.status === 429) throw new Error("limit");
           if (!res.ok) throw new Error("http");
@@ -9110,7 +9223,7 @@ Your message, caption, or call to action goes right here.</textarea
             _us.editKey = true;
             _usRenderKeyRow();
           } else if (e.message === "limit") {
-            _usStatus("This hour's Unsplash requests are used up (new keys get 50 an hour). Try again a little later.");
+            _usStatus("Every Unsplash key you've saved is used up for this hour (each key gets 50 requests an hour). Add another key, or try again a little later.");
           } else {
             _usStatus("Couldn't reach Unsplash. Check your connection and try again.");
           }
@@ -9167,7 +9280,7 @@ Your message, caption, or call to action goes right here.</textarea
           const p0 = _us.results[i];
           if (!p0) return;
           if (p0.links && p0.links.download_location) {
-            fetch(p0.links.download_location, { headers: { Authorization: "Client-ID " + _usKey(), "Accept-Version": "v1" } }).catch(() => {});
+            usFetch(p0.links.download_location).catch(() => {});
           }
           const src0 = p0.urls.raw + (p0.urls.raw.includes("?") ? "&" : "?") + "w=2400&h=2400&fit=max&q=82&fm=jpg";
           const hook = window._usPickHook;
@@ -9180,7 +9293,7 @@ Your message, caption, or call to action goes right here.</textarea
         if (!p || !US_SLOTS.some((s) => s.key === slot)) return;
         // Unsplash asks apps to report every photo that gets used
         if (p.links && p.links.download_location) {
-          fetch(p.links.download_location, { headers: { Authorization: "Client-ID " + _usKey(), "Accept-Version": "v1" } }).catch(() => {});
+          usFetch(p.links.download_location).catch(() => {});
         }
         // Used straight from Unsplash's servers, sized for sharp exports
         const src = p.urls.raw + (p.urls.raw.includes("?") ? "&" : "?") + "w=2400&h=2400&fit=max&q=82&fm=jpg";
@@ -11004,18 +11117,54 @@ Post:
         document.head.appendChild(st);
       })();
       // ══════════════════════════════════════════
-      // PINTEREST BATCH (v74)
-      // Ten pins made in one sitting. Each pin has its own content (paste your usual post content),
-      // its own photo and its own layout. Save them all, send them all to Pinterest Drafts,
-      // or schedule them all on Pinterest's next open days.
+      // BATCH (v79): 10 posts for any platform in one sitting
+      // Pick a platform (Pinterest, Instagram, Facebook, LinkedIn, Google Business, X, …). Each post has its own
+      // content (paste your document), photo and layout, sized for that platform. Save them all, send them all to
+      // that platform's Drafts, or schedule them all on its next open days. Each platform keeps its own batch.
       // ══════════════════════════════════════════
       const PB_N = 10;
-      const PB_KEY = "bpc_pinbatch_v1";
-      const _pb = { slots: [], sel: 0, busy: false, loaded: false, opener: null };
+      const PB_KEY = "bpc_pinbatch_v1"; // Pinterest's batch (as before); other platforms: bpc_batch_v1:<platform>
+      const PB_ORDER = ["pinterest", "instagram", "facebook", "linkedin", "google", "twitter", "bluesky", "tiktok", "threads", "shopify", "tumblr", "kofi", "patreon"];
+      // What each platform's posts need (these match the Scheduler's fields for that platform)
+      const PB_CFG = {
+        pinterest: { noun: "pin", title: "Pin title", text: "Description", link: "Link", alt: true },
+        instagram: { text: "Caption (with hashtags)", link: "Blog link (for your bio or a Story sticker)", alt: true },
+        facebook: { text: "Post text", link: "Link (added to the post)", linkInText: true, alt: true },
+        linkedin: { text: "Post text", link: "Link", alt: true },
+        google: { text: "Post text", link: "Link (the Learn more button)", alt: true },
+        twitter: { text: "Post (280 characters)", link: "Link (added to the post)", linkInText: true, alt: true, max: 280, linkLen: 23 },
+        bluesky: { text: "Post (300 characters)", link: "Link", alt: true, max: 300 },
+        tiktok: { text: "Caption", alt: false },
+        threads: { text: "Post text", link: "Link (added to the post)", linkInText: true, alt: true, max: 500, noScheduler: true },
+        shopify: { text: "Post text", link: "Link", alt: true },
+        tumblr: { text: "Post text", link: "Link (added to the post)", linkInText: true, alt: true },
+        kofi: { text: "Post text", link: "Link (added to the post)", linkInText: true, alt: true },
+        patreon: { text: "Post text", link: "Link (added to the post)", linkInText: true, alt: true },
+      };
+      const _pb = { pid: "pinterest", byPid: {}, sel: 0, busy: false, opener: null };
+      Object.defineProperty(_pb, "slots", {
+        get() {
+          return this.byPid[this.pid] || [];
+        },
+        set(v) {
+          this.byPid[this.pid] = v;
+        },
+      });
+      try {
+        const lp = localStorage.getItem("bpc_batch_platform");
+        if (lp && PB_CFG[lp]) _pb.pid = lp;
+      } catch (e) {}
+      const _pbCfg = (pid) => PB_CFG[pid || _pb.pid] || PB_CFG.facebook;
+      const _pbName = (pid) => (typeof _mpName === "function" ? _mpName(pid || _pb.pid) : pid || _pb.pid);
+      const _pbNoun = (n, pid) => {
+        const w = _pbCfg(pid).noun || "post";
+        return n === 1 ? w : w + "s";
+      };
+      const _pbCap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
       const _pbEmpty = () => ({ header: "", body: "", pinTitle: "", desc: "", link: "", alt: "", topic: "", photo: "", credit: null, layout: null });
       const _pbFilled = (s) => !!(s && (s.header || s.body || s.pinTitle || s.desc));
 
-      // ── Your main post is never touched: a pin borrows the post settings only while it is drawn ──
+      // ── Your main post is never touched: a batch post borrows the post settings only while it is drawn ──
       const PB_SWAP = ["header", "content", "bg", "bgX", "bgY", "bgScale", "bgFit", "bgInfo", "bg2", "bg3", "fnPrefix", "platform", "photoCredits"];
       let _pbBusy = 0;
       const _pbDeferred = { save: false, sync: false, render: false };
@@ -11034,14 +11183,14 @@ Post:
         }
         S.bg2 = "";
         S.bg3 = "";
-        // the pin's photo credit travels with its photo (for Recently used)
+        // the post's photo credit travels with its photo (for Recently used)
         S.photoCredits = Object.assign({}, saved.photoCredits || {});
         if (slot.photo) {
           if (slot.credit) S.photoCredits.bg = slot.credit;
           else delete S.photoCredits.bg;
         }
         S.fnPrefix = headerToPrefix(slot.header || "") || saved.fnPrefix || "BrandPost";
-        S.platform = "pinterest";
+        S.platform = _pb.pid;
         return saved;
       }
       function _pbRestore(saved) {
@@ -11084,7 +11233,7 @@ Post:
           _pbFlush();
         }
       }
-      // While a pin is borrowing the settings: nothing is saved, synced, redrawn or added to Recent
+      // While a batch post is borrowing the settings: nothing is saved, synced, redrawn or added to Recent
       const _pbOrig = { saveToStorage, bpcSyncToGitHub, render, _addToHistory };
       saveToStorage = function () {
         if (_pbBusy) {
@@ -11112,7 +11261,9 @@ Post:
         return _pbOrig._addToHistory.apply(this, arguments);
       };
 
-      // ── Saved between visits (photos you upload are kept in the browser's database) ──
+      // ── Saved between visits, per platform (uploaded photos live in the browser's database) ──
+      const _pbKey = (pid) => (pid === "pinterest" ? PB_KEY : "bpc_batch_v1:" + pid);
+      const _pbPhotoKey = (pid, i) => (pid === "pinterest" ? i : pid + ":" + i);
       function _pbDb() {
         return new Promise((res, rej) => {
           const r = indexedDB.open("bpc_pinbatch", 1);
@@ -11121,13 +11272,14 @@ Post:
           r.onerror = () => rej(r.error);
         });
       }
-      async function _pbPut(i, data) {
+      async function _pbPut(i, data, pid) {
         try {
           const db = await _pbDb();
+          const key = _pbPhotoKey(pid || _pb.pid, i);
           await new Promise((res) => {
             const tx = db.transaction("photos", "readwrite");
-            if (data) tx.objectStore("photos").put(data, i);
-            else tx.objectStore("photos").delete(i);
+            if (data) tx.objectStore("photos").put(data, key);
+            else tx.objectStore("photos").delete(key);
             tx.oncomplete = res;
             tx.onerror = res;
           });
@@ -11152,60 +11304,78 @@ Post:
           return {};
         }
       }
-      let _pbSaveTimer = null;
-      function _pbSave() {
-        clearTimeout(_pbSaveTimer);
-        _pbSaveTimer = setTimeout(() => {
-          try {
-            localStorage.setItem(PB_KEY, JSON.stringify(_pb.slots.map((s) => ({ ...s, photo: /^data:/.test(s.photo || "") ? "idb" : s.photo || "" }))));
-          } catch (e) {}
-        }, 250);
-      }
-      async function _pbLoad() {
-        if (_pb.loaded) return;
-        _pb.loaded = true;
-        let saved = [];
+      const _pbSaveTimers = {};
+      function _pbSaveNow(pid) {
+        pid = pid || _pb.pid;
+        clearTimeout(_pbSaveTimers[pid]);
+        const slots = _pb.byPid[pid];
+        if (!slots) return;
         try {
-          saved = JSON.parse(localStorage.getItem(PB_KEY) || "[]") || [];
+          localStorage.setItem(_pbKey(pid), JSON.stringify(slots.map((s) => ({ ...s, photo: /^data:/.test(s.photo || "") ? "idb" : s.photo || "" }))));
         } catch (e) {}
-        const photos = await _pbGetAll();
-        _pb.slots = Array.from({ length: PB_N }, (_, i) => {
-          const s = Object.assign(_pbEmpty(), saved[i] || {});
-          s.photo = s.photo === "idb" ? photos[i] || "" : s.photo || "";
-          return s;
-        });
-        const firstEmpty = _pb.slots.findIndex((s) => !_pbFilled(s));
-        _pb.sel = firstEmpty >= 0 ? firstEmpty : 0;
+      }
+      function _pbSave() {
+        const pid = _pb.pid;
+        clearTimeout(_pbSaveTimers[pid]);
+        _pbSaveTimers[pid] = setTimeout(() => _pbSaveNow(pid), 250);
+      }
+      async function _pbLoad(pid) {
+        pid = pid || _pb.pid;
+        if (!_pb.byPid[pid]) {
+          let saved = [];
+          try {
+            saved = JSON.parse(localStorage.getItem(_pbKey(pid)) || "[]") || [];
+          } catch (e) {}
+          const photos = await _pbGetAll();
+          if (!_pb.byPid[pid])
+            _pb.byPid[pid] = Array.from({ length: PB_N }, (_, i) => {
+              const s = Object.assign(_pbEmpty(), saved[i] || {});
+              s.photo = s.photo === "idb" ? photos[_pbPhotoKey(pid, i)] || "" : s.photo || "";
+              return s;
+            });
+        }
+        if (_pb.pid === pid) {
+          const fe = _pb.slots.findIndex((s) => !_pbFilled(s));
+          _pb.sel = fe >= 0 ? fe : 0;
+        }
       }
 
-      // ── Layouts: Pinterest's best layouts, a different one for every pin ──
-      async function _pbEnsureLayouts() {
-        if (_pb.slots.every((s) => Number.isInteger(s.layout) && templates[s.layout])) return;
-        const have = (S.platform === "pinterest" && typeof _tmplScores !== "undefined" && _tmplScores && Object.keys(_tmplScores).length) || (_mpScores.pinterest && Object.keys(_mpScores.pinterest).length);
+      // ── Layouts: the platform's best layouts, a different one for every post ──
+      let _pbLayoutJob = Promise.resolve();
+      function _pbEnsureLayouts() {
+        const pid = _pb.pid;
+        _pbLayoutJob = _pbLayoutJob.then(() => _pbEnsureLayoutsFor(pid)).catch(() => {});
+        return _pbLayoutJob;
+      }
+      async function _pbEnsureLayoutsFor(pid) {
+        const slots = _pb.byPid[pid];
+        if (!slots || slots.every((s) => Number.isInteger(s.layout) && templates[s.layout])) return;
+        const have = (S.platform === pid && typeof _tmplScores !== "undefined" && _tmplScores && Object.keys(_tmplScores).length) || (_mpScores[pid] && Object.keys(_mpScores[pid]).length);
         if (!have && typeof _mpScorePlatform === "function") {
-          _pbStatus("Finding the best Pinterest layouts…");
+          if (_pb.pid === pid) _pbStatus(`Finding the best ${escHtml(_pbName(pid))} layouts…`);
           try {
-            const res = await _mpScorePlatform("pinterest", _mpJob);
+            const res = await _mpScorePlatform(pid, _mpJob);
             if (res) {
-              _mpScores.pinterest = res.scores;
-              _mpPicks.pinterest = res.picks;
+              _mpScores[pid] = res.scores;
+              _mpPicks[pid] = res.picks;
             }
           } catch (e) {}
         }
-        const order = _mixOrder("pinterest");
-        const used = new Set(_pb.slots.map((s) => s.layout).filter((x) => Number.isInteger(x) && templates[x]));
-        _pb.slots.forEach((s) => {
+        const order = _mixOrder(pid);
+        const used = new Set(slots.map((s) => s.layout).filter((x) => Number.isInteger(x) && templates[x]));
+        slots.forEach((s) => {
           if (Number.isInteger(s.layout) && templates[s.layout]) return;
           const n = order.find((i) => !used.has(i));
           s.layout = n;
           used.add(n);
         });
-        _pbSave();
+        _pbSaveNow(pid);
+        if (_pb.pid === pid) _pbStatus();
       }
       function pbNewLayouts() {
         if (_pb.busy) return;
         const cur = new Set(_pb.slots.map((s) => s.layout));
-        const pool = _mixOrder("pinterest")
+        const pool = _mixOrder(_pb.pid)
           .slice(0, 40)
           .filter((i) => !cur.has(i))
           .sort(() => Math.random() - 0.5);
@@ -11214,30 +11384,37 @@ Post:
         });
         _pbSave();
         _pbRenderAll();
-        _pbStatus("New layouts picked from Pinterest's best. ⟳ on a pin chooses one yourself.");
+        _pbStatus(`New layouts picked from ${escHtml(_pbName())}'s best. 🎨 Layout on a ${_pbNoun(1)} chooses one yourself.`);
       }
       function pbPickLayout(i) {
         const slot = _pb.slots[i];
         if (!slot || _pb.busy) return;
         _pbWithSync(slot, () =>
-          mixOpenPicker(slot.layout, "pinterest", (n) => {
+          mixOpenPicker(slot.layout, _pb.pid, (n) => {
             slot.layout = n;
             _pbSave();
             _pbRenderCard(i);
-            _pbStatus(`Pin ${i + 1} now uses layout #${n + 1} ${escHtml(NAMES[n] || "")}.`);
+            _pbStatus(`${_pbCap(_pbNoun(1))} ${i + 1} now uses layout #${n + 1} ${escHtml(NAMES[n] || "")}.`);
           }),
         );
       }
 
-      // ── A whole batch document: "Pin 1 of 10: topic" sections, each with Image text, Link, title, Description, Alt text ──
+      // ── Reading a batch document: "Pin 1 of 10: topic" / "Post 1 of 10: topic" sections ──
+      const PB_HEAD = /^\s*[#>*_\s]*(pin|post|item|card|slide|graphic|image|tweet|reel|story)\s*#?\s*(\d+)\s*(?:of\s*\d+)?\s*[*_]*\s*[:\-–—]\s*(.*)$/i;
       const PB_LABELS = [
         ["imageText", /^\s*[*_]*\s*image\s*text\s*[*_]*\s*:\s*(.*)$/i],
+        ["headline", /^\s*[*_]*\s*(?:seo\s*)?headline\s*[*_]*\s*:\s*(.*)$/i],
         ["link", /^\s*[*_]*\s*(?:link|url|destination(?:\s*link)?)\s*[*_]*\s*:\s*(.*)$/i],
         ["pinTitle", /^\s*[*_]*\s*(?:pin\s*)?(?:\(\s*seo\s*rich\s*\)\s*)?title\s*[*_]*\s*:\s*(.*)$/i],
-        ["desc", /^\s*[*_]*\s*description\s*[*_]*\s*:\s*(.*)$/i],
+        ["desc", /^\s*[*_]*\s*(?:description|caption|post(?:\s*text)?|text|copy)\s*[*_]*\s*:\s*(.*)$/i],
+        ["hashtags", /^\s*[*_]*\s*hashtags?\s*[*_]*\s*:\s*(.*)$/i],
         ["alt", /^\s*[*_]*\s*(?:seo\s*summary[^:]*alt\s*text|alt\s*text)\s*[*_]*\s*:\s*(.*)$/i],
       ];
-      const _pbClean = (v) => String(v || "").replace(/^[*_\s]+/, "").replace(/[*_\s]+$/, "").trim();
+      const _pbClean = (v) =>
+        String(v || "")
+          .replace(/^[*_\s]+/, "")
+          .replace(/[*_\s]+$/, "")
+          .trim();
       function _pbParsePins(text) {
         const pins = [];
         let cur = null,
@@ -11246,14 +11423,27 @@ Post:
           .replace(/\r/g, "")
           .split("\n")
           .forEach((raw) => {
-            const h = /^\s*[#>*_\s]*pin\s*(\d+)\s*(?:of\s*\d+)?\s*[*_]*\s*[:\-–—]\s*(.*)$/i.exec(raw);
+            const h = PB_HEAD.exec(raw);
             if (h) {
-              cur = { num: +h[1], topic: h[2].replace(/\s*\((?:title|description|\d)[^)]*\)\s*$/i, "").replace(/[*_]+/g, "").trim(), imageText: "", link: "", pinTitle: "", desc: "", alt: "" };
+              cur = {
+                kind: h[1].toLowerCase(),
+                num: +h[2],
+                topic: h[3].replace(/\s*\((?:title|description|caption|post|\d)[^)]*\)\s*$/i, "").replace(/[*_]+/g, "").trim(),
+                imageText: "",
+                headline: "",
+                link: "",
+                pinTitle: "",
+                desc: "",
+                hashtags: "",
+                alt: "",
+                raw: "",
+              };
               pins.push(cur);
               field = null;
               return;
             }
             if (!cur) return;
+            cur.raw += raw + "\n";
             if (/^\s*[─━—\-_=]{3,}\s*$/.test(raw)) {
               field = null;
               return;
@@ -11266,17 +11456,76 @@ Post:
                 return;
               }
             }
+            if (/^\s*[*_]*\s*[A-Za-z][A-Za-z0-9 ()&/'-]{0,40}[*_]*\s*:(?!\/\/)/.test(raw) && !/^\s*https?:/i.test(raw)) {
+              field = null; // another label ("SEO summary:", …): not part of the previous field
+              return;
+            }
             if (field && _pbClean(raw)) cur[field] += (cur[field] ? (field === "desc" ? "\n" : " ") : "") + _pbClean(raw); // a field that runs onto more lines
           });
-        return pins.filter((p) => p.imageText || p.pinTitle || p.desc);
+        return pins.filter((p) => p.imageText || p.pinTitle || p.desc || p.headline);
       }
-      // The image text goes on the pin: first sentence as the headline, the rest underneath
+      // Which platform a document is for, when it says so ("Pin 1 of 10", "Instagram batch", …)
+      function _pbGuessPlatform(text) {
+        text = String(text || "");
+        const at = text.search(/^\s*[#>*_\s]*(?:pin|post|item|card|slide|graphic|image|tweet|reel|story)\s*#?\s*\d+/im);
+        const first = at >= 0 ? (text.slice(at).match(/^\s*[#>*_\s]*([a-z]+)/i) || [])[1] || "" : "";
+        if (/^pin$/i.test(first)) return "pinterest";
+        if (/^tweet$/i.test(first)) return "twitter";
+        const intro = (at > 0 ? text.slice(0, at) : "") + "\n" + (at >= 0 ? text.slice(at).split("\n")[0] : "");
+        const names = [
+          ["pinterest", /\bpinterest\b/i],
+          ["instagram", /\binstagram\b/i],
+          ["facebook", /\bfacebook\b/i],
+          ["linkedin", /\blinked\s*in\b/i],
+          ["google", /\bgoogle\s*(?:my\s*)?business\b|\bgbp\b/i],
+          ["twitter", /\btwitter\b|\bx\s*(?:posts?|batch)\b/i],
+          ["bluesky", /\bbluesky\b/i],
+          ["tiktok", /\btiktok\b/i],
+          ["threads", /\bthreads\b/i],
+          ["shopify", /\bshopify\b/i],
+          ["tumblr", /\btumblr\b/i],
+          ["kofi", /\bko-?fi\b/i],
+          ["patreon", /\bpatreon\b/i],
+        ];
+        for (const [pid, re] of names) if (re.test(intro)) return pid;
+        return null;
+      }
+      // The image text goes on the image: first sentence as the headline, the rest underneath
       function _pbSplitImageText(t) {
         t = String(t || "").trim();
         const m = /^(.+?[.?!])\s+(\S[\s\S]*)$/.exec(t);
         return m && m[1].split(/\s+/).length >= 3 ? [m[1], m[2]] : [t, ""];
       }
+      // One section of a document, for this platform
+      function _pbFromBlock(p, pid) {
+        const out = { imageText: p.imageText, headline: p.headline, title: p.pinTitle, desc: p.desc, link: p.link, alt: p.alt };
+        // Written in your multi-platform template (Instagram / Facebook / LinkedIn … sections)? Take this platform's part.
+        if (typeof pcParseBrief === "function") {
+          let b = null;
+          try {
+            b = pcParseBrief(p.raw);
+          } catch (e) {}
+          const sections = b && b.captions ? Object.keys(b.captions).filter((k) => k !== "all") : [];
+          if (b && b.captions && b.captions[pid]) {
+            out.desc = b.captions[pid];
+            out.link = (b.links && b.links[pid]) || b.link || out.link;
+            out.alt = (b.alts && b.alts[pid]) || out.alt || b.summary || "";
+          } else if (sections.length >= 2) {
+            out.desc = ""; // written for other platforms, not this one: don't borrow their text
+            out.link = b.link || out.link;
+            out.alt = out.alt || b.summary || "";
+          }
+          if (b && sections.length) {
+            if (pid === "pinterest") out.title = b.pintitle || out.title;
+            if (b.headline && !out.headline) out.headline = b.headline;
+            if (b.body && !out.imageText) out.imageText = b.body;
+          }
+        }
+        if (p.hashtags && pid !== "google" && !/(^|\s)#\w/.test(out.desc || "")) out.desc = (out.desc ? out.desc + "\n\n" : "") + p.hashtags;
+        return out;
+      }
       function pbFillPins(pins, fallbackIndex) {
+        const pid = _pb.pid;
         const nums = pins.map((p) => p.num);
         const max = Math.max(...nums),
           min = Math.min(...nums);
@@ -11285,17 +11534,18 @@ Post:
         pins.forEach((p) => {
           let i;
           if (pins.length === 1) i = p.num >= 1 && p.num <= PB_N ? p.num - 1 : fallbackIndex;
-          else i = max <= PB_N ? p.num - 1 : p.num - min; // a second batch ("Pin 11 of 20") starts at pin 1
+          else i = max <= PB_N ? p.num - 1 : p.num - min; // a second batch ("Post 11 of 20") starts at the first slot
           if (!(i >= 0 && i < PB_N)) return skipped.push(p.num);
           const s = _pb.slots[i];
-          const [head, body] = _pbSplitImageText(p.imageText || p.pinTitle);
+          const o = _pbFromBlock(p, pid);
+          const [head, body] = o.headline ? [o.headline, o.imageText || ""] : _pbSplitImageText(o.imageText || o.title || "");
           if (_pbFilled(s) && s.header !== head && s.photo) {
-            // new content for a pin that had a photo for something else: start its photo fresh
+            // new content for a post that had a photo for something else: start its photo fresh
             s.photo = "";
             s.credit = null;
             _pbPut(i, null);
           }
-          Object.assign(s, { header: head, body, pinTitle: p.pinTitle, desc: p.desc, link: p.link, alt: p.alt, topic: p.topic });
+          Object.assign(s, { header: head, body, pinTitle: o.title || "", desc: o.desc || "", link: o.link || "", alt: o.alt || "", topic: p.topic });
           n++;
         });
         _pbSave();
@@ -11304,13 +11554,13 @@ Post:
         _pb.sel = next >= 0 ? next : 0;
         _pbMarkSel();
         const needPhotos = _pb.slots.some((x) => _pbFilled(x) && !x.photo);
-        const hasKey = typeof _usKey === "function" && !!_usKey();
+        const hasKey = typeof _usHasKeys === "function" && _usHasKeys();
         _pbStatus(
-          (n === 1 ? `Pin ${pins[0].num <= PB_N ? pins[0].num : fallbackIndex + 1} filled.` : `✓ Filled ${n} pins from your document.`) +
-            (skipped.length ? ` Pins ${skipped.join(", ")} didn't fit in the 10 slots.` : "") +
+          (n === 1 ? `${_pbCap(_pbNoun(1))} ${pins[0].num <= PB_N ? pins[0].num : fallbackIndex + 1} filled.` : `✓ Filled ${n} ${_pbNoun(n)} from your document.`) +
+            (skipped.length ? ` Numbers ${skipped.join(", ")} didn't fit in the 10 slots.` : "") +
             (needPhotos && !hasKey ? ` To fill their photos automatically, add your free Unsplash key once: <button type="button" class="pb-mini" onclick="pbSetupPhotos()">🔍 Set up photos</button>` : ""),
         );
-        // Photos fill in by themselves: a different Unsplash photo for each pin
+        // Photos fill in by themselves: a different Unsplash photo for each post
         if (needPhotos && hasKey) setTimeout(() => pbFindPhotos(), 60);
       }
       // No Unsplash key yet: open the key box; once it's saved, the photos fill in
@@ -11324,7 +11574,7 @@ Post:
       if (_pbOrigSaveKey)
         usSaveKey = function () {
           const r = _pbOrigSaveKey.apply(this, arguments);
-          if (window._pbWantsPhotos && _usKey()) {
+          if (window._pbWantsPhotos && _usHasKeys()) {
             window._pbWantsPhotos = false;
             usClose();
             setTimeout(() => pbFindPhotos(), 60);
@@ -11332,24 +11582,25 @@ Post:
           return r;
         };
 
-      // ── Content: paste your usual post content into a pin ──
+      // ── Content: paste your usual post content into one post ──
       function pbFill(i, text) {
         const s = _pb.slots[i];
         if (!s || !text || !text.trim()) return;
         const pins = _pbParsePins(text);
         if (pins.length) return pbFillPins(pins, i);
+        const pid = _pb.pid;
         let b = {};
         try {
           b = pcParseBrief(text) || {};
         } catch (e) {}
-        const pinCap = b.captions && b.captions.pinterest;
-        if (b.headline || b.body || pinCap || b.pintitle) {
+        const cap = b.captions && b.captions[pid];
+        if (b.headline || b.body || cap || b.pintitle) {
           s.header = b.headline || s.header;
           s.body = b.body || s.body;
-          s.pinTitle = b.pintitle || s.pinTitle;
-          s.desc = pinCap || s.desc;
-          s.link = (b.links && b.links.pinterest) || b.link || s.link;
-          s.alt = (b.alts && b.alts.pinterest) || b.summary || s.alt;
+          if (pid === "pinterest") s.pinTitle = b.pintitle || s.pinTitle;
+          s.desc = cap || s.desc;
+          s.link = (b.links && b.links[pid]) || b.link || s.link;
+          s.alt = (b.alts && b.alts[pid]) || b.summary || s.alt;
         } else {
           // Plain text: first line is the headline, the rest is the image text
           const lines = text.trim().split(/\n+/);
@@ -11362,22 +11613,25 @@ Post:
         const next = after >= 0 ? after : _pb.slots.findIndex((x) => !_pbFilled(x));
         _pb.sel = next >= 0 ? next : i;
         _pbMarkSel();
-        _pbStatus(`Pin ${i + 1} filled${s.pinTitle ? ": <b>" + escHtml(s.pinTitle) + "</b>" : ""}. ${next >= 0 ? "Next up: pin " + (next + 1) + "." : "All 10 pins have content."}`);
+        const nn = _pbNoun(1);
+        _pbStatus(`${_pbCap(nn)} ${i + 1} filled${pid === "pinterest" && s.pinTitle ? ": <b>" + escHtml(s.pinTitle) + "</b>" : ""}. ${next >= 0 ? "Next up: " + nn + " " + (next + 1) + "." : `All 10 ${_pbNoun(2)} have content.`}`);
       }
       async function pbPasteInto(i) {
         try {
           const text = await navigator.clipboard.readText();
           if (!text || !text.trim()) return _pbStatus("Your clipboard is empty. Copy the post content first.");
+          const g = _pbParsePins(text).length ? _pbGuessPlatform(text) : null;
+          if (g && g !== _pb.pid) await pbSetPlatform(g, true);
           pbFill(i, text);
         } catch (e) {
           _pb.sel = i;
           _pbMarkSel();
-          _pbStatus(`Press <b>Ctrl+V</b> to paste into pin ${i + 1} (your browser needs the keyboard for this).`);
+          _pbStatus(`Press <b>Ctrl+V</b> to paste into ${_pbNoun(1)} ${i + 1} (your browser needs the keyboard for this).`);
         }
       }
       function pbPasteNext() {
         const n = _pb.slots.findIndex((x) => !_pbFilled(x));
-        pbPasteInto(n >= 0 ? n : _pb.sel); // a whole batch document fills every pin by its number
+        pbPasteInto(n >= 0 ? n : _pb.sel); // a whole batch document fills every post by its number
       }
       function pbClearSlot(i) {
         if (_pb.busy) return;
@@ -11388,7 +11642,7 @@ Post:
         _pbRenderCard(i);
       }
       function pbClearAll() {
-        if (_pb.busy || !confirm("Clear the content and photos of all 10 pins? Layouts stay.")) return;
+        if (_pb.busy || !confirm(`Clear the content and photos of all 10 ${_pbName()} ${_pbNoun(2)}? Layouts stay.`)) return;
         _pb.slots = _pb.slots.map((s, i) => {
           _pbPut(i, null);
           return Object.assign(_pbEmpty(), { layout: s.layout });
@@ -11398,7 +11652,7 @@ Post:
         _pbRenderAll();
       }
 
-      // ── Photos: each pin can have its own ──
+      // ── Photos: each post can have its own ──
       function pbUpload(i) {
         const inp = document.createElement("input");
         inp.type = "file";
@@ -11428,7 +11682,7 @@ Post:
         };
         inp.click();
       }
-      // What to search Unsplash for: the pin's audience (from its topic line) plus the season it mentions
+      // What to search Unsplash for: the post's audience (from its topic line) plus the season it mentions
       function _pbQuery(s) {
         const parts = String(s.topic || "").split("|").map((x) => x.trim()).filter(Boolean);
         let q = parts.length >= 2 ? parts[1] : parts[0] || "";
@@ -11438,34 +11692,46 @@ Post:
         if (!q) q = String(s.pinTitle || s.header || "").replace(/[^\w\s'-]/g, " ").split(/\s+/).filter(Boolean).slice(0, 4).join(" ");
         return (q + (season && !new RegExp(season, "i").test(q) ? " " + season.toLowerCase() : "")).trim();
       }
+      // The photo shape that suits the platform
+      function _pbOrient(pid) {
+        const pl = PLATS[pid || _pb.pid];
+        const r = pl ? pl.w / pl.h : 1;
+        return r < 0.9 ? "portrait" : r > 1.15 ? "landscape" : "squarish";
+      }
       async function pbFindPhotos() {
         if (_pb.busy) return;
-        const key = typeof _usKey === "function" ? _usKey() : "";
-        if (!key) {
+        if (!(typeof _usHasKeys === "function" && _usHasKeys())) {
           _pbStatus("Add your free Unsplash key first (the Unsplash window shows where), then try again.");
           return pbUnsplash(_pb.sel);
         }
         const list = _pb.slots.map((s, i) => [s, i]).filter(([s]) => _pbFilled(s) && !s.photo);
-        if (!list.length) return _pbStatus("Every pin with content already has a photo. 🔍 on a pin picks a different one.");
+        if (!list.length) return _pbStatus(`Every ${_pbNoun(1)} with content already has a photo. 🔍 on a ${_pbNoun(1)} picks a different one.`);
         _pb.busy = true;
         _pbLock(true);
         const used = new Set(_pb.slots.map((s) => s.credit && s.credit.id).filter(Boolean));
+        const orient = _pbOrient();
         let n = 0,
           problem = "";
         try {
           for (const [s, i] of list) {
             const q = _pbQuery(s);
-            _pbStatus(`Finding a photo for pin ${i + 1} (“${escHtml(q)}”)… ${n + 1} of ${list.length}`);
-            const res = await fetch("https://api.unsplash.com/search/photos?query=" + encodeURIComponent(q) + "&per_page=15&content_filter=high&orientation=portrait", { headers: { Authorization: "Client-ID " + key, "Accept-Version": "v1" } });
+            _pbStatus(`Finding a photo for ${_pbNoun(1)} ${i + 1} (“${escHtml(q)}”)… ${n + 1} of ${list.length}`);
+            let res;
+            try {
+              res = await usFetch("https://api.unsplash.com/search/photos?query=" + encodeURIComponent(q) + "&per_page=15&content_filter=high&orientation=" + orient);
+            } catch (err) {
+              problem = err.status === 401 ? "Unsplash didn't accept your keys." : "All your Unsplash keys are used up for this hour; the rest can fill in later.";
+              break;
+            }
             if (!res.ok) {
-              problem = res.status === 403 || res.status === 429 ? "Unsplash's hourly limit was reached; try again later for the rest." : "Unsplash didn't answer (" + res.status + ").";
+              problem = "Unsplash didn't answer (" + res.status + ").";
               break;
             }
             const data = await res.json();
             const pick = (data.results || []).find((ph) => ph && ph.urls && !used.has(ph.id));
             if (!pick) continue;
             used.add(pick.id);
-            if (pick.links && pick.links.download_location) fetch(pick.links.download_location, { headers: { Authorization: "Client-ID " + key, "Accept-Version": "v1" } }).catch(() => {});
+            if (pick.links && pick.links.download_location) usFetch(pick.links.download_location).catch(() => {});
             s.photo = pick.urls.raw + (pick.urls.raw.includes("?") ? "&" : "?") + "w=2400&h=2400&fit=max&q=82&fm=jpg";
             s.credit = { id: pick.id, name: (pick.user && pick.user.name) || "", link: (pick.user && pick.user.links && pick.user.links.html) || "", page: (pick.links && pick.links.html) || "" };
             _pbPut(i, null);
@@ -11480,7 +11746,7 @@ Post:
           _pbLock(false);
         }
         const ready = _pb.slots.filter(_pbFilled).length;
-        _pbStatus(problem ? `Found ${n} photo${n === 1 ? "" : "s"}. ${problem}` : `✓ All ${ready} pins are ready (a different photo for each). Look them over, then <b>📅 Schedule on open days</b>.`);
+        _pbStatus(problem ? `Found ${n} photo${n === 1 ? "" : "s"}. ${problem}` : `✓ All ${ready} ${_pbNoun(ready)} are ready (a different photo for each). Look them over, then <b>📅 Schedule on best days</b>.`);
       }
       function pbUnsplash(i) {
         window._usPickHook = (src, credit) => {
@@ -11489,12 +11755,12 @@ Post:
           _pbPut(i, null);
           _pbSave();
           _pbRenderCard(i);
-          _pbStatus(`Pin ${i + 1} photo by ${escHtml((credit && credit.name) || "Unsplash")} on Unsplash.`);
+          _pbStatus(`${_pbCap(_pbNoun(1))} ${i + 1} photo by ${escHtml((credit && credit.name) || "Unsplash")} on Unsplash.`);
         };
         usOpen("bg");
         const us = document.getElementById("us-overlay");
         if (us) document.body.appendChild(us); // above the batch window
-        // Start with a search for this pin's topic
+        // Start with a search for this post's topic
         const q = document.getElementById("us-q");
         const want = _pbQuery(_pb.slots[i]);
         if (q && want) {
@@ -11509,7 +11775,7 @@ Post:
           _pbPut(i, /^data:/.test(src) ? src : null);
           _pbSave();
           _pbRenderCard(i);
-          _pbStatus(`Pin ${i + 1} now uses a photo you've used before.`);
+          _pbStatus(`${_pbCap(_pbNoun(1))} ${i + 1} now uses a photo you've used before.`);
         };
         usOpen("bg");
         const us = document.getElementById("us-overlay");
@@ -11531,28 +11797,48 @@ Post:
       }
       function _pbCountText() {
         const n = _pb.slots.filter(_pbFilled).length;
-        return `${n} of ${PB_N} pins have content.`;
+        return `${n} of ${PB_N} ${_pbName()} ${_pbNoun(2)} have content.`;
       }
       function _pbMarkSel() {
         document.querySelectorAll("#pb-grid .pb-slot").forEach((el) => el.classList.toggle("sel", +el.dataset.i === _pb.sel));
       }
+      // Characters, the way the platform counts them (X counts every link as 23)
+      function _pbLen(s) {
+        const cfg = _pbCfg();
+        let t = s.desc || "";
+        if (cfg.linkInText && s.link && !/https?:\/\//i.test(t)) t += (t ? "\n\n" : "") + s.link;
+        const n = cfg.linkLen ? t.replace(/https?:\/\/\S+/g, "x".repeat(cfg.linkLen)).length : t.length;
+        return n;
+      }
+      function _pbCountHtml(i) {
+        const cfg = _pbCfg();
+        if (!cfg.max) return "";
+        const n = _pbLen(_pb.slots[i]);
+        return `<span class="pb-count${n > cfg.max ? " over" : ""}" id="pb-count-${i}">${n}/${cfg.max}</span>`;
+      }
       function _pbCardHtml(i) {
-        const s = _pb.slots[i];
+        const pid = _pb.pid,
+          cfg = _pbCfg(pid),
+          s = _pb.slots[i],
+          no = i + 1,
+          nn = _pbNoun(1);
         const lay = Number.isInteger(s.layout) ? `#${s.layout + 1} ${escHtml(NAMES[s.layout] || "")}` : "…";
         const src = s.photo ? (s.credit ? `📷 ${escHtml(s.credit.name || "Unsplash")}` : "Own photo") : "Main photo";
         const v = (f) => escHtml(s[f] || "");
+        const pin = pid === "pinterest";
+        const moreLabel = pin ? "Image text, description, link, alt" : ["Image text"].concat(cfg.link ? ["link"] : [], cfg.alt ? ["alt text"] : []).join(", ");
         return `<div class="pb-slot${i === _pb.sel ? " sel" : ""}${_pbFilled(s) ? " filled" : ""}" data-i="${i}">
-            <div class="pb-top"><span class="pb-num">${i + 1}</span><span class="pb-topic" title="${escHtml(s.topic || "")}">${escHtml((s.topic || "").replace(/\s*\|\s*/g, " · ")) || "Pin " + (i + 1)}</span></div>
+            <div class="pb-top"><span class="pb-num">${no}</span><span class="pb-topic" title="${escHtml(s.topic || "")}">${escHtml((s.topic || "").replace(/\s*\|\s*/g, " · ")) || _pbCap(nn) + " " + no}</span></div>
             <div class="pb-thumb${_pbFilled(s) ? "" : " empty"}" id="pb-thumb-${i}" onclick="pbSelect(${i})"></div>
-            <div class="pb-photo"><button type="button" class="pb-mini" onclick="pbPickLayout(${i})" title="Choose another layout for pin ${i + 1}">🎨 Layout</button><button type="button" class="pb-mini" onclick="pbUpload(${i})" title="Upload a photo for pin ${i + 1}">🖼 Upload</button><button type="button" class="pb-mini" onclick="pbUnsplash(${i})" title="Find a photo for pin ${i + 1} on Unsplash">🔍 Unsplash</button><button type="button" class="pb-mini" onclick="pbRecent(${i})" title="Use a photo from your recently used photos">🕘 Recent</button>${s.photo ? `<button type="button" class="pb-mini" onclick="pbUseMain(${i})" title="Use your main photo instead" aria-label="Use your main photo for pin ${i + 1}">↺</button>` : ""}</div>
+            <div class="pb-photo"><button type="button" class="pb-mini" onclick="pbPickLayout(${i})" title="Choose another layout for ${nn} ${no}">🎨 Layout</button><button type="button" class="pb-mini" onclick="pbUpload(${i})" title="Upload a photo for ${nn} ${no}">🖼 Upload</button><button type="button" class="pb-mini" onclick="pbUnsplash(${i})" title="Find a photo for ${nn} ${no} on Unsplash">🔍 Unsplash</button><button type="button" class="pb-mini" onclick="pbRecent(${i})" title="Use a photo from your recently used photos">🕘 Recent</button>${s.photo ? `<button type="button" class="pb-mini" onclick="pbUseMain(${i})" title="Use your main photo instead" aria-label="Use your main photo for ${nn} ${no}">↺</button>` : ""}</div>
             <div class="pb-meta"><span class="pb-lay" title="${lay}">Layout ${lay}</span><span class="pb-src">${src}</span></div>
-            <input class="pb-in" data-f="header" value="${v("header")}" placeholder="Headline on the pin" aria-label="Pin ${i + 1} headline"/>
-            <input class="pb-in" data-f="pinTitle" value="${v("pinTitle")}" placeholder="Pin title" aria-label="Pin ${i + 1} title"/>
-            <details class="pb-more"><summary>Image text, description, link, alt</summary>
-              <textarea class="pb-in" data-f="body" rows="2" placeholder="Image text" aria-label="Pin ${i + 1} image text">${v("body")}</textarea>
-              <textarea class="pb-in" data-f="desc" rows="3" placeholder="Pin description" aria-label="Pin ${i + 1} description">${v("desc")}</textarea>
-              <input class="pb-in" data-f="link" value="${v("link")}" placeholder="Link" aria-label="Pin ${i + 1} link"/>
-              <input class="pb-in" data-f="alt" value="${v("alt")}" placeholder="Alt text" aria-label="Pin ${i + 1} alt text"/>
+            <input class="pb-in" data-f="header" value="${v("header")}" placeholder="Headline on the image" aria-label="${_pbCap(nn)} ${no} headline"/>
+            ${pin ? `<input class="pb-in" data-f="pinTitle" value="${v("pinTitle")}" placeholder="Pin title" aria-label="Pin ${no} title"/>` : `<textarea class="pb-in" data-f="desc" rows="3" placeholder="${escHtml(cfg.text)}" aria-label="${_pbCap(nn)} ${no} ${escHtml(cfg.text)}">${v("desc")}</textarea>${_pbCountHtml(i)}`}
+            <details class="pb-more"><summary>${moreLabel}</summary>
+              <textarea class="pb-in" data-f="body" rows="2" placeholder="Image text (the smaller line)" aria-label="${_pbCap(nn)} ${no} image text">${v("body")}</textarea>
+              ${pin ? `<textarea class="pb-in" data-f="desc" rows="3" placeholder="Pin description" aria-label="Pin ${no} description">${v("desc")}</textarea>` : ""}
+              ${cfg.link ? `<input class="pb-in" data-f="link" value="${v("link")}" placeholder="${escHtml(cfg.link)}" aria-label="${_pbCap(nn)} ${no} ${escHtml(cfg.link)}"/>` : ""}
+              ${cfg.alt ? `<input class="pb-in" data-f="alt" value="${v("alt")}" placeholder="Alt text" aria-label="${_pbCap(nn)} ${no} alt text"/>` : ""}
             </details>
             <div class="pb-acts"><button type="button" class="pb-mini" onclick="pbPasteInto(${i})">📋 Paste</button><button type="button" class="pb-mini" onclick="pbClearSlot(${i})">✕ Clear</button></div>
           </div>`;
@@ -11561,8 +11847,9 @@ Post:
         const box = document.getElementById("pb-thumb-" + i);
         const slot = _pb.slots[i];
         if (!box || !slot || !Number.isInteger(slot.layout)) return;
-        const pl = PLATS.pinterest;
-        const sc = 150 / pl.w;
+        const pl = PLATS[_pb.pid];
+        const sc = Math.min(150 / pl.w, 230 / pl.h);
+        box.style.width = Math.round(pl.w * sc) + "px";
         box.style.height = Math.round(pl.h * sc) + "px";
         box.innerHTML = "";
         const inner = document.createElement("div");
@@ -11594,11 +11881,64 @@ Post:
       function pbSelect(i) {
         _pb.sel = i;
         _pbMarkSel();
-        _pbStatus(`Pin ${i + 1} selected: press <b>Ctrl+V</b> to paste its content.`);
+        _pbStatus(`${_pbCap(_pbNoun(1))} ${i + 1} selected: press <b>Ctrl+V</b> to paste its content.`);
       }
       function _pbLock(on) {
-        document.querySelectorAll("#pb-overlay .pb-act, #pb-overlay .us-more, #pb-overlay .pb-mini, #pb-overlay .us-x").forEach((b) => (b.disabled = !!on));
+        document.querySelectorAll("#pb-overlay .pb-act, #pb-overlay .us-more, #pb-overlay .pb-mini, #pb-overlay .us-x, #pb-overlay .pb-plat").forEach((b) => (b.disabled = !!on));
         document.getElementById("pb-overlay").classList.toggle("pb-working", !!on);
+      }
+      const _pbIcon = (pid) => (typeof platIcon === "function" ? platIcon(pid, 13) : "");
+      const _pbColor = (pid) => {
+        const p = typeof PF_PLATFORMS !== "undefined" ? PF_PLATFORMS.find((x) => x.id === pid) : null;
+        const c = (p && p.color) || "#f5a623";
+        return typeof _pfShow === "function" ? _pfShow(c) : c;
+      };
+      // Everything that names the platform: the picker, texts, buttons
+      function _pbRefreshChrome() {
+        const pid = _pb.pid,
+          cfg = _pbCfg(pid),
+          name = _pbName(pid),
+          pin = pid === "pinterest";
+        document.querySelectorAll("#pb-overlay .pb-plat").forEach((b) => {
+          const on = b.dataset.pid === pid;
+          b.setAttribute("aria-checked", on ? "true" : "false");
+          b.classList.toggle("on", on);
+        });
+        const sub = document.getElementById("pb-sub");
+        if (sub)
+          sub.innerHTML = `Paste your whole 10-${_pbNoun(1)} document with <b>Ctrl+V</b> and every ${_pbNoun(1)} fills at once (or paste one post at a time). Each ${_pbNoun(1)} has its own layout and photo, sized for ${escHtml(name)}.`;
+        const box = document.getElementById("pb-paste");
+        if (box) box.placeholder = `📋 Paste your 10-${_pbNoun(1)} document here (Ctrl+V). All 10 ${pin ? "pins" : escHtml(name) + " posts"} fill at once, with their photos.`;
+        const send = document.getElementById("pb-send"),
+          sched = document.getElementById("pb-sched"),
+          note = document.getElementById("pb-note");
+        if (send) {
+          send.textContent = `🗂 Send to ${name} Drafts`;
+          send.hidden = !!cfg.noScheduler;
+        }
+        if (sched) {
+          sched.hidden = !!cfg.noScheduler;
+          sched.style.setProperty("--pc", _pbColor(pid));
+        }
+        if (note) {
+          note.hidden = !cfg.noScheduler;
+          note.textContent = `${name} isn't in the Scheduler yet: save the images, then post them with Open ↗.`;
+        }
+      }
+      async function pbSetPlatform(pid, quiet) {
+        if (!PB_CFG[pid] || _pb.busy) return;
+        if (pid === _pb.pid && _pb.byPid[pid]) return;
+        _pbSaveNow(_pb.pid);
+        _pb.pid = pid;
+        try {
+          localStorage.setItem("bpc_batch_platform", pid);
+        } catch (e) {}
+        await _pbLoad(pid);
+        _pbRefreshChrome();
+        _pbRenderAll();
+        await _pbEnsureLayouts();
+        if (_pb.pid === pid) _pbRenderAll();
+        if (!quiet && _pb.pid === pid) _pbStatus(`${escHtml(_pbName(pid))} batch: ${_pbCountText()}`);
       }
       function _pbBuild() {
         if (document.getElementById("pb-overlay")) return;
@@ -11609,15 +11949,19 @@ Post:
         ov.setAttribute("aria-modal", "true");
         ov.setAttribute("aria-labelledby", "pb-title");
         ov.innerHTML = `<div class="us-modal pb-modal">
-            <div class="us-head"><div><div class="us-title" id="pb-title">📌 Pinterest batch</div>
-              <div class="mix-sub">Paste your whole 10-pin document with <b>Ctrl+V</b> and every pin fills at once (or paste one post at a time). Each pin has its own layout and photo.</div></div>
-              <div class="mix-head-actions"><button type="button" class="us-more" onclick="pbPasteNext()">📋 Paste</button><button type="button" class="us-more" onclick="pbFindPhotos()">🔍 Find photos for all pins</button><button type="button" class="us-more" onclick="pbNewLayouts()">⟳ New layouts</button><button type="button" class="us-more" onclick="pbClearAll()">Clear all</button><button type="button" class="us-x" aria-label="Close the Pinterest batch" title="Back to the Post Creator" onclick="pbClose()">✕</button></div></div>
-            <div class="pb-drop"><textarea id="pb-paste" rows="2" placeholder="📋 Paste your 10-pin document here (Ctrl+V). All 10 pins fill at once, with their photos." aria-label="Paste your 10-pin Pinterest document"></textarea></div>
+            <div class="us-head"><div><div class="us-title" id="pb-title">📦 Batch</div>
+              <div class="mix-sub" id="pb-sub"></div></div>
+              <div class="mix-head-actions"><button type="button" class="us-more" onclick="pbPasteNext()">📋 Paste</button><button type="button" class="us-more" onclick="pbFindPhotos()">🔍 Find photos for all</button><button type="button" class="us-more" onclick="pbNewLayouts()">⟳ New layouts</button><button type="button" class="us-more" onclick="pbClearAll()">Clear all</button><button type="button" class="us-x" aria-label="Close the batch" title="Back to the Post Creator" onclick="pbClose()">✕</button></div></div>
+            <div class="pb-plats" role="radiogroup" aria-label="Which platform this batch is for">${PB_ORDER.map(
+              (pid) => `<button type="button" role="radio" class="pb-plat" data-pid="${pid}" aria-checked="false" style="--pc:${_pbColor(pid)}" onclick="pbSetPlatform('${pid}')">${_pbIcon(pid)}<span>${escHtml(_pbName(pid))}</span></button>`,
+            ).join("")}</div>
+            <div class="pb-drop"><textarea id="pb-paste" rows="2" aria-label="Paste your 10-post document"></textarea></div>
             <div class="pb-grid" id="pb-grid"></div>
             <div class="pb-foot"><span class="pb-status" id="pb-status" role="status" aria-live="polite"></span>
-              <button type="button" class="pb-act" onclick="pbSaveAll()">⬇ Save all as images</button>
-              <button type="button" class="pb-act" onclick="pbSend(false)">🗂 Send to Pinterest Drafts</button>
-              <button type="button" class="pb-act pb-primary" onclick="pbSend(true)">📅 Schedule on open days</button></div>
+              <span class="pb-note" id="pb-note" hidden></span>
+              <button type="button" class="pb-act" id="pb-save" onclick="pbSaveAll()">⬇ Save all as images</button>
+              <button type="button" class="pb-act" id="pb-send" onclick="pbSend(false)">🗂 Send to Drafts</button>
+              <button type="button" class="pb-act pb-primary" id="pb-sched" onclick="pbSend(true)" title="On the platform's best days and times">📅 Schedule on best days</button></div>
           </div>`;
         document.body.appendChild(ov);
         ov.addEventListener("mousedown", (e) => (ov._down = e.target === ov));
@@ -11641,7 +11985,7 @@ Post:
             _pbMarkSel();
           }
         });
-        // Text dropped or pasted into the paste box some other way still fills the pins
+        // Text dropped or pasted into the paste box some other way still fills the posts
         ov.addEventListener("input", (e) => {
           if (e.target.id !== "pb-paste") return;
           const v = e.target.value;
@@ -11659,6 +12003,15 @@ Post:
           _pb.slots[i][f] = e.target.value;
           _pbSave();
           card.classList.toggle("filled", _pbFilled(_pb.slots[i]));
+          if (f === "desc" || f === "link") {
+            const c = document.getElementById("pb-count-" + i);
+            if (c) {
+              const n = _pbLen(_pb.slots[i]),
+                max = _pbCfg().max;
+              c.textContent = n + "/" + max;
+              c.classList.toggle("over", n > max);
+            }
+          }
           if (f === "header" || f === "body") {
             clearTimeout(redraw[i]);
             redraw[i] = setTimeout(() => {
@@ -11670,10 +12023,9 @@ Post:
           _pbStatus();
         });
       }
-      // Ctrl+V anywhere in the batch window (outside the text boxes) fills the selected pin.
+      // A batch document ("Pin 1 of 10: …" / "Post 1 of 10: …") always goes to the batch, wherever you paste it:
+      // the paste box, a post's text box, the batch page, or anywhere in the Post Creator (the batch opens and fills).
       // Listens on the window, which hears a paste before any page handler, so your main post never gets it.
-      // A pin document ("Pin 1 of 10: …") always goes to the batch, wherever you paste it: the paste box,
-      // a pin's text box, the batch page, or anywhere in the Post Creator (the batch opens and fills).
       window.addEventListener(
         "paste",
         (e) => {
@@ -11694,15 +12046,22 @@ Post:
             pbOpen(text);
             return;
           }
-          if (inField && !inBox && !pins.length) return; // an ordinary paste into a pin's text box
+          if (inField && !inBox && !pins.length) return; // an ordinary paste into a post's text box
           e.preventDefault();
           e.stopImmediatePropagation();
           if (inBox) t.value = "";
-          if (text.trim()) pbFill(_pb.sel, text);
+          if (!text.trim()) return;
+          // A document written for another platform opens that platform's batch
+          const g = pins.length ? _pbGuessPlatform(text) : null;
+          if (g && g !== _pb.pid && !_pb.busy)
+            pbSetPlatform(g, true).then(() => {
+              pbFill(_pb.sel, text);
+            });
+          else pbFill(_pb.sel, text);
         },
         true,
       );
-      // The "Paste post content" window hands a pin document to the batch too
+      // The "Paste post content" window hands a batch document to the batch too
       const _pbOrigBriefFill = typeof pcFillFromBrief === "function" ? pcFillFromBrief : null;
       if (_pbOrigBriefFill)
         pcFillFromBrief = function () {
@@ -11721,13 +12080,23 @@ Post:
         document.body.appendChild(ov);
         _pb.opener = document.activeElement;
         ov.style.display = "flex";
-        // In PostPilot Studio the batch is its own tab: 📌 Pinterest Batch
+        // In PostPilot Studio the batch is its own tab: 📦 Batch
         if (typeof studioMarkTab === "function") {
           document.body.classList.remove("show-sched");
           document.body.classList.add("show-pins");
           studioMarkTab("pinbatch");
         }
+        // A pasted document written for one platform opens that platform's batch
+        const g = typeof pasted === "string" && pasted.trim() && !_pb.busy ? _pbGuessPlatform(pasted) : null;
+        if (g && g !== _pb.pid) {
+          _pbSaveNow(_pb.pid);
+          _pb.pid = g;
+          try {
+            localStorage.setItem("bpc_batch_platform", g);
+          } catch (e) {}
+        }
         await _pbLoad();
+        _pbRefreshChrome();
         _pbRenderAll();
         if (typeof pasted === "string" && pasted.trim()) pbFill(_pb.sel, pasted);
         await _pbEnsureLayouts();
@@ -11742,6 +12111,7 @@ Post:
       }
       function pbClose() {
         if (_pb.busy) return;
+        _pbSaveNow(_pb.pid);
         const ov = document.getElementById("pb-overlay");
         if (ov) ov.style.display = "none";
         if (document.body.classList.contains("show-pins")) {
@@ -11757,21 +12127,22 @@ Post:
       }
       async function pbSaveAll() {
         const list = _pbList();
-        if (!list.length) return _pbStatus("Paste content into at least one pin first.");
+        if (!list.length) return _pbStatus(`Paste content into at least one ${_pbNoun(1)} first.`);
         if (_pb.busy) return;
+        const pid = _pb.pid;
         _pb.busy = true;
         _pbLock(true);
         _mpCancel();
         let n = 0;
         try {
           for (const [s, i] of list) {
-            _pbStatus(`Saving pin ${i + 1}… (${n + 1} of ${list.length})`);
-            const name = _pbWithSync(s, () => _mpFileName(s.layout, "pinterest"));
-            const blob = await _pbWith(s, () => _mpBlob(s.layout, "pinterest"));
+            _pbStatus(`Saving ${_pbNoun(1)} ${i + 1}… (${n + 1} of ${list.length})`);
+            const name = _pbWithSync(s, () => _mpFileName(s.layout, pid));
+            const blob = await _pbWith(s, () => _mpBlob(s.layout, pid));
             await xfSaveBlob(blob, name, false, true);
             n++;
           }
-          _pbStatus(`Saved ${n} pin${n === 1 ? "" : "s"} as images.`);
+          _pbStatus(`Saved ${n} ${_pbNoun(n)} as images.`);
         } catch (e) {
           _pbStatus("Couldn't save: " + escHtml(e.message || String(e)));
         } finally {
@@ -11781,8 +12152,12 @@ Post:
         }
       }
       async function pbSend(scheduleOpen) {
+        const pid = _pb.pid,
+          cfg = _pbCfg(pid),
+          name = _pbName(pid);
+        if (cfg.noScheduler) return _pbStatus(`${escHtml(name)} isn't in the Scheduler yet: use ⬇ Save all as images, then post them with Open ↗.`);
         const list = _pbList();
-        if (!list.length) return _pbStatus("Paste content into at least one pin first.");
+        if (!list.length) return _pbStatus(`Paste content into at least one ${_pbNoun(1)} first.`);
         if (_pb.busy) return;
         _pb.busy = true;
         _pbLock(true);
@@ -11796,31 +12171,33 @@ Post:
         let n = 0;
         try {
           for (const [s, i] of list) {
-            _pbStatus(`${scheduleOpen ? "Scheduling" : "Sending"} pin ${i + 1}… (${n + 1} of ${list.length})`);
-            const name = _pbWithSync(s, () => _mpFileName(s.layout, "pinterest"));
-            const c = await _pbWith(s, () => renderToCanvasForPlatform(s.layout, "pinterest"));
+            _pbStatus(`${scheduleOpen ? "Scheduling" : "Sending"} ${_pbNoun(1)} ${i + 1}… (${n + 1} of ${list.length})`);
+            const fname = _pbWithSync(s, () => _mpFileName(s.layout, pid));
+            const c = await _pbWith(s, () => renderToCanvasForPlatform(s.layout, pid));
             if (!c) continue;
             const img = await compressForQueue(c);
+            // Platforms without a link field get the link at the end of the post
+            const text = cfg.linkInText && s.link && !/https?:\/\//i.test(s.desc || "") ? (s.desc ? s.desc + "\n\n" : "") + s.link : s.desc || "";
             const item = {
               id: Date.now() + Math.random(),
               toDrafts: true,
               scheduleOpen: !!scheduleOpen,
               dataUrl: img,
-              platformImages: { pinterest: img },
+              platformImages: { [pid]: img },
               gifDataUrl: null,
-              imageName: name,
-              platformNames: { pinterest: name },
-              platform: "pinterest",
-              selectedPlatforms: ["pinterest"],
+              imageName: fname,
+              platformNames: { [pid]: fname },
+              platform: pid,
+              selectedPlatforms: [pid],
               templateName: NAMES[s.layout] || "",
               header: s.header || "",
               content: s.body || "",
-              captions: s.desc ? { pinterest: s.desc } : {},
-              pinTitle: s.pinTitle || "",
-              link: s.link || "",
-              links: s.link ? { pinterest: s.link } : {},
+              captions: text ? { [pid]: text } : {},
+              pinTitle: pid === "pinterest" ? s.pinTitle || "" : "",
+              link: cfg.linkInText ? "" : s.link || "",
+              links: s.link && !cfg.linkInText ? { [pid]: s.link } : {},
               altText: s.alt || "",
-              alts: s.alt ? { pinterest: s.alt } : {},
+              alts: s.alt ? { [pid]: s.alt } : {},
               format: "png",
               sentAt: new Date().toISOString(),
               accountId: (typeof _pfAccounts !== "undefined" && _pfAccounts[_pfActiveAccount] && _pfAccounts[_pfActiveAccount].id) || "acct1",
@@ -11836,8 +12213,8 @@ Post:
             n++;
           }
           const msg = scheduleOpen
-            ? `📅 ${n} pin${n === 1 ? "" : "s"} scheduled on Pinterest's next open days, at Pinterest's default time. The Scheduler lists the dates.`
-            : `🗂 ${n} pin${n === 1 ? "" : "s"} sent to Pinterest Drafts. Schedule them from Drafts (or Plan my week) whenever you're ready.`;
+            ? `📅 ${n} ${_pbNoun(n)} scheduled on ${escHtml(name)}'s best days and times. The Scheduler lists the dates.`
+            : `🗂 ${n} ${_pbNoun(n)} sent to ${escHtml(name)} Drafts. Schedule them from Drafts (or Plan my week) whenever you're ready.`;
           _pbStatus(msg);
           _mpToast(msg, 9000);
         } catch (e) {
@@ -11853,6 +12230,12 @@ Post:
         st.textContent = `
           .pb-open-btn { margin-top: 6px; }
           .pb-modal { width: min(1180px, 100%); }
+          .pb-plats { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 18px 10px; }
+          .pb-plat { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 999px; padding: 4px 11px; font: 600 11.5px "DM Sans", sans-serif; cursor: pointer; }
+          .pb-plat svg { flex-shrink: 0; }
+          .pb-plat:hover { border-color: var(--pc); }
+          .pb-plat.on { background: var(--pc); border-color: var(--pc); color: #fff; }
+          .pb-plat:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
           .pb-drop { padding: 0 18px 10px; }
           #pb-paste { width: 100%; box-sizing: border-box; min-height: 52px; resize: vertical; border: 2px dashed var(--hi); border-radius: 10px; background: var(--hi-dim, rgba(245,166,35,.08)); color: var(--text); padding: 12px 14px; font: 600 13px "DM Sans", sans-serif; }
           #pb-paste::placeholder { color: var(--text); opacity: .85; }
@@ -11873,16 +12256,19 @@ Post:
           .pb-mini { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 6px; font: 600 10.5px "DM Sans", sans-serif; padding: 3px 7px; cursor: pointer; }
           .pb-mini:hover { border-color: var(--hi); }
           .pb-in { width: 100%; box-sizing: border-box; background: var(--bg, #0e0b22); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; font: 500 11.5px "DM Sans", sans-serif; resize: vertical; }
+          .pb-count { align-self: flex-end; font-size: 10px; color: var(--muted); margin-top: -3px; }
+          .pb-count.over { color: #ef4444; font-weight: 700; }
           .pb-more summary { font-size: 10.5px; color: var(--muted); cursor: pointer; padding: 2px 0; }
           .pb-more[open] { display: flex; flex-direction: column; gap: 5px; }
           .pb-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 18px 16px; border-top: 1px solid var(--border); }
           .pb-status { flex: 1; min-width: 200px; font-size: 12px; color: var(--muted); }
+          .pb-note { font-size: 11.5px; color: #f5a623; }
           .pb-act { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 8px; font: 700 12px "DM Sans", sans-serif; padding: 8px 12px; cursor: pointer; }
           .pb-act:hover { border-color: var(--hi); }
-          .pb-primary { background: #e60023; border-color: #e60023; color: #fff; }
+          .pb-primary { --pc: #e60023; background: var(--pc); border-color: var(--pc); color: #fff; }
           .pb-working .pb-grid { opacity: .6; pointer-events: none; }
           .pb-mini:focus-visible, .pb-act:focus-visible, .pb-in:focus-visible { outline: 2px solid var(--hi); outline-offset: 1px; }
-          button:disabled.pb-act, button:disabled.pb-mini { opacity: .5; cursor: progress; }
+          button:disabled.pb-act, button:disabled.pb-mini, button:disabled.pb-plat { opacity: .5; cursor: progress; }
         `;
         document.head.appendChild(st);
       })();
@@ -11961,14 +12347,17 @@ Post:
           im.src = src;
         });
       }
-      const _ruPending = new Map();
+      // Recordings run one at a time (several pins saving at once can't trip over each other),
+      // and each is stamped with the moment the photo was used, so newest-first matches what you did
+      let _ruQueue = Promise.resolve();
+      let _ruLast = 0;
       function ruAdd(src, credit, platform) {
         if (!src || typeof src !== "string" || !/^(data:image|https?:)/i.test(src)) return Promise.resolve();
         const id = _ruId(src);
-        const prev = _ruPending.get(id) || Promise.resolve();
-        const job = prev.then(async () => {
+        const now = Math.max(Date.now(), _ruLast + 1);
+        _ruLast = now;
+        const job = _ruQueue.then(async () => {
           const list = await ruList();
-          const now = Date.now();
           let rec = list.find((r) => r.id === id);
           if (rec) {
             rec.usedAt = now;
@@ -11989,11 +12378,7 @@ Post:
           } catch (e) {}
           _ruRenderIfOpen();
         });
-        const tail = job.catch(() => {});
-        _ruPending.set(id, tail);
-        tail.then(() => {
-          if (_ruPending.get(id) === tail) _ruPending.delete(id);
-        });
+        _ruQueue = job.catch(() => {});
         return job;
       }
       async function ruRemove(i) {
@@ -12123,6 +12508,452 @@ Post:
         `;
         document.head.appendChild(st);
       })();
+      // ══════════════════════════════════════════
+      // TIMELY IDEAS (v80)
+      // Live California weather & safety alerts (National Weather Service), today's headlines (Wikipedia's
+      // "In the news"), and your upcoming observances, each turned into a post idea you can create in one click.
+      // Send it with ⚡ Post next and it takes the next upcoming slot; the post it bumps moves to the next best day.
+      // ══════════════════════════════════════════
+      const TI_SOCAL = /riverside|san bernardino|los angeles|orange county|\borange\b|san diego|ventura|inland empire|ontario|pomona|rancho cucamonga/i;
+      // What each kind of event means for your clients (care: lead with help, not a sales pitch)
+      const TI_ANGLES = [
+        { re: /red flag|fire weather|wildfire|\bfire\b|smoke|evacuat/i, line: "Home", emoji: "🔥", photo: "wildfire home safety", care: true,
+          head: (a) => `${a}: wildfire risk is high. Is your home ready?`, body: "Clear brush, pack a go-bag, and know what your home policy covers before fire weather hits.", tags: "#WildfireSafety #HomeInsurance #SoCal" },
+        { re: /excessive heat|extreme heat|heat advisory|heat warning|heat wave/i, line: "Auto", emoji: "🌡️", photo: "summer heat car",
+          head: (a) => `${a}: extreme heat is here. Protect your car, pets and home.`, body: "Check tire pressure and your battery, never leave pets in a car, and keep the AC serviced.", tags: "#HeatSafety #AutoInsurance #SoCal" },
+        { re: /wind advisory|high wind|santa ana/i, line: "Home", emoji: "💨", photo: "windy palm trees", care: true,
+          head: (a) => `${a}: strong winds ahead. Secure your home.`, body: "Tie down patio furniture, check trees near the roof, and know what your home policy covers.", tags: "#WindSafety #HomeInsurance #SoCal" },
+        { re: /flash flood|flood|atmospheric river|heavy rain|winter storm|\bstorm\b/i, line: "Home", emoji: "🌧️", photo: "rain storm street", care: true,
+          head: (a) => `${a}: storms are coming. Are you covered for flooding?`, body: "Most home policies don't cover flood damage. Slow down on wet roads and check your coverage.", tags: "#StormSafety #FloodInsurance #SoCal" },
+        { re: /earthquake|seismic|shakeout/i, line: "Home", emoji: "🏚️", photo: "earthquake preparedness kit", care: true,
+          head: () => "Earthquakes don't give warnings. Is your home covered?", body: "Standard California home policies don't cover earthquake damage. Make a plan and check your options.", tags: "#EarthquakePrep #HomeInsurance #California" },
+        { re: /\brecall/i, line: "Auto", emoji: "🚗", photo: "car mechanic",
+          head: () => "Is your car on a recall list?", body: "Check your VIN for open recalls and get repairs done. A safer car means fewer claims.", tags: "#CarSafety #AutoInsurance" },
+        { re: /data breach|cyber ?attack|cybersecurity|hack(?:ed|ers?)?\b|ransomware/i, line: "Business", emoji: "🔐", photo: "cyber security laptop",
+          head: () => "Another data breach in the news. Is your business protected?", body: "Cyber liability coverage helps small businesses recover from breaches and ransomware attacks.", tags: "#CyberSecurity #SmallBusiness #BusinessInsurance" },
+        { re: /interest rate|federal reserve|inflation|stock market|recession|economy/i, line: "Life", emoji: "📈", photo: "family financial planning",
+          head: () => "Markets are moving. Is your family's plan steady?", body: "Life coverage with living benefits can protect your family whatever the economy does.", tags: "#FinancialPlanning #LifeInsurance" },
+        { re: /world series|super bowl|championship|playoffs?|\bfinals\b|stanley cup|world cup/i, line: "Auto", emoji: "🏆", photo: "friends watching game",
+          head: () => "Big game plans? Get home safe.", body: "Celebrate smart: plan a sober ride home, and check your coverage if you're hosting.", tags: "#GameDay #DriveSafe #AutoInsurance" },
+      ];
+      const _ti = { items: null, at: 0, busy: false, other: 0 };
+      const _tiDay = (d) => d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0");
+      function _tiAngle(text) {
+        return TI_ANGLES.find((a) => a.re.test(text || "")) || null;
+      }
+      function _tiArea(areaDesc) {
+        const m = String(areaDesc || "").match(TI_SOCAL);
+        if (!m) return "California";
+        const w = m[0].toLowerCase();
+        return w.includes("inland") || w.includes("riverside") || w.includes("bernardino") || w.includes("ontario") || w.includes("pomona") || w.includes("cucamonga")
+          ? "Inland Empire"
+          : w.replace(/\b\w/g, (c) => c.toUpperCase()).replace(/ County$/, "");
+      }
+      async function _tiAlerts() {
+        const res = await fetch("https://api.weather.gov/alerts/active?area=CA", { headers: { Accept: "application/geo+json" } });
+        if (!res.ok) throw new Error("weather " + res.status);
+        const data = await res.json();
+        const seen = new Set();
+        return (data.features || [])
+          .map((f) => f.properties || {})
+          .filter((p) => p.event && !seen.has(p.event + "|" + _tiArea(p.areaDesc)) && seen.add(p.event + "|" + _tiArea(p.areaDesc)))
+          .map((p) => {
+            const area = _tiArea(p.areaDesc);
+            const a = _tiAngle(p.event + " " + (p.headline || ""));
+            return { kind: "alert", local: area !== "California", title: `${p.event}: ${area}`, meta: `National Weather Service · until ${p.expires ? new Date(p.expires).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" }) : "further notice"}`, url: "https://www.weather.gov/", angle: a, area };
+          })
+          .filter((x) => x.angle)
+          .sort((a, b) => b.local - a.local);
+      }
+      async function _tiNews() {
+        const res = await fetch("https://en.wikipedia.org/api/rest_v1/feed/featured/" + _tiDay(new Date()));
+        if (!res.ok) throw new Error("news " + res.status);
+        const data = await res.json();
+        const out = [];
+        let other = 0;
+        (data.news || []).forEach((n) => {
+          const text = String(n.story || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+          const a = _tiAngle(text);
+          if (!a) return other++;
+          const link = (n.links || [])[0];
+          out.push({ kind: "news", title: text, meta: "In the news · Wikipedia", url: (link && link.content_urls && link.content_urls.desktop && link.content_urls.desktop.page) || "https://en.wikipedia.org/wiki/Portal:Current_events", angle: a, area: "California" });
+        });
+        _ti.other = other;
+        return out;
+      }
+      function _tiDays() {
+        if (typeof _DN_EVENTS_FIXED === "undefined") return [];
+        const out = [];
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        for (let i = 0; i < 21; i++) {
+          const d = new Date(today);
+          d.setDate(today.getDate() + i);
+          _DN_EVENTS_FIXED.filter((e) => e.month === d.getMonth() + 1 && e.day === d.getDate()).forEach((e) => {
+            const msg = String(e.msg || "");
+            const first = (msg.match(/^[^.!?]+[.!?]/) || [msg])[0].trim();
+            out.push({ kind: "day", title: `${e.emoji || "📅"} ${first}`, meta: d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) + (i === 0 ? " · today" : ` · in ${i} day${i === 1 ? "" : "s"}`), url: "", angle: null, msg, first, when: d });
+          });
+        }
+        return out;
+      }
+      // The post an idea becomes: headline and image text, plus a caption for each platform
+      function _tiPost(x) {
+        const site = (S.siteURL || "").replace(/^https?:\/\//, "");
+        const link = S.postLink || (site ? "https://" + site : "");
+        let head, body, tags;
+        if (x.angle) {
+          head = x.angle.head(x.area || "California");
+          body = x.angle.body;
+          tags = x.angle.tags;
+        } else {
+          head = x.first.replace(/[!.]$/, "");
+          body = x.msg.slice(x.first.length).trim().split(/(?<=[.!?])\s+/)[0] || "";
+          tags = "";
+        }
+        const learn = site ? ` Learn more at ${site.replace(/^www\./, "")}.` : "";
+        const cap = `${head} ${body}${learn}${tags ? "\n\n" + tags : ""}`.trim();
+        const short = `${head} ${link}`.trim();
+        return {
+          headline: head,
+          body,
+          summary: body,
+          link,
+          pintitle: head,
+          captions: { instagram: cap, facebook: `${head} ${body}${learn}`.trim(), linkedin: `${head}\n\n${body}${learn}`.trim(), pinterest: cap, google: `${head} ${body} Learn More by clicking the button below!`.trim(), twitter: short.length <= 280 ? short : head, bluesky: `${head} ${body}`.slice(0, 280).trim() },
+          links: {},
+          alts: {},
+          plats: S.platforms && S.platforms.length ? S.platforms.slice() : ["instagram", "facebook", "linkedin", "google"],
+          photo: x.angle ? x.angle.photo : "",
+          unknown: [],
+        };
+      }
+      async function tiLoad(force) {
+        if (_ti.busy) return;
+        if (!force && _ti.items && Date.now() - _ti.at < 30 * 60e3) return _tiRender();
+        _ti.busy = true;
+        _tiRender();
+        const [alerts, news] = await Promise.all([_tiAlerts().catch(() => null), _tiNews().catch(() => null)]);
+        _ti.items = { alerts, news, days: _tiDays() };
+        _ti.at = Date.now();
+        _ti.busy = false;
+        _tiRender();
+      }
+      function _tiCard(x, i) {
+        const a = x.angle;
+        const p = _tiPost(x);
+        return `<div class="ti-card">
+            <div class="ti-top"><span class="ti-emoji">${a ? a.emoji : "📅"}</span><div><div class="ti-title">${escHtml(x.title)}</div><div class="ti-meta">${escHtml(x.meta)}${x.url ? ` · <a href="${escHtml(x.url)}" target="_blank" rel="noopener">source</a>` : ""}</div></div></div>
+            <div class="ti-idea">${a ? `<b>Idea for ${escHtml(a.line)}:</b> ` : "<b>Idea:</b> "}${escHtml(p.headline)}<div class="ti-body">${escHtml(p.body)}</div></div>
+            ${a && a.care ? `<div class="ti-care">💛 People may be affected. Lead with safety tips and help, not a sales pitch.</div>` : ""}
+            <button type="button" class="pb-act ti-go" onclick="tiCreate(${i})">✨ Create this post</button>
+          </div>`;
+      }
+      function _tiRender() {
+        const box = document.getElementById("ti-list");
+        if (!box) return;
+        if (_ti.busy || !_ti.items) {
+          box.innerHTML = `<div class="us-empty">Checking the news and weather…</div>`;
+          return;
+        }
+        const { alerts, news, days } = _ti.items;
+        _ti.flat = [];
+        const sec = (title, list, empty) => {
+          const cards = (list || []).map((x) => {
+            _ti.flat.push(x);
+            return _tiCard(x, _ti.flat.length - 1);
+          });
+          return `<div class="ti-sec"><div class="ti-sh">${title}</div>${cards.length ? `<div class="ti-grid">${cards.join("")}</div>` : `<div class="ti-none">${empty}</div>`}</div>`;
+        };
+        box.innerHTML =
+          sec("⚠ Weather & safety alerts (California)", alerts, alerts === null ? "Couldn't reach the National Weather Service right now." : "No active weather alerts with an insurance angle right now.") +
+          sec("📰 In the news", news, news === null ? "Couldn't reach the news feed right now." : `No headlines with an insurance angle today${_ti.other ? ` (${_ti.other} other headline${_ti.other === 1 ? "" : "s"} skipped)` : ""}.`) +
+          sec("📅 Coming up", days, "No observances in the next three weeks.");
+        const st = document.getElementById("ti-updated");
+        if (st) st.textContent = "Updated " + new Date(_ti.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      }
+      function tiCreate(i) {
+        const x = (_ti.flat || [])[i];
+        if (!x) return;
+        const b = _tiPost(x);
+        pcApplyBrief(b);
+        S.timely = { title: x.title, at: Date.now() };
+        tiClose();
+        if (typeof studioTab === "function") studioTab("creator");
+        _mpToast(`✨ Idea loaded into your post. Pick a layout and photo, then <b>Send to PostPilot → ⚡ Post next</b> to put it in the next upcoming slot.`, 9000);
+      }
+      function tiOpen() {
+        let ov = document.getElementById("ti-overlay");
+        if (!ov) {
+          ov = document.createElement("div");
+          ov.id = "ti-overlay";
+          ov.className = "us-overlay";
+          ov.setAttribute("role", "dialog");
+          ov.setAttribute("aria-modal", "true");
+          ov.setAttribute("aria-labelledby", "ti-title");
+          ov.innerHTML = `<div class="us-modal ti-modal">
+              <div class="us-head"><div><div class="us-title" id="ti-title">📰 Timely ideas</div><div class="mix-sub">Live weather alerts, today's headlines and upcoming observances, each with a post idea. Create one, then send it with <b>⚡ Post next</b>.</div></div>
+                <div class="mix-head-actions"><span class="ti-upd" id="ti-updated"></span><button type="button" class="us-more" onclick="tiLoad(true)">↻ Refresh</button><button type="button" class="us-x" aria-label="Close" onclick="tiClose()">✕</button></div></div>
+              <div class="ti-list" id="ti-list"></div>
+            </div>`;
+          document.body.appendChild(ov);
+          ov.addEventListener("mousedown", (e) => (ov._down = e.target === ov));
+          ov.addEventListener("click", (e) => {
+            if (e.target === ov && ov._down) tiClose();
+            ov._down = false;
+          });
+          ov.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              tiClose();
+            }
+          });
+        }
+        document.body.appendChild(ov);
+        ov.style.display = "flex";
+        tiLoad(false);
+        setTimeout(() => {
+          const b = ov.querySelector(".us-more");
+          if (b) b.focus();
+        }, 30);
+      }
+      function tiClose() {
+        const ov = document.getElementById("ti-overlay");
+        if (ov) ov.style.display = "none";
+      }
+      // After "⚡ Post next": where it went
+      function _pfNextToast(pids) {
+        const names = (pids || []).map((p) => _mpName(p)).join(", ");
+        _mpToast(`⚡ Sent to PostPilot for ${names}: it takes the next upcoming slot, and the post that was there moves to the next best day and time.`, 9000);
+      }
+      (function _tiStyles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          .ti-modal { width: min(980px, 100%); }
+          .ti-list { overflow-y: auto; padding: 0 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+          .ti-sh { font-weight: 800; font-size: 12.5px; margin-bottom: 8px; }
+          .ti-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+          .ti-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); display: flex; flex-direction: column; gap: 7px; }
+          .ti-top { display: flex; gap: 8px; align-items: flex-start; }
+          .ti-emoji { font-size: 20px; line-height: 1; }
+          .ti-title { font-weight: 700; font-size: 12.5px; }
+          .ti-meta { font-size: 10.5px; color: var(--muted); }
+          .ti-meta a { color: var(--hi); }
+          .ti-idea { font-size: 12px; }
+          .ti-body { color: var(--muted); margin-top: 2px; }
+          .ti-care { font-size: 11px; color: #f5a623; }
+          .ti-go { align-self: flex-start; }
+          .ti-none { font-size: 12px; color: var(--muted); }
+          .ti-upd { font-size: 11px; color: var(--muted); }
+        `;
+        document.head.appendChild(st);
+      })();
+      // ══════════════════════════════════════════
+      // PHOTO CREDIT ON IMAGES (v81)
+      // "Photo by Name on Unsplash": small but clear, in whichever corner is free of your text, logo and
+      // website tag, inside each platform's safe margins (clear of app buttons and feed crops).
+      // Only on layouts that show an Unsplash photo; your own uploads never get a label.
+      // ══════════════════════════════════════════
+      const _CR_ORDER = ["br", "bl", "tr", "tl"];
+      const _crEsc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      const crOn = () => S.photoCreditOn !== false;
+      // The photographers whose photos this layout shows
+      function _crNames(html) {
+        if (!crOn()) return [];
+        const cr = S.photoCredits || {};
+        const names = [];
+        ["bg", "bg2", "bg3"].forEach((k) => {
+          const c = cr[k],
+            src = S[k];
+          if (!c || !c.name || !src || typeof src !== "string") return;
+          if (!/images\.unsplash\.com/i.test(src) && !(c.src && c.src === src)) return; // the credit must belong to the photo that's there now
+          if (!html.includes(src.split("?")[0])) return; // this layout doesn't show that photo
+          if (!names.includes(c.name)) names.push(c.name);
+        });
+        return names;
+      }
+      function crText(names) {
+        if (!names || !names.length) return "";
+        const who = names.length === 1 ? names[0] : names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+        return `Photo${names.length > 1 ? "s" : ""} by ${who} on Unsplash`;
+      }
+      // Added to the layout as it's drawn, with the safe spot for each corner on this platform
+      function _creditRoot(html) {
+        const names = _crNames(html || "");
+        if (!names.length) return html;
+        const i = html.lastIndexOf("</");
+        if (i < 0) return html;
+        const pl = PLATS[S.platform] || { w: 1080, h: 1080 };
+        const W = pl.w,
+          H = pl.h;
+        const fs = Math.max(11, Math.round(Math.sqrt(W * H) * 0.0155));
+        const edges = {};
+        _CR_ORDER.forEach((p) => {
+          const e = _tagEdges(W, H, p);
+          edges[p] = { t: Math.round(e.t), b: Math.round(e.b), l: Math.round(e.l), r: Math.round(e.r) };
+        });
+        // Until it's measured: a corner the website tag isn't using
+        const tagPos = S.siteURL ? S.siteTagPos || "bc" : "";
+        const start = _CR_ORDER.find((p) => p !== tagPos) || "br";
+        const e = edges[start];
+        const style =
+          `position:absolute;${start[0] === "t" ? "top:" + e.t : "bottom:" + e.b}px;${start[1] === "l" ? "left:" + e.l : "right:" + e.r}px;z-index:60;` +
+          `font:600 ${fs}px/1.25 'DM Sans',Arial,sans-serif;color:#fff;background:rgba(0,0,0,.58);padding:${Math.round(fs * 0.32)}px ${Math.round(fs * 0.7)}px;border-radius:${fs}px;` +
+          `letter-spacing:.01em;white-space:nowrap;max-width:${Math.round(W * 0.62)}px;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-sizing:border-box;text-shadow:none;`;
+        return html.slice(0, i) + `<div data-sf="credit" data-sf-pos="${start}" data-sf-fs="${fs}" data-sf-edges='${JSON.stringify(edges)}' style="${style}">${_crEsc(crText(names))}</div>` + html.slice(i);
+      }
+      const _crOrigOverlay = applyGifOverlay;
+      applyGifOverlay = function (html) {
+        return _crOrigOverlay.call(this, _creditRoot(html));
+      };
+      // After the text is fitted: the corner that touches the least text, logo and website tag
+      function _crTextRects(root, skip) {
+        const out = [];
+        root.querySelectorAll("*").forEach((el) => {
+          if (el === skip || skip.contains(el) || el.closest('[data-sf="credit"]')) return;
+          let own = "";
+          el.childNodes.forEach((n) => {
+            if (n.nodeType === 3) own += n.nodeValue;
+          });
+          if (!own.trim()) return;
+          if (typeof _effOpacity === "function" && _effOpacity(el, root) < 0.3) return;
+          const rg = document.createRange();
+          rg.selectNodeContents(el);
+          const r = rg.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) out.push(r);
+        });
+        return out;
+      }
+      function crPlace(root) {
+        const el = root && root.querySelector && root.querySelector('[data-sf="credit"]');
+        if (!el) return;
+        let edges;
+        try {
+          edges = JSON.parse(el.dataset.sfEdges || "{}");
+        } catch (e) {
+          return;
+        }
+        if (!edges.br || !edges.bl || !edges.tr || !edges.tl) return;
+        const canvas = el.offsetParent;
+        if (!canvas || !canvas.offsetWidth) return;
+        const cr = canvas.getBoundingClientRect();
+        const k = cr.width / canvas.offsetWidth;
+        if (!k) return;
+        const W = canvas.offsetWidth,
+          H = canvas.offsetHeight;
+        const avoid = _crTextRects(canvas, el);
+        ['[data-sf="logo"]', '[data-sf="tag"]'].forEach((q) => {
+          const x = canvas.querySelector(q);
+          if (x && x.offsetWidth) avoid.push(x.getBoundingClientRect());
+        });
+        const fs0 = +el.dataset.sfFs || 16;
+        const gap = 6 * k;
+        const L = Math.max(edges.tl.l, edges.bl.l),
+          R = Math.max(edges.tr.r, edges.br.r),
+          T = Math.max(edges.tl.t, edges.tr.t),
+          B = Math.max(edges.bl.b, edges.br.b);
+        const size = (fs) => {
+          el.style.transform = "none";
+          el.style.fontSize = fs + "px";
+          el.style.padding = Math.round(fs * 0.32) + "px " + Math.round(fs * 0.7) + "px";
+          el.style.borderRadius = fs + "px";
+          const r = el.getBoundingClientRect();
+          return { cw: r.width / k, ch: r.height / k };
+        };
+        const tryAt = (fs, cw, ch) => {
+          const c = [];
+          // 1. the corners
+          _CR_ORDER.forEach((pos) => {
+            const e = edges[pos];
+            c.push({ pos, x: pos[1] === "l" ? e.l : W - e.r - cw, y: pos[0] === "t" ? e.t : H - e.b - ch, w: cw, h: ch, pen: 0 });
+          });
+          // 2. along the top and bottom edges
+          if (W - L - R > cw)
+            [0.2, 0.35, 0.5, 0.65, 0.8].forEach((f) => {
+              const x = L + f * (W - L - R - cw);
+              c.push({ pos: "b", x, y: H - B - ch, w: cw, h: ch, pen: 0.03 });
+              c.push({ pos: "t", x, y: T, w: cw, h: ch, pen: 0.03 });
+            });
+          // 3. up the sides, like a magazine credit
+          if (H - T - B > cw)
+            [0.15, 0.5, 0.85].forEach((f) => {
+              const y = T + f * (H - T - B - cw);
+              c.push({ pos: "l", x: L, y, w: ch, h: cw, pen: 0.08, rot: -90 });
+              c.push({ pos: "r", x: W - R - ch, y, w: ch, h: cw, pen: 0.08, rot: 90 });
+            });
+          const area = cw * ch * k * k;
+          let best = null;
+          c.forEach((q) => {
+            const r = { left: cr.left + q.x * k - gap, top: cr.top + q.y * k - gap, right: cr.left + (q.x + q.w) * k + gap, bottom: cr.top + (q.y + q.h) * k + gap };
+            let a = 0;
+            avoid.forEach((o) => (a += _area(_rectI(r, o))));
+            const score = a + q.pen * area;
+            if (!best || score < best.score) best = Object.assign({}, q, { a, score, fs, cw, ch });
+          });
+          return best;
+        };
+        // Full size first; only if every spot touches something, a little smaller (never below a readable minimum)
+        let best = null;
+        for (const s of [1, 0.85, 0.72]) {
+          const fs = Math.max(11, Math.round(fs0 * s));
+          if (best && fs === best.fs) continue;
+          const { cw, ch } = size(fs);
+          const b = tryAt(fs, cw, ch);
+          if (!best || b.a < best.a - 0.5) best = b;
+          if (best.a === 0) break;
+        }
+        if (!best) return;
+        size(best.fs);
+        el.style.right = "auto";
+        el.style.bottom = "auto";
+        el.style.transformOrigin = "0 0";
+        if (!best.rot) {
+          el.style.left = best.x + "px";
+          el.style.top = best.y + "px";
+          el.style.transform = "none";
+        } else if (best.rot === -90) {
+          // reads bottom to top along the left edge
+          el.style.left = best.x + "px";
+          el.style.top = best.y + best.cw + "px";
+          el.style.transform = "rotate(-90deg)";
+        } else {
+          // reads top to bottom along the right edge
+          el.style.left = best.x + best.ch + "px";
+          el.style.top = best.y + "px";
+          el.style.transform = "rotate(90deg)";
+        }
+        el.dataset.sfPos = best.pos;
+        el.dataset.sfHit = Math.round(best.a / (k * k));
+      }
+      const _crOrigFit = fitTextBatch;
+      fitTextBatch = function (roots) {
+        const r = _crOrigFit.apply(this, arguments);
+        try {
+          (roots || []).forEach((root) => root && crPlace(root));
+        } catch (e) {}
+        return r;
+      };
+      // The switch, under the Unsplash buttons
+      function crToggle(on) {
+        S.photoCreditOn = !!on;
+        if (typeof saveToStorage === "function") saveToStorage();
+        render();
+      }
+      (function _crMount(tries) {
+        // right under Background's 🔍 Unsplash / 🕘 Recently used buttons (always visible)
+        const row = [...document.querySelectorAll("#sidebar .ru-open-btn, #sidebar .us-open-btn")].filter((b) => !b.closest("#extra-media-section")).pop();
+        if (!row) return tries < 20 && setTimeout(() => _crMount(tries + 1), 250);
+        if (document.getElementById("cr-on")) return;
+        const lab = document.createElement("label");
+        lab.className = "cr-toggle";
+        lab.title = "Adds “Photo by … on Unsplash” in a free corner of every image that uses an Unsplash photo";
+        lab.innerHTML = `<input type="checkbox" id="cr-on" ${crOn() ? "checked" : ""} onchange="crToggle(this.checked)"/> Credit Unsplash photographers on the image`;
+        row.insertAdjacentElement("afterend", lab);
+        const st = document.createElement("style");
+        st.textContent = `.cr-toggle { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); margin: 2px 0 6px; cursor: pointer; }
+          .cr-toggle input { accent-color: var(--hi); }`;
+        document.head.appendChild(st);
+      })(0);
       // ══════════════════════════════════════════
       // COPY TO CLIPBOARD
       // ══════════════════════════════════════════
@@ -16811,6 +17642,8 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
           })
           .join("")}
       </div>
+      <button onclick="confirmPfSend('next')" title="Puts this post in the next upcoming slot on each platform; the post that was there moves to its next best day and time"
+        style="width:100%;margin-bottom:8px;padding:9px;border-radius:7px;border:1px solid #f5a623;background:rgba(245,166,35,.12);color:#fff;font-family:'DM Sans',sans-serif;font-size:12.5px;font-weight:700;cursor:pointer;">⚡ Post next (timely: bump the schedule)</button>
       <div style="display:flex;gap:8px;">
         <button onclick="pfPickerBack()" style="flex:1;padding:9px;border-radius:7px;border:1px solid rgba(255,255,255,.1);background:transparent;color:#8b8fa8;font-family:'DM Sans',sans-serif;font-size:12.5px;cursor:pointer;">← Back</button>
         <button onclick="confirmPfSend(true)" title="Puts each platform's image and caption in its Drafts in PostPilot, to schedule later"
@@ -16910,7 +17743,8 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
             const trimmed = existing.slice(-8);
             const queueItem = {
               id: Date.now() + Math.random(),
-              toDrafts: !!toDrafts, // straight to each platform's Drafts
+              toDrafts: toDrafts === true, // straight to each platform's Drafts
+              timely: toDrafts === "next", // ⚡ Post next: into the next upcoming slot
               platformNames: Object.fromEntries(selectedPlatforms.map((pid) => [pid, _mpFileName(mixIdx(idx, pid), pid)])), // your file names per platform
               dataUrl,
               platformImages,
@@ -16938,7 +17772,9 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
               try {
                 const _sf = document.getElementById("sched-frame");
                 const _sw = _sf && _sf.contentWindow;
-                if (_sw && typeof _sw._ppItemsToDrafts === "function") _sw._ppItemsToDrafts([queueItem]);
+                if (toDrafts === "next") {
+                  if (_sw && typeof _sw._ppBumpItems === "function") _sw._ppBumpItems([queueItem]);
+                } else if (_sw && typeof _sw._ppItemsToDrafts === "function") _sw._ppItemsToDrafts([queueItem]);
               } catch (e) {}
             }
             trimmed.push(queueItem);
@@ -16985,7 +17821,8 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
         }
         // Show branded success popup
         const acct = _pfAccounts[_pfActiveAccount];
-        if (toDrafts) _pfDraftsToast(selectedPlatforms, indices.length);
+        if (toDrafts === "next") _pfNextToast(selectedPlatforms);
+        else if (toDrafts) _pfDraftsToast(selectedPlatforms, indices.length);
         else showPfSuccessPopup(
           acct ? acct.name : activePfAccountName(),
           acct ? acct.logo : "",
@@ -24628,6 +25465,13 @@ function checkIncomingQueue() {
         try { if (items.length) localStorage.setItem(PF_QUEUE_KEY(), JSON.stringify(items)); else localStorage.removeItem(PF_QUEUE_KEY()); } catch (e) {}
         _ppItemsToDrafts(_toDrafts);
       }
+      // "⚡ Post next" posts go straight into the next upcoming slot
+      const _timely = items.filter(it => it && it.timely);
+      if (_timely.length) {
+        items = items.filter(it => !(it && it.timely));
+        try { if (items.length) localStorage.setItem(PF_QUEUE_KEY(), JSON.stringify(items)); else localStorage.removeItem(PF_QUEUE_KEY()); } catch (e) {}
+        _ppBumpItems(_timely);
+      }
       if (items && items.length && !state.showIncomingModal) {
         state.incomingQueue = items;
         state._pfShownIds = new Set(items.map(it => String(it && it.id)));
@@ -27314,6 +28158,7 @@ function renderCalendarView() {
   // Collect ALL posts across all platforms for this month, keyed by YYYY-MM-DD
   const byDay = {};
   Object.values(PLATFORMS).forEach(plat => {
+    if (_ppCalOnly() && plat.id !== _ppCalOnly()) return;
     (state.posts[plat.id] || []).forEach(post => {
       if (!post.scheduledDate) return;
       const d = post.scheduledDate; // 'YYYY-MM-DD'
@@ -27367,14 +28212,7 @@ function renderCalendarView() {
 
   // Build legend — only show platforms that actually have posts on the calendar
   const platformsWithPosts = Object.values(PLATFORMS).filter(p => (state.posts[p.id] || []).some(x => x.scheduledDate));
-  const legend = platformsWithPosts.length > 0
-    ? platformsWithPosts.map(p =>
-        `<div class="cal-legend-item">
-          <div class="cal-legend-dot" style="background:${p.color}"></div>
-          <span>${p.name}</span>
-        </div>`
-      ).join('')
-    : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">No scheduled posts yet</span>`;
+  const legend = _ppCalLegend(platformsWithPosts);
 
   // Build cells HTML
   const cellsHtml = cells.map(({ cellDate, dayNum, otherMonth }) => {
@@ -27385,10 +28223,11 @@ function renderCalendarView() {
       isToday ? 'today' : '',
       isViewingDay ? 'viewing-day' : '',
       otherMonth ? 'other-month' : '',
-      posts.length ? 'has-posts' : ''
+      posts.length ? 'has-posts' : '',
+      ppWeekendsOff() && _ppIsWknd(cellDate) ? 'wknd-off' : ''
     ].filter(Boolean).join(' ');
 
-    const MAX_VISIBLE_CHIPS = 4;
+    const MAX_VISIBLE_CHIPS = _ppCalOnly() ? 10 : 4;
     const chipsHtml = (() => {
       if (!posts.length) return '';
       const chipParts = posts.map(({ post, plat }, idx) => {
@@ -27440,7 +28279,7 @@ function renderCalendarView() {
       ondragover="calCellDragOver(event,'${cellDate}')"
       ondragleave="calCellDragLeave(event)"
       ondrop="calCellDrop(event,'${cellDate}')">
-      <div class="cal-day-num">${dayNum}</div>
+      <div class="cal-day-num">${dayNum}</div>${_ppCalCap(cellDate, posts.length)}
       ${holidayHtml}
       ${chipsHtml}
     </div>`;
@@ -27451,7 +28290,7 @@ function renderCalendarView() {
   return `
     <div id="cal-wrap">
       <div id="cal-nav">
-        <h2>${MONTH_NAMES[m]} ${y}</h2>
+        <h2>${MONTH_NAMES[m]} ${y}${_ppCalOnly() ? ' · ' + PLATFORMS[_ppCalOnly()].name + ' only' : ''}</h2>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <div class="cal-legend">${legend}</div>
           <div class="cal-nav-btns">
@@ -27463,7 +28302,7 @@ function renderCalendarView() {
       </div>
       <div id="cal-grid-wrap">
         <div id="cal-dow-row">${dowRow}</div>
-        <div id="cal-cells">${cellsHtml}</div>
+        <div id="cal-cells" class="${_ppCalOnly() ? 'cal-only' : ''}">${cellsHtml}</div>
       </div>
     </div>
     <div id="cal-day-popover" onclick="event.stopPropagation()">
@@ -28587,7 +29426,7 @@ function render() {
     ${state.showComposer ? renderComposerModal(platform) : ''}
 
     <!_PPESC_-- BATCH SCHEDULE MODAL -->
-    ${state.showBatchScheduleModal ? renderBatchScheduleModal() : ''}${state.showPlanWeek ? renderPlanWeek() : ''}${state.showToday ? renderTodayList() : ''}
+    ${state.showBatchScheduleModal ? renderBatchScheduleModal() : ''}${state.showPlanWeek ? renderPlanWeek() : ''}${state.showToday ? renderTodayList() : ''}${state.showBestFit ? renderBestFit() : ''}${state.showBestTimes ? renderBestTimes() : ''}
 
     <!_PPESC_-- HASHTAG SET MODAL -->
     ${state.showHashtagSetModal ? renderHashtagSetModal() : ''}
@@ -30012,7 +30851,7 @@ function confirmBatchSchedule() {
       isGif: draft.isGif,
       tags: draft.tags || [],
       scheduledDate: dateStr,
-      scheduledTime: time,
+      scheduledTime: (_plan.times && _plan.times[i]) || time,
     };
     state.posts[platform] = sortPosts([...(state.posts[platform] || []), newPost]);
     scheduled++;
@@ -30063,6 +30902,7 @@ function renderBatchScheduleModal() {
         <div class="form-group">
           <label class="form-label">Posting Frequency</label>
           <select onchange="updateBatchScheduleForm('spacing',this.value)">
+            <option value="best"    ${spacing==='best'   ?'selected':''}>Best days & times (each platform's own)</option>
             <option value="open"    ${spacing==='open'   ?'selected':''}>Open days only (skip busy days)</option>
             <option value="daily"   ${spacing==='daily'  ?'selected':''}>Daily</option>
             <option value="every2"  ${spacing==='every2' ?'selected':''}>Every 2 days</option>
@@ -30072,7 +30912,7 @@ function renderBatchScheduleModal() {
         </div>
         <div style="font-size:11.5px;color:var(--text-muted);background:var(--bg-elevated);border-radius:7px;padding:10px 12px;line-height:1.6">
           ${count} draft${count!==1?'s':''} will be scheduled starting <strong style="color:var(--text-primary)">${startDate||'—'}</strong>
-          at <strong style="color:var(--text-primary)">${time}</strong>, ${spacing==='open'?'one per open day (days that already have a post are skipped)':spacing==='daily'?'every day':spacing==='every2'?'every 2 days':spacing==='mwf'?'Mon/Wed/Fri':'weekly'}.
+          at <strong style="color:var(--text-primary)">${time}</strong>, ${spacing==='best'?'on the platform\'s best days and times, spread out (the time above is not used)':spacing==='open'?'one per open day (days that already have a post are skipped)':spacing==='daily'?'every day':spacing==='every2'?'every 2 days':spacing==='mwf'?'Mon/Wed/Fri':'weekly'}.
         </div>
         ${_ppBatchPreview()}
       </div>
@@ -30761,7 +31601,7 @@ async function _ppItemsToDrafts(items) {
         await savePosts(state.posts);
         render();
         const k = Object.keys(sched)[0], total = Object.values(sched).reduce((a, d) => a + d.length, 0);
-        showToast('📅 Scheduled ' + total + ' post' + (total === 1 ? '' : 's') + ' on open days: ' + Object.keys(sched).map(p => PLATFORMS[p].name + ' ' + sched[p].map(_ppNiceDay).join(', ')).join(' · ') + ' at ' + _ppClock(ppDefaultTime(k)) + '.');
+        showToast('📅 Scheduled ' + total + ' post' + (total === 1 ? '' : 's') + ' on their best days and times: ' + Object.keys(sched).map(p => PLATFORMS[p].name + ' ' + sched[p].map(_ppNiceDay).join(', ')).join(' · ') + '.');
       }
     }
   } catch (e) {
@@ -31090,6 +31930,822 @@ function renderComingUp() {
     .td-act { display: flex; gap: 5px; flex-shrink: 0; }
     .td-ok { color: #22c55e; font-weight: 700; font-size: 11.5px; align-self: center; }
     .td-miss { font-size: 12px; color: #f5a623; margin-top: 4px; }`;
+  document.head.appendChild(st);
+})();
+// ── Best days and times per platform (general guidance; edit them under ⭐ Best times) ──
+// [day of week (0 = Sun … 6 = Sat), "HH:MM"]
+const PP_BEST_DEFAULT = {
+  instagram: [[1, '09:00'], [2, '10:00'], [3, '11:00'], [4, '12:00'], [5, '10:00']],
+  facebook: [[1, '09:00'], [2, '09:00'], [3, '10:00'], [4, '09:00'], [5, '09:00']],
+  linkedin: [[1, '09:00'], [2, '08:00'], [3, '09:00'], [4, '08:00']],
+  pinterest: [[0, '20:00'], [2, '20:00'], [4, '20:00'], [5, '20:00'], [6, '20:00']],
+  google: [[1, '10:00'], [2, '10:00'], [3, '10:00'], [4, '10:00'], [5, '10:00']],
+  twitter: [[1, '10:00'], [2, '09:00'], [3, '09:00'], [4, '09:00'], [5, '10:00']],
+  bluesky: [[1, '10:00'], [2, '09:00'], [3, '09:00'], [4, '09:00'], [5, '10:00']],
+  tiktok: [[0, '19:00'], [2, '19:00'], [3, '19:00'], [4, '19:00'], [5, '17:00']],
+  youtube: [[4, '15:00'], [5, '15:00'], [6, '11:00'], [0, '11:00']],
+  shopify: [[2, '10:00'], [4, '10:00'], [6, '10:00']],
+  tumblr: [[0, '19:00'], [1, '19:00'], [3, '19:00'], [5, '19:00']],
+  kofi: [[0, '18:00'], [2, '18:00'], [5, '18:00']],
+  patreon: [[0, '18:00'], [2, '18:00'], [5, '18:00']],
+};
+const _PP_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+function _ppBestStore() { try { return JSON.parse(localStorage.getItem(wsKey('pp_best_slots')) || '{}') || {}; } catch (e) { return {}; } }
+function ppBestSlots(pid) {
+  const c = _ppBestStore()[pid];
+  const list = Array.isArray(c) ? c : (PP_BEST_DEFAULT[pid] || [[1, ppDefaultTime(pid)], [3, ppDefaultTime(pid)], [5, ppDefaultTime(pid)]]);
+  return list.filter(x => Array.isArray(x) && x.length === 2 && /^\d\d:\d\d$/.test(x[1])).slice().sort((a, b) => a[0] - b[0] || a[1].localeCompare(b[1]));
+}
+function ppSetBestSlots(pid, list) {
+  const m = _ppBestStore();
+  if (list) m[pid] = list; else delete m[pid];
+  try { localStorage.setItem(wsKey('pp_best_slots'), JSON.stringify(m)); } catch (e) {}
+}
+const _ppT = (date, time) => new Date(date + 'T' + (time || '00:00')).getTime();
+// The platform's best slots, in order, from a moment on
+function ppSlotsFrom(pid, fromMs, days) {
+  const best = ppBestSlots(pid), out = [];
+  const start = new Date(fromMs); start.setHours(0, 0, 0, 0);
+  for (let i = 0; i < (days || 60); i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const ds = _ppDayStr(d), dow = d.getDay();
+    best.forEach(([w, time]) => { if (w === dow) { const t = _ppT(ds, time); if (t > fromMs) out.push({ date: ds, time, t }); } });
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+// Days that already have a post on the platform (one post a day keeps things spread out)
+function _ppTaken(pid, exclude) {
+  const s = new Set();
+  (state.posts[pid] || []).forEach(p => { if (p.scheduledDate && !(exclude && exclude.has(String(p.id)))) s.add(p.scheduledDate); });
+  return s;
+}
+function ppNextFree(pid, fromMs, taken, days) { return ppSlotsFrom(pid, fromMs, days || 120).find(s => !taken.has(s.date)) || null; }
+function ppBestPlan(pid, n, fromMs, days, taken) {
+  taken = taken || _ppTaken(pid);
+  const out = [];
+  for (const s of ppSlotsFrom(pid, fromMs, days || 120)) {
+    if (out.length >= n) break;
+    if (taken.has(s.date)) continue;
+    out.push(s); taken.add(s.date);
+  }
+  return out;
+}
+const _ppSlotLabel = (s) => s ? _ppNiceDay(s.date) + ' · ' + _ppClock(s.time) : '';
+function _ppBestSummary(pid) { return ppBestSlots(pid).map(([d, t]) => _PP_DOW[d] + ' ' + _ppClock(t).replace(':00', '')).join(', '); }
+
+// ── Plan my week, on each platform's best days and times ──
+function _ppPlanRows() {
+  const pw = state.planWeek || { days: 7, skip: {} }, rows = [];
+  _ppVisible().forEach(pl => {
+    const drafts = state.drafts[pl.id] || [];
+    if (!drafts.length) return;
+    const slots = ppBestPlan(pl.id, drafts.length, Date.now(), pw.days);
+    rows.push({ pl, drafts, slots: drafts.map((_, i) => slots[i] || null), plan: drafts.map((_, i) => slots[i] ? slots[i].date : null), on: !(pw.skip || {})[pl.id] });
+  });
+  return rows;
+}
+function renderPlanWeek() {
+  const pw = state.planWeek || { days: 7 };
+  const rows = _ppPlanRows();
+  const total = rows.reduce((n, r) => n + (r.on ? r.slots.filter(Boolean).length : 0), 0);
+  const sec = (r) => {
+    const fit = r.slots.filter(Boolean).length;
+    return `<div class="pw-sec" style="border-left-color:${r.pl.color}">
+      <div class="pw-head"><label class="pw-on"><input type="checkbox" ${r.on ? 'checked' : ''} onchange="ppPlanToggle('${r.pl.id}', this.checked)"/> <span style="color:${r.pl.color};font-weight:700">${escapeHtml(r.pl.name)}</span></label>
+        <span class="pw-count">${fit} of ${r.drafts.length} draft${r.drafts.length === 1 ? '' : 's'} fit</span>
+        <span class="pw-tl" title="${escapeHtml(r.pl.name)}'s best days and times">⭐ ${escapeHtml(_ppBestSummary(r.pl.id))}</span></div>
+      ${r.on ? `<div class="pw-list">${r.drafts.map((d, i) => `<div class="bp-row"><img src="${escapeHtml(d.imageThumb || d.imageFull || '')}" alt=""/><span class="bp-name">${escapeHtml(String(d.srcHeader || d.notes || d.imageName || 'Draft').slice(0, 48))}</span><span class="bp-date${r.slots[i] ? '' : ' none'}">${r.slots[i] ? _ppSlotLabel(r.slots[i]) : 'stays in Drafts'}</span></div>`).join('')}</div>` : ''}
+    </div>`;
+  };
+  return `<div class="overlay" onclick="ppClosePlanWeek()" style="z-index:820"><div class="modal" style="max-width:680px" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="pw-title">
+    <div class="modal-header"><h2 class="modal-title" id="pw-title">🗓 Plan my week</h2><button class="close-btn" onclick="ppClosePlanWeek()" aria-label="Close">×</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;max-height:68vh;overflow-y:auto">
+      <div class="pw-top"><span>Each platform's drafts go onto its best days and times: one post a day (Pinterest: up to ${ppDailyCap('pinterest')} a day)${ppWeekendsOff() ? ', weekdays only' : ''}. <button type="button" class="od-mk" onclick="ppOpenBestTimes()">⭐ Edit best times</button></span>
+        <label>Plan <select aria-label="How far ahead to plan" onchange="state.planWeek.days = +this.value; render()">${[7, 14, 30].map(d => `<option value="${d}" ${d === pw.days ? 'selected' : ''}>${d === 7 ? 'this week (7 days)' : 'the next ' + d + ' days'}</option>`).join('')}</select></label></div>
+      ${rows.length ? rows.map(sec).join('') : `<div class="pw-empty">No drafts to plan yet. Send posts to Drafts from the Post Creator (🗂 Save to Drafts), then come back here.</div>`}
+    </div>
+    <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;padding:16px 20px">
+      <button class="btn-cancel" onclick="ppClosePlanWeek()">Cancel</button>
+      <button class="btn-save" ${total ? '' : 'disabled'} onclick="ppConfirmPlanWeek()">Schedule ${total} post${total === 1 ? '' : 's'} →</button>
+    </div></div></div>`;
+}
+function ppConfirmPlanWeek() {
+  const rows = _ppPlanRows().filter(r => r.on);
+  const posts = { ...state.posts }, drafts = { ...state.drafts }, per = {};
+  let n = 0;
+  rows.forEach(r => {
+    const done = new Set();
+    r.drafts.forEach((d, i) => {
+      const s = r.slots[i];
+      if (!s || (posts[r.pl.id] || []).length >= MAX_POSTS) return;
+      const post = { ...defaultForm(r.pl.id), ...(d.formSnapshot ? d.formSnapshot : _draftTextFields(d)), id: Date.now() + Math.random(), publishStatus: 'scheduled', platform: r.pl.id,
+        image: d.imageFull, imageOriginal: d.imageFull, imageName: d.imageName, isVideo: d.isVideo, isGif: d.isGif, tags: d.tags || [], scheduledDate: s.date, scheduledTime: s.time };
+      posts[r.pl.id] = sortPosts([...(posts[r.pl.id] || []), post]);
+      done.add(String(d.id)); n++; per[r.pl.id] = (per[r.pl.id] || 0) + 1;
+    });
+    drafts[r.pl.id] = (drafts[r.pl.id] || []).filter(d => !done.has(String(d.id)));
+  });
+  state.posts = posts; state.drafts = drafts;
+  savePosts(state.posts); saveDrafts(state.drafts);
+  state.showPlanWeek = false;
+  render();
+  showToast(n ? '🗓 Scheduled ' + n + ' post' + (n === 1 ? '' : 's') + ' on their best days and times: ' + Object.keys(per).map(p => PLATFORMS[p].name + ' ×' + per[p]).join(', ') + '.' : 'Nothing to schedule.');
+}
+
+// ── Batch Schedule: "Best days & times" ──
+function _ppBatchPlan(pid, n, startDate, spacing, time) {
+  const out = [];
+  if (!startDate) return out;
+  if (spacing === 'best') {
+    const from = Math.max(Date.now(), _ppT(startDate, '00:00') - 1);
+    const slots = ppBestPlan(pid, n, from, 180);
+    slots.forEach(s => out.push(s.date));
+    out.times = slots.map(s => s.time);
+    return out;
+  }
+  const cur = new Date(startDate + 'T00:00:00');
+  if (spacing === 'open') {
+    const busy = _ppBusyDays(pid), today = _ppDayStr(new Date());
+    const late = time && new Date(today + 'T' + time) <= new Date();
+    for (let g = 0; out.length < n && g < 800; g++) {
+      const s = _ppDayStr(cur);
+      if (!busy.get(s) && !(s === today && late)) out.push(s);
+      cur.setDate(cur.getDate() + 1);
+    }
+    return out;
+  }
+  const step = { daily: 1, every2: 2, weekly: 7 }[spacing] || 1;
+  for (let i = 0; i < n; i++) {
+    out.push(_ppDayStr(cur));
+    if (spacing === 'mwf') { do { cur.setDate(cur.getDate() + 1); } while (![1, 3, 5].includes(cur.getDay())); }
+    else cur.setDate(cur.getDate() + step);
+  }
+  return out;
+}
+function _ppBatchPreview() {
+  const pid = state.activePlatform;
+  const drafts = (state.drafts[pid] || []).filter(d => state.selectedDrafts.has(String(d.id)));
+  const f = state.batchScheduleForm || {};
+  if (!drafts.length || !f.startDate) return '';
+  const plan = _ppBatchPlan(pid, drafts.length, f.startDate, f.spacing, f.time);
+  const busy = _ppBusyDays(pid);
+  return `<div class="bp-prev"><div class="bp-head">Where they'll go</div>` + drafts.map((d, i) => {
+    const n = busy.get(plan[i]) || 0, tm = plan.times ? plan.times[i] : f.time;
+    return `<div class="bp-row"><img src="${escapeHtml(d.imageThumb || d.imageFull || '')}" alt=""/><span class="bp-name">${escapeHtml(String(d.srcHeader || d.notes || d.imageName || 'Draft').slice(0, 42))}</span>` +
+      `<span class="bp-date${n ? ' busy' : ''}">${plan[i] ? _ppNiceDay(plan[i]) + (tm ? ' · ' + _ppClock(tm) : '') : '—'}${n ? ' · ⚠ already has ' + n : ''}</span></div>`;
+  }).join('') + `</div>`;
+}
+const _ppOpenBatchBest = openBatchScheduleModal;
+openBatchScheduleModal = function () { const r = _ppOpenBatchBest.apply(this, arguments); state.batchScheduleForm = { ...state.batchScheduleForm, spacing: 'best' }; render(); return r; };
+
+// ── "Schedule on open days" from the Batch: each post on the platform's next free best slot ──
+async function _ppScheduleItemOpen(item, pid, fmt, sched) {
+  const imageName = _ppItemName(item, pid, fmt);
+  const posts = state.posts[pid] || [];
+  if (posts.some(p => p.imageName === imageName && p.fromBrandCreator)) return; // already scheduled
+  if (posts.length >= MAX_POSTS) return;
+  const imageData = await getImageForPlatform(item, pid, fmt);
+  const slot = ppNextFree(pid, Date.now(), _ppTaken(pid)) || { date: _ppBatchPlan(pid, 1, _ppDayStr(new Date()), 'open', ppDefaultTime(pid))[0], time: ppDefaultTime(pid) };
+  const post = { ...defaultForm(pid), ..._draftTextFields(_ppSrcOf(item, pid)), id: Date.now() + Math.random(), platform: pid, image: imageData, imageOriginal: imageData, imageName,
+    scheduledDate: slot.date, scheduledTime: slot.time, publishStatus: 'scheduled', fromBrandCreator: true };
+  state.posts = { ...state.posts, [pid]: sortPosts([...(state.posts[pid] || []), post]) };
+  _pcShowPlatform(pid);
+  (sched[pid] = sched[pid] || []).push(slot.date);
+}
+function _ppSrcOf(item, pid) {
+  return { platform: pid, srcHeader: item.header || '', srcContent: item.content || '', srcCaptions: item.captions || null, srcPinTitle: item.pinTitle || '',
+    srcLink: item.link || '', srcAlt: item.altText || '', srcLinks: item.links || null, srcAlts: item.alts || null, notes: [item.header, item.content].filter(Boolean).join(' · ').substring(0, 200) };
+}
+
+// ── ⚡ Post next: a timely post takes the next upcoming slot; the post it bumps moves to the next best day and time ──
+let _ppBumpBusy = Promise.resolve();
+function _ppBumpItems(items) { _ppBumpBusy = _ppBumpBusy.then(() => _ppBumpNow(items)).catch(e => console.error('Post next failed', e)); return _ppBumpBusy; }
+async function _ppBumpNow(items) {
+  const notes = [];
+  for (const item of items) {
+    const pids = ((item.selectedPlatforms && item.selectedPlatforms.length) ? item.selectedPlatforms : [item.platform || 'instagram']).filter(pid => PLATFORMS[pid]);
+    for (const pid of pids) {
+      const fmt = item.format || 'png';
+      const imageName = _ppItemName(item, pid, fmt);
+      if ((state.posts[pid] || []).some(p => p.timely && p.imageName === imageName)) continue; // already placed
+      const imageData = await getImageForPlatform(item, pid, fmt);
+      const now = Date.now();
+      const upcoming = (state.posts[pid] || []).filter(p => p.scheduledDate && p.publishStatus !== 'published' && _ppT(p.scheduledDate, p.scheduledTime) > now)
+        .sort((a, b) => _ppT(a.scheduledDate, a.scheduledTime) - _ppT(b.scheduledDate, b.scheduledTime));
+      let slot, bumped = null;
+      if (upcoming.length && _ppT(upcoming[0].scheduledDate, upcoming[0].scheduledTime) - now <= 7 * 864e5) {
+        bumped = upcoming[0];
+        slot = { date: bumped.scheduledDate, time: bumped.scheduledTime };
+      } else slot = ppNextFree(pid, now, _ppTaken(pid)) || { date: _ppDayStr(new Date(now + 864e5)), time: ppDefaultTime(pid) };
+      const post = { ...defaultForm(pid), ..._draftTextFields(_ppSrcOf(item, pid)), id: Date.now() + Math.random(), platform: pid, image: imageData, imageOriginal: imageData, imageName,
+        scheduledDate: slot.date, scheduledTime: slot.time, publishStatus: 'scheduled', fromBrandCreator: true, timely: true };
+      let list = [...(state.posts[pid] || []), post];
+      let moved = null;
+      if (bumped) {
+        const taken = new Set(list.filter(p => p.scheduledDate && p !== bumped).map(p => p.scheduledDate));
+        moved = ppNextFree(pid, _ppT(slot.date, slot.time), taken);
+        if (moved) list = list.map(p => p === bumped ? { ...p, scheduledDate: moved.date, scheduledTime: moved.time } : p);
+      }
+      state.posts = { ...state.posts, [pid]: sortPosts(list) };
+      _pcShowPlatform(pid);
+      notes.push(`${PLATFORMS[pid].name} ${_ppSlotLabel(slot)}` + (bumped && moved ? ` (the post that was there moved to ${_ppSlotLabel(moved)})` : ''));
+    }
+  }
+  if (notes.length) {
+    await savePosts(state.posts);
+    render();
+    showToast('⚡ Timely post scheduled: ' + notes.join(' · ') + '.');
+  }
+}
+
+// ── Holidays: their posts belong in the lead-up, spread out, with other content in between ──
+function _ppNthDow(y, m, dow, n) { const d = new Date(y, m, 1); const off = (dow - d.getDay() + 7) % 7; d.setDate(1 + off + (n - 1) * 7); return d; }
+function _ppLastDow(y, m, dow) { const d = new Date(y, m + 1, 0); d.setDate(d.getDate() - ((d.getDay() - dow + 7) % 7)); return d; }
+const _ppD = (d) => _ppDayStr(d);
+const _ppAdd = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const PP_HOLIDAYS = [
+  { id: 'halloween', name: 'Halloween', re: /\bhalloween\b|trick[\s-]or[\s-]treat|trunk[\s-]or[\s-]treat|jack[\s-]?o[\s'-]*lantern/i, win: (y) => [`${y}-09-15`, `${y}-10-31`] },
+  { id: 'thanksgiving', name: 'Thanksgiving', re: /thanksgiving|friendsgiving|turkey fryer/i, win: (y) => [`${y}-11-01`, _ppD(_ppNthDow(y, 10, 4, 4))] },
+  { id: 'christmas', name: 'the holidays', re: /christmas|\bxmas\b|hanukkah|kwanzaa|holiday lights|holiday decorat|holiday season|santa/i, win: (y) => [`${y}-11-24`, `${y}-12-25`] },
+  { id: 'newyear', name: 'New Year', re: /new year'?s|\bnye\b/i, win: (y) => [`${y}-12-26`, `${y + 1}-01-03`] },
+  { id: 'valentine', name: "Valentine's Day", re: /valentine/i, win: (y) => [`${y}-02-01`, `${y}-02-14`] },
+  { id: 'stpatrick', name: "St. Patrick's Day", re: /st\.?\s*patrick|st\.?\s*paddy/i, win: (y) => [`${y}-03-01`, `${y}-03-17`] },
+  { id: 'mothers', name: "Mother's Day", re: /mother'?s day/i, win: (y) => { const d = _ppNthDow(y, 4, 0, 2); return [_ppD(_ppAdd(d, -14)), _ppD(d)]; } },
+  { id: 'memorial', name: 'Memorial Day', re: /memorial day/i, win: (y) => { const d = _ppLastDow(y, 4, 1); return [_ppD(_ppAdd(d, -10)), _ppD(d)]; } },
+  { id: 'fathers', name: "Father's Day", re: /father'?s day/i, win: (y) => { const d = _ppNthDow(y, 5, 0, 3); return [_ppD(_ppAdd(d, -14)), _ppD(d)]; } },
+  { id: 'july4', name: 'the Fourth of July', re: /fourth of july|4th of july|independence day|fireworks/i, win: (y) => [`${y}-06-20`, `${y}-07-04`] },
+  { id: 'backtoschool', name: 'back to school', re: /back[\s-]to[\s-]school/i, win: (y) => [`${y}-07-25`, `${y}-09-10`] },
+  { id: 'laborday', name: 'Labor Day', re: /labor day/i, win: (y) => { const d = _ppNthDow(y, 8, 1, 1); return [_ppD(_ppAdd(d, -7)), _ppD(d)]; } },
+];
+function _ppHolidayOf(text, nowMs) {
+  const h = PP_HOLIDAYS.find(x => x.re.test(text || ''));
+  if (!h) return null;
+  const today = _ppDayStr(new Date(nowMs || Date.now())), y = new Date(nowMs || Date.now()).getFullYear();
+  for (const yy of [y - 1, y, y + 1]) { const [start, end] = h.win(yy); if (end >= today) return { id: h.id, name: h.name, start, end }; }
+  return null;
+}
+function _ppAllText(p) { return [p.title, p.caption, p.content, p.description, p.liText, p.fbText, p.twitterText, p.bskyText, p.tiktokText, p.shopifyText, p.tumblrText, p.kofiText, p.patreonText, p.ytText, p.hashtags].filter(Boolean).join(' '); }
+function _ppDraftText(d) {
+  const f = d.formSnapshot || {};
+  return [d.srcHeader, d.srcContent, d.srcPinTitle, d.notes, d.srcCaptions && Object.values(d.srcCaptions).join(' '), _ppAllText(f)].filter(Boolean).join(' ');
+}
+const _ppDayGap = (a, b) => Math.abs(Math.round((_ppT(a, '12:00') - _ppT(b, '12:00')) / 864e5));
+
+// ── ✨ Best fit: posts onto their platform's best days and times, holiday posts spread through the lead-up ──
+function _ppFitPlan(opts) {
+  opts = opts || {};
+  const now = Date.now(), horizon = opts.days || 60, out = [];
+  _ppVisible().forEach(pl => {
+    if (opts.skip && opts.skip[pl.id]) return;
+    const pid = pl.id;
+    const best = ppBestSlots(pid);
+    if (!best.length) return;
+    const all = state.posts[pid] || [];
+    const upcoming = all.filter(p => p.scheduledDate && p.publishStatus !== 'published' && _ppT(p.scheduledDate, p.scheduledTime) > now)
+      .sort((a, b) => _ppT(a.scheduledDate, a.scheduledTime) - _ppT(b.scheduledDate, b.scheduledTime));
+    const drafts = opts.drafts ? (state.drafts[pid] || []) : [];
+    if (!upcoming.length && !drafts.length) return;
+    const onBest = (p) => { const dow = new Date(p.scheduledDate + 'T00:00:00').getDay(); return best.some(([d, t]) => d === dow && t === p.scheduledTime); };
+    const keptDays = new Set(all.filter(p => p.scheduledDate && (p.publishStatus === 'published' || _ppT(p.scheduledDate, p.scheduledTime) <= now)).map(p => p.scheduledDate));
+    const holDays = {}, keep = [], move = [];
+    upcoming.forEach(p => {
+      const h = _ppHolidayOf(_ppAllText(p), now);
+      const inWin = !h || (p.scheduledDate >= h.start && p.scheduledDate <= h.end);
+      if (onBest(p) && inWin && !keptDays.has(p.scheduledDate)) {
+        keep.push(p); keptDays.add(p.scheduledDate);
+        if (h) (holDays[h.id] = holDays[h.id] || []).push(p.scheduledDate);
+      } else move.push({ kind: 'post', ref: p, h, why: h && !inWin ? 'holiday' : keptDays.has(p.scheduledDate) ? 'crowded' : 'time' });
+    });
+    const items = move.concat(drafts.map(d => ({ kind: 'draft', ref: d, h: _ppHolidayOf(_ppDraftText(d), now), why: 'draft' })));
+    const slots = ppSlotsFrom(pid, now, horizon).filter(s => !keptDays.has(s.date));
+    const used = new Set(), moves = [], stuck = [];
+    // Other posts first: the nearest best slot on or after the day they were meant for (their timing stays close)
+    items.filter(x => !x.h && x.kind === 'post').forEach(x => {
+      const from = Math.max(now, _ppT(x.ref.scheduledDate, '00:00'));
+      const s = slots.find(q => q.t >= from && !used.has(q.date)) || slots.find(q => !used.has(q.date));
+      if (!s) return stuck.push({ x, note: 'no free best slot in the planning window' });
+      used.add(s.date);
+      moves.push({ x, s, reason: x.why === 'crowded' ? 'was sharing a day with another post' : `a better day and time for ${pl.name}` });
+    });
+    // Holiday posts: evenly spread through the lead-up to the holiday, at most every other day, so other posts sit in between
+    const byHol = {};
+    items.filter(x => x.h).forEach(x => (byHol[x.h.id] = byHol[x.h.id] || []).push(x));
+    Object.values(byHol).forEach(list => {
+      const h = list[0].h;
+      const winDays = new Set(ppSlotsFrom(pid, now, horizon).filter(s => s.date >= h.start && s.date <= h.end).map(s => s.date)).size;
+      const room = Math.max(0, Math.ceil(winDays / 2) - (holDays[h.id] || []).length);
+      const free = slots.filter(s => s.date >= h.start && s.date <= h.end && !used.has(s.date));
+      const k = Math.min(list.length, room, free.length);
+      for (let j = 0; j < k; j++) {
+        let at = Math.min(free.length - 1, Math.floor((j + 0.5) * free.length / k));
+        while (at < free.length && used.has(free[at].date)) at++;
+        if (at >= free.length) { at = free.findIndex(s => !used.has(s.date)); if (at < 0) break; }
+        const s = free[at];
+        used.add(s.date);
+        moves.push({ x: list[j], s, reason: `${h.name}: spread through ${_ppNiceDay(h.start)} – ${_ppNiceDay(h.end)}` });
+      }
+      list.slice(k).forEach(x => stuck.push({ x, note: free.length ? `more ${h.name} posts than the lead-up has room for` : `no free slot before ${h.name}` }));
+    });
+    // Drafts: the earliest free best slots
+    items.filter(x => !x.h && x.kind === 'draft').forEach(x => {
+      const s = slots.find(q => !used.has(q.date));
+      if (!s) return stuck.push({ x, note: 'no free best slot in the planning window' });
+      used.add(s.date);
+      moves.push({ x, s, reason: 'from Drafts' });
+    });
+    const real = moves.filter(m => !(m.x.kind === 'post' && m.s.date === m.x.ref.scheduledDate && m.s.time === m.x.ref.scheduledTime));
+    if (real.length || stuck.length) out.push({ pl, keep: keep.length, moves: real.sort((a, b) => a.s.t - b.s.t), stuck });
+  });
+  return out;
+}
+function ppOpenBestFit() { state.bestFit = Object.assign({ days: 60, drafts: true }, state.bestFit || {}); state.showBestFit = true; render(); }
+function ppCloseBestFit() { state.showBestFit = false; render(); }
+function renderBestFit() {
+  const bf = state.bestFit || { days: 60, drafts: true };
+  const plan = _ppFitPlan(bf);
+  const total = plan.reduce((n, r) => n + r.moves.length, 0);
+  const name = (x) => escapeHtml(String(x.kind === 'draft' ? (x.ref.srcHeader || x.ref.notes || x.ref.imageName || 'Draft') : (getPostSummary ? getPostSummary(x.ref) : '') || x.ref.title || x.ref.caption || 'Post').slice(0, 46));
+  const img = (x) => escapeHtml(x.kind === 'draft' ? (x.ref.imageThumb || x.ref.imageFull || '') : (x.ref.image || ''));
+  return `<div class="overlay" onclick="ppCloseBestFit()" style="z-index:820"><div class="modal" style="max-width:760px" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="bf-title">
+    <div class="modal-header"><h2 class="modal-title" id="bf-title">✨ Best fit</h2><button class="close-btn" onclick="ppCloseBestFit()" aria-label="Close">×</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;max-height:68vh;overflow-y:auto">
+      <div class="pw-top"><span>Posts go onto each platform's best days and times: one a day (Pinterest: up to ${ppDailyCap('pinterest')})${ppWeekendsOff() ? ', weekdays only' : ''}. Holiday posts are spread through the lead-up to the holiday, with other posts in between. <button type="button" class="od-mk" onclick="ppOpenBestTimes()">⭐ Edit best times</button></span>
+        <span style="display:flex;gap:12px;align-items:center"><label><input type="checkbox" ${bf.drafts ? 'checked' : ''} onchange="state.bestFit.drafts = this.checked; render()"/> Include drafts</label>
+        <label>Look ahead <select onchange="state.bestFit.days = +this.value; render()">${[30, 60, 90].map(d => `<option value="${d}" ${d === bf.days ? 'selected' : ''}>${d} days</option>`).join('')}</select></label></span></div>
+      ${plan.length ? plan.map(r => `<div class="pw-sec" style="border-left-color:${r.pl.color}">
+        <div class="pw-head"><span style="color:${r.pl.color};font-weight:700">${escapeHtml(r.pl.name)}</span><span class="pw-count">${r.moves.length} change${r.moves.length === 1 ? '' : 's'}${r.keep ? ` · ${r.keep} already on a best time` : ''}</span></div>
+        <div class="pw-list">${r.moves.map(m => `<div class="bp-row bf-row"><img src="${img(m.x)}" alt=""/><span class="bp-name">${name(m.x)}</span>
+          <span class="bf-when">${m.x.kind === 'draft' ? 'Drafts' : _ppNiceDay(m.x.ref.scheduledDate) + ' · ' + _ppClock(m.x.ref.scheduledTime)} → <b>${_ppSlotLabel(m.s)}</b></span><span class="bf-why">${escapeHtml(m.reason)}</span></div>`).join('')}
+          ${r.stuck.map(u => `<div class="bp-row bf-row"><img src="${img(u.x)}" alt=""/><span class="bp-name">${name(u.x)}</span><span class="bf-why warn">⚠ ${escapeHtml(u.note)}; left as is</span></div>`).join('')}</div>
+      </div>`).join('') : `<div class="pw-empty">Everything is already on its platform's best days and times. Nothing to change.</div>`}
+    </div>
+    <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;padding:16px 20px">
+      <button class="btn-cancel" onclick="ppCloseBestFit()">Cancel</button>
+      <button class="btn-save" ${total ? '' : 'disabled'} onclick="ppApplyBestFit()">Apply ${total} change${total === 1 ? '' : 's'} →</button>
+    </div></div></div>`;
+}
+function ppApplyBestFit() {
+  const plan = _ppFitPlan(state.bestFit || {});
+  const posts = { ...state.posts }, drafts = { ...state.drafts };
+  let n = 0;
+  plan.forEach(r => {
+    const pid = r.pl.id, doneDrafts = new Set();
+    r.moves.forEach(m => {
+      if (m.x.kind === 'post') posts[pid] = (posts[pid] || []).map(p => p === m.x.ref ? { ...p, scheduledDate: m.s.date, scheduledTime: m.s.time } : p);
+      else {
+        const d = m.x.ref;
+        posts[pid] = [...(posts[pid] || []), { ...defaultForm(pid), ...(d.formSnapshot ? d.formSnapshot : _draftTextFields(d)), id: Date.now() + Math.random(), publishStatus: 'scheduled', platform: pid,
+          image: d.imageFull, imageOriginal: d.imageFull, imageName: d.imageName, isVideo: d.isVideo, isGif: d.isGif, tags: d.tags || [], scheduledDate: m.s.date, scheduledTime: m.s.time }];
+        doneDrafts.add(String(d.id));
+      }
+      n++;
+    });
+    posts[pid] = sortPosts(posts[pid] || []);
+    if (doneDrafts.size) drafts[pid] = (drafts[pid] || []).filter(d => !doneDrafts.has(String(d.id)));
+  });
+  state.posts = posts; state.drafts = drafts;
+  savePosts(state.posts); saveDrafts(state.drafts);
+  state.showBestFit = false;
+  render();
+  showToast(n ? `✨ Best fit: ${n} post${n === 1 ? '' : 's'} moved onto their best days and times.` : 'Nothing to change.');
+}
+
+// ── ⭐ Best times: edit each platform's best days and times ──
+function ppOpenBestTimes() { state.showBestTimes = true; render(); }
+function ppCloseBestTimes() { state.showBestTimes = false; render(); }
+function ppToggleBestDay(pid, dow) {
+  const list = ppBestSlots(pid);
+  const has = list.some(([d]) => d === dow);
+  ppSetBestSlots(pid, has ? list.filter(([d]) => d !== dow) : [...list, [dow, (list[0] && list[0][1]) || ppDefaultTime(pid)]]);
+  render();
+}
+function ppSetBestTime(pid, dow, time) { ppSetBestSlots(pid, ppBestSlots(pid).map(([d, t]) => [d, d === dow ? time : t])); render(); }
+function ppResetBestTimes(pid) { ppSetBestSlots(pid, null); render(); }
+function renderBestTimes() {
+  const pls = _ppVisible();
+  return `<div class="overlay" onclick="ppCloseBestTimes()" style="z-index:830"><div class="modal" style="max-width:760px" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="bt-title">
+    <div class="modal-header"><h2 class="modal-title" id="bt-title">⭐ Best days and times</h2><button class="close-btn" onclick="ppCloseBestTimes()" aria-label="Close">×</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;max-height:68vh;overflow-y:auto">
+      <div class="pw-top"><span>Plan my week, Batch Schedule, ⚡ Post next and ✨ Best fit use these. They start from general industry guidance; tune them to when your audience is most active.</span></div>
+      ${pls.map(pl => { const list = ppBestSlots(pl.id); const custom = !!_ppBestStore()[pl.id];
+        return `<div class="pw-sec bt-row" style="border-left-color:${pl.color}"><div class="pw-head"><span style="color:${pl.color};font-weight:700;min-width:110px">${escapeHtml(pl.name)}</span>
+          <span class="bt-days">${[1, 2, 3, 4, 5, 6, 0].map(d => { const on = list.find(([w]) => w === d);
+            return `<span class="bt-day${on ? ' on' : ''}"><button type="button" aria-pressed="${on ? 'true' : 'false'}" onclick="ppToggleBestDay('${pl.id}', ${d})">${_PP_DOW[d]}</button>${on ? `<select aria-label="${escapeHtml(pl.name)} ${_PP_DOW[d]} time" onchange="ppSetBestTime('${pl.id}', ${d}, this.value)">${_ppTimeOpts(on[1]).map(t => `<option value="${t}" ${t === on[1] ? 'selected' : ''}>${_ppClock(t)}</option>`).join('')}</select>` : ''}</span>`; }).join('')}</span>
+          ${custom ? `<button type="button" class="od-mk" onclick="ppResetBestTimes('${pl.id}')">Reset</button>` : ''}</div></div>`; }).join('')}
+    </div>
+    <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;padding:16px 20px"><button class="btn-save" onclick="ppCloseBestTimes()">Done</button></div></div></div>`;
+}
+// ── The sidebar card: Today · Plan my week · Best fit · Timely ideas · Best times · gaps ──
+function renderComingUp() {
+  const today = _ppDayStr(new Date());
+  let pending = 0, drafts = 0;
+  _ppVisible().forEach(pl => {
+    (state.posts[pl.id] || []).forEach(p => { if (p.scheduledDate === today && p.publishStatus !== 'published') pending++; });
+    drafts += (state.drafts[pl.id] || []).length;
+  });
+  const gaps = _ppGaps();
+  const ideas = window.parent && window.parent !== window && typeof window.parent.tiOpen === 'function';
+  return `<div class="cu-card">
+    <button type="button" class="cu-btn" onclick="ppOpenToday()">📋 Today${pending ? ` <span class="cu-n">${pending}</span>` : ''}</button>
+    <button type="button" class="cu-btn" onclick="ppOpenPlanWeek()">🗓 Plan my week${drafts ? ` <span class="cu-n alt">${drafts}</span>` : ''}</button>
+    <button type="button" class="cu-btn" onclick="ppOpenBestFit()">✨ Best fit</button>
+    ${ideas ? `<button type="button" class="cu-btn" onclick="window.parent.studioTab('creator'); window.parent.tiOpen()">📰 Timely ideas</button>` : ''}
+    <button type="button" class="cu-btn cu-small" onclick="ppOpenBestTimes()">⭐ Best times</button>
+    ${gaps.length ? `<div class="cu-gaps" role="note"><div class="cu-gh">⚠ Gaps coming up</div>${gaps.slice(0, 5).map(g => `<button type="button" class="cu-gap" onclick="ppOpenPlanWeek()" title="Fill it from your drafts"><b style="color:${g.pl.color}">${escapeHtml(g.pl.name)}</b>: nothing ${g.label}</button>`).join('')}</div>` : ''}
+  </div>`;
+}
+(function _bfStyles() {
+  const st = document.createElement('style');
+  st.textContent = `.cu-small { font-size: 11px; padding: 4px 10px; }
+    .bf-row { flex-wrap: wrap; }
+    .bf-when { font-size: 11.5px; white-space: nowrap; }
+    .bf-why { flex-basis: 100%; padding-left: 36px; font-size: 10.5px; color: var(--text-muted, #8b8fa8); }
+    .bf-why.warn { color: #f5a623; flex-basis: auto; padding-left: 0; }
+    .bt-days { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+    .bt-day { display: inline-flex; align-items: center; gap: 3px; }
+    .bt-day button { border: 1px solid var(--border, rgba(255,255,255,.15)); background: transparent; color: var(--text-muted, #8b8fa8); border-radius: 999px; padding: 3px 9px; font: 700 11px system-ui, sans-serif; cursor: pointer; }
+    .bt-day.on button { background: #22c55e; border-color: #22c55e; color: #fff; }
+    .bt-day select { font-size: 11px; padding: 2px 4px; }
+    .bt-day button:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }`;
+  document.head.appendChild(st);
+})();
+// ── Weekends, per brand (each brand keeps its own setting) ──
+function ppWeekendsOff() { try { return localStorage.getItem(wsKey('pp_weekends_off')) === '1'; } catch (e) { return false; } }
+const _ppIsWknd = (ds) => { const d = new Date(ds + 'T00:00:00').getDay(); return d === 0 || d === 6; };
+const _ppSkipDay = (ds) => ppWeekendsOff() && _ppIsWknd(ds);
+const _ppBrand = () => { try { return getWorkspaceNames()[getActiveWorkspace()] || 'This brand'; } catch (e) { return 'This brand'; } };
+// ── How many posts a day: one everywhere, except Pinterest (up to 10, spread through the day) ──
+function ppDailyCap(pid) {
+  if (pid !== 'pinterest') return 1;
+  const v = parseInt(localStorage.getItem(wsKey('pp_pin_cap')) || '', 10);
+  return v >= 1 && v <= 10 ? v : 10;
+}
+function ppSetPinCap(n) { try { localStorage.setItem(wsKey('pp_pin_cap'), String(Math.max(1, Math.min(10, n | 0)))); } catch (e) {} render(); }
+const PP_MORE_TIMES = { pinterest: ['20:00', '21:00', '14:00', '22:00', '15:00', '19:00', '16:00', '12:00', '10:00', '18:00'] };
+function _ppDayTimes(pid, dow) {
+  const main = ppBestSlots(pid).filter(([d]) => d === dow).map(([, t]) => t);
+  if (!main.length) return [];
+  return [...new Set([...main, ...(PP_MORE_TIMES[pid] || [])])].slice(0, Math.max(1, ppDailyCap(pid))).sort();
+}
+function ppSlotsFrom(pid, fromMs, days) {
+  const out = [], start = new Date(fromMs); start.setHours(0, 0, 0, 0);
+  for (let i = 0; i < (days || 60); i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const ds = _ppDayStr(d);
+    if (_ppSkipDay(ds)) continue;
+    _ppDayTimes(pid, d.getDay()).forEach(time => { const t = _ppT(ds, time); if (t > fromMs) out.push({ date: ds, time, t }); });
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+// What each day already holds: how many posts, at which times
+function _ppOcc(pid, skipIds, list) {
+  const m = new Map();
+  (list || state.posts[pid] || []).forEach(p => {
+    if (!p.scheduledDate || (skipIds && skipIds.has(String(p.id)))) return;
+    const o = m.get(p.scheduledDate) || { n: 0, times: new Set() };
+    o.n++; o.times.add(p.scheduledTime || ''); m.set(p.scheduledDate, o);
+  });
+  return m;
+}
+function _ppAsOcc(pid, taken) {
+  if (taken instanceof Map) return taken;
+  if (taken instanceof Set) { const m = new Map(); taken.forEach(d => m.set(d, { n: 1e9, times: new Set() })); return m; } // a set of days: those days are full
+  return _ppOcc(pid);
+}
+const _ppFreeAt = (pid, occ, s) => { const o = occ.get(s.date); return !o || (o.n < ppDailyCap(pid) && !o.times.has(s.time)); };
+const _ppTakeAt = (occ, s) => { const o = occ.get(s.date) || { n: 0, times: new Set() }; o.n++; o.times.add(s.time); occ.set(s.date, o); };
+function _ppTaken(pid, exclude) { return _ppOcc(pid, exclude); }
+function ppNextFree(pid, fromMs, taken, days) { const occ = _ppAsOcc(pid, taken); return ppSlotsFrom(pid, fromMs, days || 120).find(s => _ppFreeAt(pid, occ, s)) || null; }
+function ppBestPlan(pid, n, fromMs, days, taken) {
+  const occ = _ppAsOcc(pid, taken), out = [];
+  for (const s of ppSlotsFrom(pid, fromMs, days || 120)) {
+    if (out.length >= n) break;
+    if (!_ppFreeAt(pid, occ, s)) continue;
+    out.push(s); _ppTakeAt(occ, s);
+  }
+  return out;
+}
+// Batch Schedule's other spacings skip a brand's clear weekends; "open days" counts Pinterest's room for more
+function _ppBatchPlan(pid, n, startDate, spacing, time) {
+  const out = [];
+  if (!startDate) return out;
+  if (spacing === 'best') {
+    const slots = ppBestPlan(pid, n, Math.max(Date.now(), _ppT(startDate, '00:00') - 1), 180);
+    slots.forEach(s => out.push(s.date));
+    out.times = slots.map(s => s.time);
+    return out;
+  }
+  const cur = new Date(startDate + 'T00:00:00');
+  if (spacing === 'open') {
+    const occ = _ppOcc(pid), cap = ppDailyCap(pid), today = _ppDayStr(new Date());
+    const late = time && new Date(today + 'T' + time) <= new Date();
+    for (let g = 0; out.length < n && g < 800; g++) {
+      const s = _ppDayStr(cur), o = occ.get(s);
+      if ((!o || (o.n < cap && !o.times.has(time))) && !_ppSkipDay(s) && !(s === today && late)) out.push(s);
+      cur.setDate(cur.getDate() + 1);
+    }
+    return out;
+  }
+  const step = { daily: 1, every2: 2, weekly: 7 }[spacing] || 1;
+  for (let i = 0; i < n; i++) {
+    for (let g = 0; g < 7 && _ppSkipDay(_ppDayStr(cur)); g++) cur.setDate(cur.getDate() + 1);
+    out.push(_ppDayStr(cur));
+    if (spacing === 'mwf') { do { cur.setDate(cur.getDate() + 1); } while (![1, 3, 5].includes(cur.getDay())); }
+    else cur.setDate(cur.getDate() + step);
+  }
+  return out;
+}
+function _ppBatchPreview() {
+  const pid = state.activePlatform;
+  const drafts = (state.drafts[pid] || []).filter(d => state.selectedDrafts.has(String(d.id)));
+  const f = state.batchScheduleForm || {};
+  if (!drafts.length || !f.startDate) return '';
+  const plan = _ppBatchPlan(pid, drafts.length, f.startDate, f.spacing, f.time);
+  const busy = _ppBusyDays(pid), cap = ppDailyCap(pid);
+  return `<div class="bp-prev"><div class="bp-head">Where they'll go</div>` + drafts.map((d, i) => {
+    const n = busy.get(plan[i]) || 0, tm = plan.times ? plan.times[i] : f.time, full = n >= cap;
+    return `<div class="bp-row"><img src="${escapeHtml(d.imageThumb || d.imageFull || '')}" alt=""/><span class="bp-name">${escapeHtml(String(d.srcHeader || d.notes || d.imageName || 'Draft').slice(0, 42))}</span>` +
+      `<span class="bp-date${full ? ' busy' : ''}">${plan[i] ? _ppNiceDay(plan[i]) + (tm ? ' · ' + _ppClock(tm) : '') : '—'}${full ? ' · ⚠ already has ' + n : ''}</span></div>`;
+  }).join('') + `</div>`;
+}
+// Composer: open days leave out a brand's clear weekends; Pinterest shows how full each day is
+function _ppOpenDaysInner(form) {
+  const pid = state.activePlatform, pl = PLATFORMS[pid];
+  if (!pl) return '';
+  const cap = ppDailyCap(pid), busy = _ppBusyDays(pid, state.editingPostId);
+  const days = [], cur = new Date(); cur.setHours(0, 0, 0, 0);
+  for (let g = 0; days.length < 6 && g < 400; g++) { const s = _ppDayStr(cur); if ((busy.get(s) || 0) < cap && !_ppSkipDay(s)) days.push(s); cur.setDate(cur.getDate() + 1); }
+  const sel = form && form.scheduledDate, n = sel ? busy.get(sel) || 0 : 0;
+  return `<div class="od-row"><span class="od-label">Open days on ${escapeHtml(pl.name)}:</span>` +
+    days.map(s => `<button type="button" class="od-chip${s === sel ? ' on' : ''}" onclick="ppPickOpenDay('${s}')" title="${cap > 1 ? (busy.get(s) || 0) + ' of ' + cap + ' posts used this day' : 'Nothing is scheduled on ' + escapeHtml(pl.name) + ' this day'}">${_ppNiceDay(s)}${cap > 1 ? ` <small class="od-cap">${busy.get(s) || 0}/${cap}</small>` : ''}</button>`).join('') + `</div>` +
+    (sel && _ppSkipDay(sel) ? `<div class="od-warn">🌙 ${escapeHtml(_ppBrand())} keeps weekends clear. Pick a weekday, or turn weekends back on in the sidebar.</div>`
+      : n >= cap ? `<div class="od-warn">⚠ ${_ppNiceDay(sel)} already has ${n} ${escapeHtml(pl.name)} post${n > 1 ? 's' : ''}${cap > 1 ? ' (the most for one day)' : ''}. Pick an open day to spread things out.</div>` : '') + _ppDefTimeLine();
+}
+// Gap alerts don't count a brand's clear weekends
+function _ppGaps() {
+  const out = [], start = new Date(); start.setHours(0, 0, 0, 0);
+  const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return _ppDayStr(d); }).filter(d => !_ppSkipDay(d));
+  const wd = (s) => new Date(s + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+  _ppVisible().forEach(pl => {
+    const posts = state.posts[pl.id] || [];
+    if (!posts.length && !(state.drafts[pl.id] || []).length) return;
+    const busy = new Set(posts.filter(p => p.scheduledDate).map(p => p.scheduledDate));
+    let best = null, cur = null;
+    days.forEach(d => {
+      if (busy.has(d)) { cur = null; return; }
+      cur = cur ? { s: cur.s, e: d, n: cur.n + 1 } : { s: d, e: d, n: 1 };
+      if (!best || cur.n > best.n) best = cur;
+    });
+    if (best && best.n >= 3) out.push({ pl, n: best.n, label: best.n === days.length ? 'in the next week' : wd(best.s) + '–' + wd(best.e) });
+  });
+  return out;
+}
+// ⚡ Post next with room for more than one post a day
+async function _ppBumpNow(items) {
+  const notes = [];
+  for (const item of items) {
+    const pids = ((item.selectedPlatforms && item.selectedPlatforms.length) ? item.selectedPlatforms : [item.platform || 'instagram']).filter(pid => PLATFORMS[pid]);
+    for (const pid of pids) {
+      const fmt = item.format || 'png';
+      const imageName = _ppItemName(item, pid, fmt);
+      if ((state.posts[pid] || []).some(p => p.timely && p.imageName === imageName)) continue;
+      const imageData = await getImageForPlatform(item, pid, fmt);
+      const now = Date.now();
+      const upcoming = (state.posts[pid] || []).filter(p => p.scheduledDate && p.publishStatus !== 'published' && _ppT(p.scheduledDate, p.scheduledTime) > now)
+        .sort((a, b) => _ppT(a.scheduledDate, a.scheduledTime) - _ppT(b.scheduledDate, b.scheduledTime));
+      let slot, bumped = null;
+      if (upcoming.length && _ppT(upcoming[0].scheduledDate, upcoming[0].scheduledTime) - now <= 7 * 864e5) {
+        bumped = upcoming[0];
+        slot = { date: bumped.scheduledDate, time: bumped.scheduledTime };
+      } else slot = ppNextFree(pid, now, _ppOcc(pid)) || { date: _ppDayStr(new Date(now + 864e5)), time: ppDefaultTime(pid) };
+      const post = { ...defaultForm(pid), ..._draftTextFields(_ppSrcOf(item, pid)), id: Date.now() + Math.random(), platform: pid, image: imageData, imageOriginal: imageData, imageName,
+        scheduledDate: slot.date, scheduledTime: slot.time, publishStatus: 'scheduled', fromBrandCreator: true, timely: true };
+      let list = [...(state.posts[pid] || []), post], moved = null;
+      if (bumped) {
+        moved = ppNextFree(pid, _ppT(slot.date, slot.time), _ppOcc(pid, new Set([String(bumped.id)]), list));
+        if (moved) list = list.map(p => p === bumped ? { ...p, scheduledDate: moved.date, scheduledTime: moved.time } : p);
+      }
+      state.posts = { ...state.posts, [pid]: sortPosts(list) };
+      _pcShowPlatform(pid);
+      notes.push(`${PLATFORMS[pid].name} ${_ppSlotLabel(slot)}` + (bumped && moved ? ` (the post that was there moved to ${_ppSlotLabel(moved)})` : ''));
+    }
+  }
+  if (notes.length) { await savePosts(state.posts); render(); showToast('⚡ Timely post scheduled: ' + notes.join(' · ') + '.'); }
+}
+// ✨ Best fit with room for more than one post a day, and clear weekends
+function _ppFitPlan(opts) {
+  opts = opts || {};
+  const now = Date.now(), horizon = opts.days || 60, out = [];
+  const byT = (a, b) => _ppT(a.scheduledDate, a.scheduledTime) - _ppT(b.scheduledDate, b.scheduledTime);
+  _ppVisible().forEach(pl => {
+    if (opts.skip && opts.skip[pl.id]) return;
+    const pid = pl.id;
+    if (!ppBestSlots(pid).length) return;
+    const all = state.posts[pid] || [];
+    const upcoming = all.filter(p => p.scheduledDate && p.publishStatus !== 'published' && _ppT(p.scheduledDate, p.scheduledTime) > now).sort(byT);
+    const drafts = opts.drafts ? (state.drafts[pid] || []) : [];
+    if (!upcoming.length && !drafts.length) return;
+    const onBest = (p) => !_ppSkipDay(p.scheduledDate) && _ppDayTimes(pid, new Date(p.scheduledDate + 'T00:00:00').getDay()).includes(p.scheduledTime);
+    const occ = _ppOcc(pid, null, all.filter(p => p.scheduledDate && (p.publishStatus === 'published' || _ppT(p.scheduledDate, p.scheduledTime) <= now)));
+    const free = (q) => _ppFreeAt(pid, occ, q), take = (q) => _ppTakeAt(occ, q);
+    const holDays = {}, keep = [], move = [];
+    upcoming.forEach(p => {
+      const h = _ppHolidayOf(_ppAllText(p), now);
+      const inWin = !h || (p.scheduledDate >= h.start && p.scheduledDate <= h.end);
+      const at = { date: p.scheduledDate, time: p.scheduledTime };
+      if (onBest(p) && inWin && free(at)) {
+        keep.push(p); take(at);
+        if (h) (holDays[h.id] = holDays[h.id] || []).push(p.scheduledDate);
+      } else move.push({ kind: 'post', ref: p, h, why: h && !inWin ? 'holiday' : _ppSkipDay(p.scheduledDate) ? 'weekend' : onBest(p) ? 'crowded' : 'time' });
+    });
+    const items = move.concat(drafts.map(d => ({ kind: 'draft', ref: d, h: _ppHolidayOf(_ppDraftText(d), now), why: 'draft' })));
+    const slots = ppSlotsFrom(pid, now, horizon);
+    const moves = [], stuck = [];
+    items.filter(x => !x.h && x.kind === 'post').forEach(x => {
+      const from = Math.max(now, _ppT(x.ref.scheduledDate, '00:00'));
+      const q = slots.find(z => z.t >= from && free(z)) || slots.find(free);
+      if (!q) return stuck.push({ x, note: 'no free best slot in the planning window' });
+      take(q);
+      moves.push({ x, s: q, reason: x.why === 'weekend' ? `${_ppBrand()} keeps weekends clear` : x.why === 'crowded' ? 'was sharing a slot with another post' : `a better day and time for ${pl.name}` });
+    });
+    const byHol = {};
+    items.filter(x => x.h).forEach(x => (byHol[x.h.id] = byHol[x.h.id] || []).push(x));
+    Object.values(byHol).forEach(list => {
+      const h = list[0].h, had = holDays[h.id] || [];
+      const winDays = new Set(slots.filter(z => z.date >= h.start && z.date <= h.end).map(z => z.date)).size;
+      const room = Math.max(0, Math.ceil(winDays / 2) - had.length);
+      const seen = new Set(), cands = [];
+      slots.forEach(z => { if (z.date >= h.start && z.date <= h.end && !seen.has(z.date) && !had.includes(z.date) && free(z)) { seen.add(z.date); cands.push(z); } });
+      const k = Math.min(list.length, room, cands.length), used = new Set();
+      for (let j = 0; j < k; j++) {
+        let at = Math.min(cands.length - 1, Math.floor((j + 0.5) * cands.length / k));
+        while (at < cands.length && (used.has(at) || !free(cands[at]))) at++;
+        if (at >= cands.length) { at = cands.findIndex((z, i) => !used.has(i) && free(z)); if (at < 0) break; }
+        used.add(at); take(cands[at]);
+        moves.push({ x: list[j], s: cands[at], reason: `${h.name}: spread through ${_ppNiceDay(h.start)} – ${_ppNiceDay(h.end)}` });
+      }
+      list.slice(k).forEach(x => stuck.push({ x, note: cands.length ? `more ${h.name} posts than the lead-up has room for` : `no free slot before ${h.name}` }));
+    });
+    items.filter(x => !x.h && x.kind === 'draft').forEach(x => {
+      const q = slots.find(free);
+      if (!q) return stuck.push({ x, note: 'no free best slot in the planning window' });
+      take(q);
+      moves.push({ x, s: q, reason: 'from Drafts' });
+    });
+    const real = moves.filter(m => !(m.x.kind === 'post' && m.s.date === m.x.ref.scheduledDate && m.s.time === m.x.ref.scheduledTime));
+    if (real.length || stuck.length) out.push({ pl, keep: keep.length, moves: real.sort((a, b) => a.s.t - b.s.t), stuck });
+  });
+  return out;
+}
+// Turning weekends off moves this brand's weekend posts to the next best weekday times
+function _ppClearWeekends() {
+  const now = Date.now(), notes = [], posts = { ...state.posts };
+  Object.keys(PLATFORMS).forEach(pid => {
+    const list = posts[pid] || [];
+    const moving = list.filter(p => p.scheduledDate && p.publishStatus !== 'published' && _ppIsWknd(p.scheduledDate) && _ppT(p.scheduledDate, p.scheduledTime) > now)
+      .sort((a, b) => _ppT(a.scheduledDate, a.scheduledTime) - _ppT(b.scheduledDate, b.scheduledTime));
+    if (!moving.length) return;
+    const occ = _ppOcc(pid, new Set(moving.map(p => String(p.id))), list), to = new Map();
+    moving.forEach(p => {
+      const q = ppNextFree(pid, Math.max(now, _ppT(p.scheduledDate, '00:00')), occ, 180);
+      if (!q) return;
+      _ppTakeAt(occ, q); to.set(p, q);
+      notes.push(`${PLATFORMS[pid].name} ${_ppNiceDay(p.scheduledDate)} → ${_ppSlotLabel(q)}`);
+    });
+    posts[pid] = sortPosts(list.map(p => to.has(p) ? { ...p, scheduledDate: to.get(p).date, scheduledTime: to.get(p).time } : p));
+  });
+  if (notes.length) { state.posts = posts; savePosts(state.posts); }
+  return notes;
+}
+function ppSetWeekendsOff(off) {
+  try { localStorage.setItem(wsKey('pp_weekends_off'), off ? '1' : '0'); } catch (e) {}
+  const moved = off ? _ppClearWeekends() : [];
+  render();
+  showToast(off ? `🌙 ${_ppBrand()} keeps weekends clear` + (moved.length ? `. Moved ${moved.length} weekend post${moved.length === 1 ? '' : 's'} to the next best weekday times: ${moved.slice(0, 3).join('; ')}${moved.length > 3 ? '; …' : ''}.` : '.') : `📅 ${_ppBrand()} posts on weekends again.`);
+}
+// ── ⭐ Best times: the brand's weekends and Pinterest's posts per day live here too ──
+function renderBestTimes() {
+  const pls = _ppVisible(), off = ppWeekendsOff();
+  return `<div class="overlay" onclick="ppCloseBestTimes()" style="z-index:830"><div class="modal" style="max-width:780px" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="bt-title">
+    <div class="modal-header"><h2 class="modal-title" id="bt-title">⭐ Best days and times</h2><button class="close-btn" onclick="ppCloseBestTimes()" aria-label="Close">×</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;max-height:68vh;overflow-y:auto">
+      <div class="bt-brand" role="group" aria-label="Weekends for ${escapeHtml(_ppBrand())}">🌙 Weekends for <b>${escapeHtml(_ppBrand())}</b>:
+        <button type="button" class="${off ? '' : 'on'}" aria-pressed="${off ? 'false' : 'true'}" onclick="ppSetWeekendsOff(false)">Post on weekends</button>
+        <button type="button" class="${off ? 'on' : ''}" aria-pressed="${off ? 'true' : 'false'}" onclick="ppSetWeekendsOff(true)">Keep weekends clear</button></div>
+      <div class="pw-top"><span>Plan my week, Batch Schedule, ⚡ Post next and ✨ Best fit use these. They start from general industry guidance; tune them to when your audience is most active.</span></div>
+      ${pls.map(pl => { const list = ppBestSlots(pl.id); const custom = !!_ppBestStore()[pl.id];
+        return `<div class="pw-sec bt-row" style="border-left-color:${pl.color}"><div class="pw-head"><span style="color:${pl.color};font-weight:700;min-width:110px">${escapeHtml(pl.name)}</span>
+          <span class="bt-days">${[1, 2, 3, 4, 5, 6, 0].map(d => { const on = list.find(([w]) => w === d), wk = off && (d === 0 || d === 6);
+            return `<span class="bt-day${on ? ' on' : ''}${wk ? ' off' : ''}"><button type="button" aria-pressed="${on ? 'true' : 'false'}" ${wk ? `disabled title="${escapeHtml(_ppBrand())} keeps weekends clear"` : ''} onclick="ppToggleBestDay('${pl.id}', ${d})">${_PP_DOW[d]}</button>${on && !wk ? `<select aria-label="${escapeHtml(pl.name)} ${_PP_DOW[d]} time" onchange="ppSetBestTime('${pl.id}', ${d}, this.value)">${_ppTimeOpts(on[1]).map(t => `<option value="${t}" ${t === on[1] ? 'selected' : ''}>${_ppClock(t)}</option>`).join('')}</select>` : ''}</span>`; }).join('')}</span>
+          ${pl.id === 'pinterest' ? `<label class="bt-cap">Pins per day <select aria-label="Pinterest pins per day" onchange="ppSetPinCap(+this.value)">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${n === ppDailyCap('pinterest') ? 'selected' : ''}>${n}</option>`).join('')}</select></label>` : ''}
+          ${custom ? `<button type="button" class="od-mk" onclick="ppResetBestTimes('${pl.id}')">Reset</button>` : ''}</div></div>`; }).join('')}
+    </div>
+    <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;padding:16px 20px"><button class="btn-save" onclick="ppCloseBestTimes()">Done</button></div></div></div>`;
+}
+// ── The sidebar card, now with the brand's weekends ──
+function renderComingUp() {
+  const today = _ppDayStr(new Date());
+  let pending = 0, drafts = 0;
+  _ppVisible().forEach(pl => {
+    (state.posts[pl.id] || []).forEach(p => { if (p.scheduledDate === today && p.publishStatus !== 'published') pending++; });
+    drafts += (state.drafts[pl.id] || []).length;
+  });
+  const gaps = _ppGaps(), off = ppWeekendsOff();
+  const ideas = window.parent && window.parent !== window && typeof window.parent.tiOpen === 'function';
+  return `<div class="cu-card">
+    <button type="button" class="cu-btn" onclick="ppOpenToday()">📋 Today${pending ? ` <span class="cu-n">${pending}</span>` : ''}</button>
+    <button type="button" class="cu-btn" onclick="ppOpenPlanWeek()">🗓 Plan my week${drafts ? ` <span class="cu-n alt">${drafts}</span>` : ''}</button>
+    <button type="button" class="cu-btn" onclick="ppOpenBestFit()">✨ Best fit</button>
+    ${ideas ? `<button type="button" class="cu-btn" onclick="window.parent.studioTab('creator'); window.parent.tiOpen()">📰 Timely ideas</button>` : ''}
+    <button type="button" class="cu-btn cu-small" onclick="ppOpenBestTimes()">⭐ Best times</button>
+    <div class="cu-wk" role="group" aria-label="Weekends for ${escapeHtml(_ppBrand())}" title="${escapeHtml(_ppBrand())}: post on weekends, or keep them clear (weekend posts move to the next best weekday times)"><span class="cu-wk-l">🌙 Weekends for ${escapeHtml(_ppBrand())}</span>
+      <button type="button" class="${off ? '' : 'on'}" aria-pressed="${off ? 'false' : 'true'}" onclick="ppSetWeekendsOff(false)">Post</button>
+      <button type="button" class="${off ? 'on' : ''}" aria-pressed="${off ? 'true' : 'false'}" onclick="ppSetWeekendsOff(true)">Keep clear</button></div>
+    ${gaps.length ? `<div class="cu-gaps" role="note"><div class="cu-gh">⚠ Gaps coming up</div>${gaps.slice(0, 5).map(g => `<button type="button" class="cu-gap" onclick="ppOpenPlanWeek()" title="Fill it from your drafts"><b style="color:${g.pl.color}">${escapeHtml(g.pl.name)}</b>: nothing ${g.label}</button>`).join('')}</div>` : ''}
+  </div>`;
+}
+// ── The calendar: one platform at a time (Pinterest shows how full each day is) ──
+function _ppCalOnly() { const f = state.calOnly; return f && PLATFORMS[f] ? f : ''; }
+function ppCalFilter(pid) { state.calOnly = pid && state.calOnly !== pid ? pid : ''; render(); }
+function _ppCalLegend(list) {
+  const f = _ppCalOnly();
+  if (!list.length && !f) return `<span style="font-size:11px;color:var(--text-muted);font-style:italic">No scheduled posts yet</span>`;
+  const chips = [`<button type="button" class="cal-flt${f ? '' : ' on'}" aria-pressed="${f ? 'false' : 'true'}" onclick="ppCalFilter('')" title="Show every platform">All</button>`]
+    .concat(list.map(p => `<button type="button" class="cal-flt${f === p.id ? ' on' : ''}" aria-pressed="${f === p.id ? 'true' : 'false'}" style="--pc:${p.color}" onclick="ppCalFilter('${p.id}')" title="Show only ${escapeHtml(p.name)} on the calendar"><span class="cal-legend-dot" style="background:${p.color}"></span>${escapeHtml(p.name)}</button>`));
+  const cap = f === 'pinterest' ? `<label class="cal-cap-set">Pins per day <select aria-label="Pinterest pins per day" onchange="ppSetPinCap(+this.value)">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${n === ppDailyCap('pinterest') ? 'selected' : ''}>${n}</option>`).join('')}</select></label>` : '';
+  return chips.join('') + cap;
+}
+function _ppCalCap(ds, n) {
+  const f = _ppCalOnly();
+  if (!f || !n) return '';
+  const cap = ppDailyCap(f);
+  if (cap <= 1) return '';
+  return `<span class="cal-cap${n >= cap ? ' full' : ''}" title="${n} of ${cap} ${escapeHtml(PLATFORMS[f].name)} posts this day">${n}/${cap}</span>`;
+}
+// ── The stats bar: every platform with posts or drafts, all on one row ──
+function renderCalendarStatsBar() {
+  const now = new Date();
+  const list = Object.values(PLATFORMS).filter(p => (state.posts[p.id] || []).length || (state.drafts[p.id] || []).length);
+  if (!list.length) return `<div class="cal-stats-bar" style="justify-content:center;padding:6px 0"><span style="font-size:11.5px;color:var(--text-muted);font-style:italic">No posts or drafts yet</span></div>`;
+  const f = _ppCalOnly();
+  return `<div class="cal-stats-bar pp-fit" role="list">` + list.map(p => {
+    const posts = state.posts[p.id] || [];
+    const sch = posts.filter(x => !x.manualUpload && x.scheduledDate).length;
+    const q = posts.filter(x => !x.manualUpload && !x.scheduledDate).length;
+    const up = posts.filter(x => !x.manualUpload && x.scheduledDate && new Date(`${x.scheduledDate}T${x.scheduledTime || '00:00'}`) > now).length;
+    const dc = (state.drafts[p.id] || []).length;
+    const name = p.id === 'google' ? 'Google' : p.id === 'twitter' ? 'X' : p.name;
+    const st = (v, cls, l, sh) => `<span class="cs-st"><b class="${cls}${v ? '' : ' zero'}">${v}</b><i><span class="l">${l}</span><span class="s">${sh}</span></i></span>`;
+    return `<button type="button" role="listitem" class="cal-stat-chip${f === p.id ? ' on' : ''}" style="--pc:${p.color};border-color:${p.color}40;background:${p.color}0f"
+        onclick="ppCalFilter('${p.id}')" title="${escapeHtml(p.name)}: ${sch} scheduled · ${q} in queue · ${dc} draft${dc === 1 ? '' : 's'} · ${up} upcoming. Click to show only ${escapeHtml(p.name)} on the calendar.">
+      <span class="cs-in"><span class="cs-head"><span class="cs-icon">${p.icon.replace(/width="20" height="20"/g, 'width="13" height="13"')}</span><span class="cs-name">${escapeHtml(name)}</span></span>
+      <span class="cs-grid">${st(sch, 'cs-sch', 'sched', 'sch')}${st(q, 'cs-q', 'queue', 'q')}${st(dc, 'cs-dr', dc === 1 ? 'draft' : 'drafts', 'dr')}${st(up, 'cs-up', 'upcoming', 'up')}</span></span>
+    </button>`;
+  }).join('') + `</div>`;
+}
+(function _wkStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .cal-stats-bar.pp-fit { overflow: hidden; align-items: stretch; gap: 6px; }
+    .pp-fit .cal-stat-chip { flex: 1 1 0; min-width: 0; max-width: 250px; flex-shrink: 1; padding: 0; display: block; container-type: inline-size; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+    .pp-fit .cal-stat-chip.on { box-shadow: inset 0 0 0 1.5px var(--pc); }
+    .pp-fit .cal-stat-chip:focus-visible { outline: 2px solid #f5a623; outline-offset: 1px; }
+    .pp-fit .cs-in { display: flex; flex-direction: column; gap: 2px; padding: 5px 8px; min-width: 0; }
+    .pp-fit .cs-head { display: flex; align-items: center; gap: 5px; min-width: 0; }
+    .pp-fit .cs-head { height: 14px; }
+    .pp-fit .cs-icon { color: var(--pc); display: flex; flex: none; width: 13px; height: 13px; }
+    .pp-fit .cs-icon svg { width: 13px; height: 13px; }
+    .pp-fit .cs-name { color: var(--pc); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .pp-fit .cs-grid { display: grid; grid-template-columns: repeat(4, auto); justify-content: space-between; column-gap: 6px; row-gap: 2px; }
+    .pp-fit .cs-st { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+    .pp-fit .cs-grid b { font-size: 13px; font-weight: 800; color: var(--text-primary, #e8eaf0); line-height: 1.15; text-align: center; }
+    .pp-fit .cs-grid b.cs-sch { color: var(--pc); }
+    .pp-fit .cs-grid b.zero { opacity: .45; }
+    .pp-fit .cs-grid i { font-style: normal; font-size: 9px; color: var(--text-muted); line-height: 1.1; white-space: nowrap; text-align: center; }
+    .pp-fit .cs-grid i .s { display: none; }
+    @container (max-width: 175px) { .pp-fit .cs-grid i .l { display: none; } .pp-fit .cs-grid i .s { display: inline; } }
+    @container (max-width: 96px) { .pp-fit .cs-in { padding: 4px 5px; } .pp-fit .cs-grid { column-gap: 3px; } .pp-fit .cs-grid b { font-size: 11.5px; } .pp-fit .cs-name { display: none; } .pp-fit .cs-head { justify-content: center; } }
+    @container (max-width: 80px) { .pp-fit .cs-grid { grid-template-columns: repeat(2, auto); justify-content: space-around; column-gap: 4px; } }
+    .cal-legend .cal-flt { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); background: transparent; color: var(--text-secondary); border-radius: 999px; padding: 3px 9px; font: 600 11px 'DM Sans', sans-serif; cursor: pointer; }
+    .cal-legend .cal-flt.on { background: var(--pc, #6c63ff); border-color: var(--pc, #6c63ff); color: #fff; }
+    .cal-legend .cal-flt.on .cal-legend-dot { background: #fff !important; }
+    .cal-legend .cal-flt:focus-visible, .cu-wk button:focus-visible, .bt-brand button:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
+    .cal-cap-set { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); margin-left: 4px; white-space: nowrap; }
+    .cal-cap-set select, .bt-cap select { width: auto; min-width: 0; padding: 2px 6px; font-size: 11px; height: auto; border-radius: 6px; }
+    .cal-cell { position: relative; }
+    .cal-cap { position: absolute; top: 5px; right: 6px; font-size: 9.5px; font-weight: 800; padding: 1px 5px; border-radius: 6px; background: rgba(230,0,35,.16); color: #ff8a9b; }
+    .cal-cap.full { background: #E60023; color: #fff; }
+    .cal-cell.wknd-off { opacity: .5; background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(255,255,255,.035) 6px 12px), var(--bg-card); }
+    #cal-cells.cal-only .cal-post-chip-plat { display: none; }
+    #cal-cells.cal-only .cal-post-chip { padding-top: 1px; padding-bottom: 1px; }
+    .cu-wk { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); flex-wrap: wrap; }
+    .cu-wk .cu-wk-l { flex-basis: 100%; }
+    .cu-wk button, .bt-brand button { border: 1px solid var(--border); background: transparent; color: var(--text-muted); border-radius: 999px; padding: 2px 9px; font: 700 10.5px system-ui, sans-serif; cursor: pointer; }
+    .cu-wk button.on, .bt-brand button.on { background: #6c63ff; border-color: #6c63ff; color: #fff; }
+    .bt-brand { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+    .bt-day.off button { opacity: .35; cursor: not-allowed; }
+    .bt-cap { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); }
+    .od-cap { opacity: .7; font-size: 10px; }`;
   document.head.appendChild(st);
 })();
 function _draftTextFields(draft) {
