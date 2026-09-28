@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v82</span>
+              <span class="sb-version">v83</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -3972,6 +3972,40 @@
             <span class="sl-val" id="lgyv">5</span>
             <button class="pos-reset-btn" onclick="resetLogoPos()" title="Reset to preset">↺</button>
           </div>
+        </div>
+      </div>
+
+      <!-- ── FARMERS LOGO (a second logo, placed on its own) ── -->
+      <div class="sec sec-divider" id="l2-section">
+        <div class="sec-label" style="display: flex; align-items: center; justify-content: space-between"><span>Farmers logo</span><span class="l2-hint">second logo</span></div>
+        <div class="l2-row">
+          <div class="l2-thumb" id="l2-thumb"><span>No logo yet</span></div>
+          <div class="l2-btns">
+            <button type="button" onclick="l2Pick()">⬆ Upload logo file</button>
+            <button type="button" id="l2-remove" onclick="l2Remove()" style="display: none">Remove</button>
+          </div>
+          <input type="file" id="l2-file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onchange="l2File(this.files[0])" />
+        </div>
+        <div class="l2-hint" style="margin-bottom: 8px">Use the official logo file (a PNG with a see-through background works best).</div>
+        <div class="l2-needs" style="display: none">
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 8px; cursor: pointer"><input type="checkbox" id="l2-on" onchange="l2Set('logo2On', this.checked)" /> Show on images</label>
+          <div class="field-label">Show for</div>
+          <div class="l2-brands" id="l2-brands" role="group" aria-label="Brands that show the Farmers logo"></div>
+          <div class="field-label">Position</div>
+          <div class="l2-pos" role="radiogroup" aria-label="Farmers logo position">
+            <button type="button" role="radio" data-pos="tl" onclick="l2SetPos('tl')">↖ Top left</button>
+            <button type="button" role="radio" data-pos="tc" onclick="l2SetPos('tc')">↑ Top</button>
+            <button type="button" role="radio" data-pos="tr" onclick="l2SetPos('tr')">↗ Top right</button>
+            <button type="button" role="radio" data-pos="bl" onclick="l2SetPos('bl')">↙ Bottom left</button>
+            <button type="button" role="radio" data-pos="bc" onclick="l2SetPos('bc')">↓ Bottom</button>
+            <button type="button" role="radio" data-pos="br" onclick="l2SetPos('br')">↘ Bottom right</button>
+          </div>
+          <button type="button" class="l2-swap" onclick="l2Swap()" title="Your logo and the Farmers logo trade top and bottom">⇅ Swap top and bottom with my logo</button>
+          <div class="sl-row" style="margin-top: 8px"><label for="l2-size">Size</label><input type="range" id="l2-size" min="0" max="100" value="50" oninput="l2Set('logo2Size', +this.value)" /></div>
+          <div class="field-label">Backing</div>
+          <select id="l2-back" onchange="l2Set('logo2Back', this.value)"><option value="none">None</option><option value="white">White box</option><option value="dark">Dark box</option></select>
+          <div class="l2-hint" style="margin-top: 6px">It stays inside each platform's safe area and moves along its edge to stay clear of your text, logo and website tag. Size stays between clearly visible and never oversized.</div>
+          <div class="l2-note" id="l2-note"></div>
         </div>
       </div>
 
@@ -4984,6 +5018,12 @@ Your message, caption, or call to action goes right here.</textarea
         bg3Scale: 100,
         gapColor: "bg",
         photoCreditOn: true,
+        logo2On: true,
+        logo2Pos: "br",
+        logo2Size: 50,
+        logo2Back: "none",
+        logo2Aspect: 0,
+        logo2Brands: ["ws_a"],
         mixes: {},
         showZones: false,
         bgInfo: null,
@@ -6313,6 +6353,12 @@ Your message, caption, or call to action goes right here.</textarea
             gapColor: S.gapColor,
             mixes: S.mixes,
             photoCreditOn: S.photoCreditOn,
+            logo2On: S.logo2On,
+            logo2Pos: S.logo2Pos,
+            logo2Size: S.logo2Size,
+            logo2Back: S.logo2Back,
+            logo2Aspect: S.logo2Aspect,
+            logo2Brands: S.logo2Brands,
             showZones: S.showZones,
             bgInfo: S.bgInfo,
             bg2Info: S.bg2Info,
@@ -12842,7 +12888,7 @@ Post:
         const W = canvas.offsetWidth,
           H = canvas.offsetHeight;
         const avoid = _crTextRects(canvas, el);
-        ['[data-sf="logo"]', '[data-sf="tag"]'].forEach((q) => {
+        ['[data-sf="logo"]', '[data-sf="logo2"]', '[data-sf="tag"]'].forEach((q) => {
           const x = canvas.querySelector(q);
           if (x && x.offsetWidth) avoid.push(x.getBoundingClientRect());
         });
@@ -12954,6 +13000,314 @@ Post:
           .cr-toggle input { accent-color: var(--hi); }`;
         document.head.appendChild(st);
       })(0);
+      // ══════════════════════════════════════════
+      // SECOND LOGO: FARMERS (v83)
+      // Your own logo file, placed on its own spot: top or bottom, left, center or right. On every layout it stays
+      // inside the platform's safe area, and slides along its edge to stay clear of your text, logo and website tag.
+      // Its size stays between clearly visible and never oversized. It shows only on the brands you tick.
+      // ══════════════════════════════════════════
+      const LS_LOGO2 = "bpc_logo2";
+      const _L2_WS = ["ws_a", "ws_b", "ws_c"];
+      const _L2_POS = ["tl", "tc", "tr", "bl", "bc", "br"];
+      function _l2Load() {
+        try {
+          S.logo2 = localStorage.getItem(LS_LOGO2) || null;
+        } catch (e) {
+          S.logo2 = null;
+        }
+      }
+      _l2Load();
+      const _l2OrigLoad = loadFromStorage;
+      loadFromStorage = function () {
+        const r = _l2OrigLoad.apply(this, arguments);
+        _l2Load();
+        return r;
+      };
+      const _l2Brand = () => _L2_WS[typeof _pfActiveAccount === "number" ? _pfActiveAccount : 0] || "ws_a";
+      const _l2Brands = () => (Array.isArray(S.logo2Brands) ? S.logo2Brands : ["ws_a"]);
+      const l2Shown = () => !!S.logo2 && S.logo2On !== false && _l2Brands().includes(_l2Brand());
+      // Where it starts: the chosen spot inside the safe area, stepping left of an app-button corner if needed
+      function _l2At(pos, W, H, ow, oh, pad, obs) {
+        const xl = pad.l,
+          xr = W - pad.r - ow,
+          xc = Math.min(xr, Math.max(xl, (W - ow) / 2));
+        let x = pos[1] === "l" ? xl : pos[1] === "r" ? xr : xc;
+        const y = pos[0] === "t" ? pad.t : H - pad.b - oh;
+        for (let g = 0; g < 40 && obs.some(([ox, oy]) => x + ow > ox && y + oh > oy) && x > xl; g++) x = Math.max(xl, x - W * 0.04);
+        return { x: Math.round(x), y: Math.round(y) };
+      }
+      function _l2Root(html) {
+        if (!l2Shown()) return html;
+        const i = html.lastIndexOf("</");
+        if (i < 0) return html;
+        const pl = PLATS[S.platform] || { w: 1080, h: 1080 };
+        const W = pl.w,
+          H = pl.h,
+          short = Math.min(W, H);
+        const asp = S.logo2Aspect > 0 ? S.logo2Aspect : 3;
+        // Never oversized, always clearly visible: 5–10.5% of the short side tall, at most a third of the width
+        const hMin = short * 0.05,
+          hMax = short * 0.105;
+        let h = hMin + ((hMax - hMin) * Math.max(0, Math.min(100, S.logo2Size ?? 50))) / 100;
+        let w = h * asp;
+        if (w > W * 0.34) {
+          w = W * 0.34;
+          h = w / asp;
+        }
+        const back = S.logo2Back === "white" || S.logo2Back === "dark" ? S.logo2Back : "";
+        const py = back ? Math.round(h * 0.2) : 0,
+          px = back ? Math.round(h * 0.3) : 0;
+        const z = curZone();
+        const pad = {
+          l: Math.round(Math.max(W * 0.03, z.l ? W * (z.l + 0.01) : 0)),
+          r: Math.round(Math.max(W * 0.03, z.r ? W * (z.r + 0.01) : 0)),
+          t: Math.round(Math.max(H * 0.03, z.t ? H * (z.t + 0.01) : 0)),
+          b: Math.round(Math.max(H * 0.03, z.b ? H * (z.b + 0.01) : 0)),
+        };
+        const obs = (z.corners || []).map((c) => [Math.round(c.x * W), Math.round(c.y * H)]);
+        const ow = Math.round(w + 2 * px),
+          oh = Math.round(h + 2 * py);
+        const pos = _L2_POS.includes(S.logo2Pos) ? S.logo2Pos : "br";
+        const at = _l2At(pos, W, H, ow, oh, pad, obs);
+        const rad = Math.round(h * 0.22);
+        const style =
+          `position:absolute;left:${at.x}px;top:${at.y}px;width:${ow}px;height:${oh}px;z-index:12;pointer-events:none;box-sizing:border-box;padding:${py}px ${px}px;` +
+          (back === "white" ? `background:#fff;border-radius:${rad}px;box-shadow:0 2px 10px rgba(0,0,0,.18);` : back === "dark" ? `background:rgba(15,17,26,.8);border-radius:${rad}px;` : "");
+        const box = { W, H, pad, obs, h: Math.round(h), w: Math.round(w), hMin: Math.round(hMin), px, py };
+        return html.slice(0, i) + `<div data-sf="logo2" data-sf-pos="${pos}" data-sf-box='${JSON.stringify(box)}' style="${style}"><img src="${S.logo2}" alt="" style="display:block;width:100%;height:100%;object-fit:contain;"/></div>` + html.slice(i);
+      }
+      const _l2OrigOverlay = applyGifOverlay;
+      applyGifOverlay = function (html) {
+        return _l2OrigOverlay.call(this, _l2Root(html));
+      };
+      // After the text is fitted: keep the chosen edge, slide along it to the nearest clear spot, shrink a little
+      // only if the whole edge is busy (never below the minimum), and use the other edge only as a last resort
+      function l2Place(root) {
+        const el = root && root.querySelector && root.querySelector('[data-sf="logo2"]');
+        if (!el) return;
+        let box;
+        try {
+          box = JSON.parse(el.dataset.sfBox || "{}");
+        } catch (e) {
+          return;
+        }
+        const canvas = el.offsetParent;
+        if (!canvas || !canvas.offsetWidth || !box.pad) return;
+        const cr = canvas.getBoundingClientRect();
+        const k = cr.width / canvas.offsetWidth;
+        if (!k) return;
+        const W = canvas.offsetWidth,
+          H = canvas.offsetHeight;
+        const avoid = _crTextRects(canvas, el);
+        ['[data-sf="logo"]', '[data-sf="tag"]'].forEach((q) => {
+          const x = canvas.querySelector(q);
+          if (x && x.offsetWidth) avoid.push(x.getBoundingClientRect());
+        });
+        const pref = _L2_POS.includes(el.dataset.sfPref || "") ? el.dataset.sfPref : el.dataset.sfPos || "br";
+        el.dataset.sfPref = pref;
+        const gap = 8 * k;
+        const hits = (x, y, ow, oh) => {
+          const r = { left: cr.left + x * k - gap, top: cr.top + y * k - gap, right: cr.left + (x + ow) * k + gap, bottom: cr.top + (y + oh) * k + gap };
+          let a = 0;
+          avoid.forEach((o) => (a += _area(_rectI(r, o))));
+          return a;
+        };
+        const blocked = (x, y, ow, oh) => (box.obs || []).some(([ox, oy]) => x + ow > ox && y + oh > oy);
+        const scales = [1, 0.85, 0.72].map((f) => Math.max(box.hMin / box.h, f)).filter((v, i, a) => a.indexOf(v) === i);
+        let best = null;
+        const edges = pref[0] === "t" ? ["t", "b"] : ["b", "t"];
+        search: for (let ei = 0; ei < 2; ei++) {
+          for (const s of scales) {
+            const ow = Math.round(box.w * s + 2 * box.px),
+              oh = Math.round(box.h * s + 2 * box.py);
+            const xl = box.pad.l,
+              xr = W - box.pad.r - ow;
+            if (xr < xl) continue;
+            const y = edges[ei] === "t" ? box.pad.t : H - box.pad.b - oh;
+            const want = pref[1] === "l" ? xl : pref[1] === "r" ? xr : (xl + xr) / 2;
+            const xs = [want];
+            for (let j = 0; j <= 12; j++) xs.push(xl + ((xr - xl) * j) / 12);
+            xs.sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
+            for (const x of xs) {
+              if (blocked(x, y, ow, oh)) continue;
+              const a = hits(x, y, ow, oh);
+              if (!best || a < best.a - 0.5) best = { x, y, ow, oh, a, edge: edges[ei] };
+              if (a === 0) break search;
+            }
+          }
+        }
+        if (!best) return;
+        el.style.left = Math.round(best.x) + "px";
+        el.style.top = Math.round(best.y) + "px";
+        el.style.width = best.ow + "px";
+        el.style.height = best.oh + "px";
+        el.dataset.sfPos = best.edge + pref[1];
+        el.dataset.sfHit = Math.round(best.a / (k * k));
+      }
+      const _l2OrigFit = fitTextBatch;
+      fitTextBatch = function (roots) {
+        const r = _l2OrigFit.apply(this, arguments);
+        try {
+          (roots || []).forEach((root) => {
+            if (root && root.querySelector && root.querySelector('[data-sf="logo2"]')) {
+              l2Place(root);
+              if (typeof crPlace === "function") crPlace(root); // the photo credit steps around it too
+            }
+          });
+        } catch (e) {}
+        return r;
+      };
+      // ── The controls ──
+      function _l2Refresh() {
+        if (typeof debounceSave === "function") debounceSave();
+        if (typeof debouncedRender === "function") debouncedRender();
+        else render();
+        l2Sync();
+      }
+      function l2Pick() {
+        const f = document.getElementById("l2-file");
+        if (f) {
+          f.value = "";
+          f.click();
+        }
+      }
+      function l2File(file) {
+        if (!file) return;
+        const rd = new FileReader();
+        rd.onload = () => {
+          const im = new Image();
+          im.onload = () => {
+            let w = im.naturalWidth || 600,
+              h = im.naturalHeight || 200;
+            const k = Math.min(1, 900 / Math.max(w, h));
+            w = Math.max(1, Math.round(w * k));
+            h = Math.max(1, Math.round(h * k));
+            const c = document.createElement("canvas");
+            c.width = w;
+            c.height = h;
+            c.getContext("2d").drawImage(im, 0, 0, w, h);
+            const data = c.toDataURL("image/png");
+            S.logo2 = data;
+            S.logo2Aspect = w / h;
+            if (S.logo2On === undefined) S.logo2On = true;
+            if (!Array.isArray(S.logo2Brands) || !S.logo2Brands.length) S.logo2Brands = [_l2Brand()];
+            try {
+              localStorage.setItem(LS_LOGO2, data);
+            } catch (e) {
+              if (typeof _mpToast === "function") _mpToast("That logo file is too big to keep in this browser. Try a smaller PNG.");
+            }
+            _l2Refresh();
+          };
+          im.onerror = () => {
+            if (typeof _mpToast === "function") _mpToast("Couldn't read that image. Try a PNG or SVG logo file.");
+          };
+          im.src = rd.result;
+        };
+        rd.readAsDataURL(file);
+      }
+      function l2Remove() {
+        S.logo2 = null;
+        try {
+          localStorage.removeItem(LS_LOGO2);
+        } catch (e) {}
+        _l2Refresh();
+      }
+      function l2Set(key, val) {
+        S[key] = val;
+        _l2Refresh();
+      }
+      function l2SetPos(pos) {
+        if (_L2_POS.includes(pos)) l2Set("logo2Pos", pos);
+      }
+      function l2ToggleBrand(ws) {
+        const set = new Set(_l2Brands());
+        if (set.has(ws)) set.delete(ws);
+        else set.add(ws);
+        l2Set("logo2Brands", _L2_WS.filter((w) => set.has(w)));
+      }
+      // Your logo and the Farmers logo trade top and bottom
+      function l2Swap() {
+        let p = S.logoPosPreset || "tl";
+        if (!_L2_POS.includes(p)) p = ((S.logoY ?? 5) < 50 ? "t" : "b") + ((S.logoX ?? 5) < 34 ? "l" : (S.logoX ?? 5) > 66 ? "r" : "c");
+        const mine = (p[0] === "t" ? "b" : "t") + p[1];
+        const q = _L2_POS.includes(S.logo2Pos) ? S.logo2Pos : "br";
+        S.logo2Pos = (q[0] === "t" ? "b" : "t") + q[1];
+        const sel = document.getElementById("logoPosPreset");
+        if (sel) sel.value = mine;
+        applyLogoPosPreset(mine);
+        l2Sync();
+      }
+      function l2Sync() {
+        const box = document.getElementById("l2-section");
+        if (!box) return;
+        const has = !!S.logo2;
+        const th = document.getElementById("l2-thumb");
+        if (th) th.innerHTML = has ? `<img src="${S.logo2}" alt="Farmers logo"/>` : `<span>No logo yet</span>`;
+        box.querySelectorAll(".l2-needs").forEach((e) => (e.style.display = has ? "" : "none"));
+        const rm = document.getElementById("l2-remove");
+        if (rm) rm.style.display = has ? "" : "none";
+        const on = document.getElementById("l2-on");
+        if (on) on.checked = S.logo2On !== false;
+        const pos = _L2_POS.includes(S.logo2Pos) ? S.logo2Pos : "br";
+        box.querySelectorAll(".l2-pos button").forEach((b) => {
+          const a = b.dataset.pos === pos;
+          b.classList.toggle("on", a);
+          b.setAttribute("aria-checked", a ? "true" : "false");
+        });
+        const sz = document.getElementById("l2-size");
+        if (sz) sz.value = S.logo2Size ?? 50;
+        const bk = document.getElementById("l2-back");
+        if (bk) bk.value = S.logo2Back || "none";
+        const br = document.getElementById("l2-brands");
+        if (br)
+          br.innerHTML = _L2_WS.map((ws, i) => {
+            const nm = (typeof _pfAccounts !== "undefined" && _pfAccounts[i] && _pfAccounts[i].name) || "Brand " + (i + 1);
+            const onb = _l2Brands().includes(ws);
+            return `<button type="button" class="${onb ? "on" : ""}" aria-pressed="${onb}" onclick="l2ToggleBrand('${ws}')">${onb ? "✓ " : ""}${escHtml(nm)}</button>`;
+          }).join("");
+        const nt = document.getElementById("l2-note");
+        if (nt) {
+          const nm = (typeof _pfAccounts !== "undefined" && _pfAccounts[_L2_WS.indexOf(_l2Brand())] && _pfAccounts[_L2_WS.indexOf(_l2Brand())].name) || "this brand";
+          nt.textContent = has && S.logo2On !== false && !_l2Brands().includes(_l2Brand()) ? `Not showing: ${nm} is selected at the top, and it isn't ticked above.` : "";
+        }
+      }
+      // Switching brands shows or hides it
+      ["selectPfAccount", "cycleActiveAccount", "selectBrandSyncWorkspace"].forEach((fn) => {
+        if (typeof window[fn] !== "function") return;
+        const o = window[fn];
+        window[fn] = function () {
+          const before = l2Shown();
+          const r = o.apply(this, arguments);
+          l2Sync();
+          if (before !== l2Shown()) {
+            if (typeof debouncedRender === "function") debouncedRender();
+            else render();
+          }
+          return r;
+        };
+      });
+      setTimeout(l2Sync, 0);
+      (function _l2Styles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          #l2-section .l2-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+          #l2-section .l2-thumb { width: 96px; height: 44px; border: 1px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; background: repeating-conic-gradient(rgba(255,255,255,.06) 0 25%, transparent 0 50%) 0 0 / 12px 12px; overflow: hidden; flex: none; }
+          #l2-section .l2-thumb img { max-width: 92%; max-height: 86%; object-fit: contain; }
+          #l2-section .l2-thumb span { font-size: 10.5px; color: var(--muted); }
+          #l2-section .l2-btns { display: flex; flex-direction: column; gap: 5px; }
+          #l2-section .l2-btns button, #l2-section .l2-swap { font-size: 11.5px; padding: 5px 10px; border-radius: 7px; border: 1px solid var(--border); background: var(--panel); color: inherit; cursor: pointer; }
+          #l2-section .l2-pos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 8px; }
+          #l2-section .l2-pos button { font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 5px 2px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; }
+          #l2-section .l2-pos button.on { background: var(--hi); border-color: var(--hi); color: #fff; font-weight: 700; }
+          #l2-section .l2-brands { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+          #l2-section .l2-brands button { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; }
+          #l2-section .l2-brands button.on { background: rgba(245,166,35,.15); border-color: #f5a623; color: #f5a623; font-weight: 700; }
+          #l2-section .l2-hint, #l2-section .l2-note { font-size: 10.5px; color: var(--muted); line-height: 1.4; }
+          #l2-section .l2-note:empty { display: none; }
+          #l2-section .l2-note { color: #f5a623; margin-top: 4px; }
+          #l2-section button:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }`;
+        document.head.appendChild(st);
+      })();
       // ══════════════════════════════════════════
       // COPY TO CLIPBOARD
       // ══════════════════════════════════════════
