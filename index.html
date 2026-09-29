@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v89</span>
+              <span class="sb-version">v90</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -34187,7 +34187,7 @@ function _ppLiveSection(live) {
   const items = live.slice().sort((a, b) => when(b) - when(a));
   return `<div class="live-sec"><button type="button" class="live-head" aria-expanded="${open}" onclick="ppToggleLive()">✅ Live posts <b>${live.length}</b><span>${open ? 'Hide' : 'Show'}</span></button>` +
     (open ? `<div class="live-list">${items.map(p => { const u = _ppLiveUrl(p);
-      return `<div class="live-row">${p.image ? `<img src="${escapeHtml(p.image)}" alt=""/>` : `<span class="live-noimg">🔗</span>`}<span class="live-name">${escapeHtml(String(getPostSummary(p) || 'Post').slice(0, 64))}</span><span class="live-when">${p.scheduledDate ? _ppNiceDay(p.scheduledDate) : ''}</span>` +
+      return `<div class="live-row">${p.image ? `<img src="${escapeHtml(p.image)}" alt=""/>` : `<span class="live-noimg">🔗</span>`}<span class="live-name">${escapeHtml(String(getPostSummary(p) || 'Post').slice(0, 64))}</span><span class="live-when">${p.scheduledDate ? _ppNiceDay(p.scheduledDate) : ''}${p.plannedFor && p.plannedFor.date && p.plannedFor.date !== p.scheduledDate ? ` <span class="live-plan" title="Planned for ${_ppSlotLabel(p.plannedFor)}">(planned ${_ppNiceDay(p.plannedFor.date)})</span>` : ''}</span>` +
         (u ? `<a class="live-open" href="${escapeHtml(u)}" target="_blank" rel="noopener">Open live post ↗</a>` : `<button type="button" class="live-add" onclick="openComposer('${p.id}')">Add live link</button>`) +
         (p.imagePurged ? `<span class="live-cleared" title="The full image was cleared after 30 days to save space">image cleared</span>` : '') + `</div>`; }).join('')}</div>` : '') + `</div>`;
 }
@@ -34830,13 +34830,15 @@ function ppTodayLinkSave() {
   }
   // TikTok and YouTube keep their own live link field (as in the post editor); the link marks it Live
   const field = pid === 'tiktok' ? 'tiktokLiveUrl' : pid === 'youtube' ? 'ytLiveUrl' : 'liveUrl';
+  const had = !!_ppLiveUrl((state.posts[pid] || []).find(p => String(p.id) === id) || {});
   state.posts = { ...state.posts, [pid]: (state.posts[pid] || []).map(p => (String(p.id) === id ? { ...p, [field]: url, liveUrl: url } : p)) };
+  const moved = had ? null : _ppMarkLiveNow(pid, id); // a new link: shown when you posted it; a changed link: stays put
   state.todayLink = null;
   _ppNormalizeLive();
   savePosts(state.posts);
   try { if (typeof recalcStreak === 'function') recalcStreak(pid); } catch (e) {}
   render();
-  showToast(`✅ ${PLATFORMS[pid] ? PLATFORMS[pid].name : 'The'} post is Live. Its link is saved.`);
+  showToast(`✅ ${PLATFORMS[pid] ? PLATFORMS[pid].name : 'The'} post is Live. ${moved ? _ppMovedNote(moved) : 'Its link is saved.'}`);
 }
 (function _tdLinkStyles() {
   const st = document.createElement('style');
@@ -34957,6 +34959,55 @@ function ppScheduleAllSelected() {
     .dsel-box:hover { border-color: #f5a623; }
     .dsel-box:focus-visible, .dsel-plat:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
     .draft-card.draft-selected { outline: 2px solid #22c55e; outline-offset: -2px; border-radius: 12px; }`;
+  document.head.appendChild(st);
+})();
+// ── A new live link: the post moves to the day and time the link was added, and shows as posted there ──
+function _ppMarkLiveNow(pid, id, planned) {
+  const now = new Date(), today = _ppDayStr(now), hm = _ppHm(now);
+  let from = null;
+  state.posts = { ...state.posts, [pid]: sortPosts((state.posts[pid] || []).map(p => {
+    if (String(p.id) !== String(id)) return p;
+    const src = planned && planned.date ? planned : (p.scheduledDate ? { date: p.scheduledDate, time: p.scheduledTime || '' } : null);
+    if (src && (src.date !== today || src.time !== hm)) from = src;
+    return { ...p, publishStatus: 'published', liveAt: Date.now(), scheduledDate: today, scheduledTime: hm, plannedFor: from || p.plannedFor || null };
+  })) };
+  return { from, to: { date: today, time: hm } };
+}
+function _ppMovedNote(m) {
+  if (!m) return '';
+  if (!m.from) return `It's on the calendar at ${_ppSlotLabel(m.to)}.`;
+  return `It moved to ${_ppSlotLabel(m.to)}, when you posted it (it was planned for ${_ppSlotLabel(m.from)}).`;
+}
+// In the post editor: adding a link (not changing one) does the same
+const _ppSavePostLink = savePost;
+savePost = function (addToQueue) {
+  const pid = state.activePlatform, id = state.editingPostId;
+  let had = false, before = new Set(), planned = null;
+  try {
+    syncFormFromDOM(); // when it was planned for, noted before anything moves it
+    const f = state.form || {};
+    if (f.scheduledDate) planned = { date: f.scheduledDate, time: f.scheduledTime || '' };
+    before = new Set((state.posts[pid] || []).map(p => String(p.id)));
+    const cur = id != null ? (state.posts[pid] || []).find(p => String(p.id) === String(id)) : null;
+    had = !!(cur && _ppLiveUrl(cur));
+  } catch (e) {}
+  const r = _ppSavePostLink.apply(this, arguments);
+  try {
+    const list = state.posts[pid] || [];
+    const post = (id != null && list.find(p => String(p.id) === String(id))) || list.find(p => !before.has(String(p.id)));
+    if (post && !had && _ppLiveUrl(post) && !post.manualUpload) {
+      const m = _ppMarkLiveNow(pid, post.id, planned);
+      savePosts(state.posts);
+      try { if (typeof recalcStreak === 'function') recalcStreak(pid); } catch (e) {}
+      render();
+      setTimeout(() => showToast(`✅ Live. ${_ppMovedNote(m)}`), 450);
+    }
+  } catch (e) {}
+  return r;
+};
+(function _linkMoveStyles() {
+  const st = document.createElement('style');
+  st.textContent = `.live-plan { color: var(--text-muted); font-size: 10.5px; }`;
   document.head.appendChild(st);
 })();
 function _draftTextFields(draft) {
