@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v83</span>
+              <span class="sb-version">v84</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -6252,6 +6252,15 @@ Your message, caption, or call to action goes right here.</textarea
         "Solar Burst",
         "Star Frame Burst",
         "Crest Burst",
+        "Gold Frame",
+        "Silver Frame",
+        "Gold Deco Corners",
+        "Silver Deco Corners",
+        "Gold Hairline Luxe",
+        "Silver Split Luxe",
+        "Gold Circle Portrait",
+        "Gold Square Portrait",
+        "Gold Star Portrait",
       ];
 
       let selected = new Set();
@@ -9607,6 +9616,40 @@ Your message, caption, or call to action goes right here.</textarea
           _xfLiftChildren(node, keep);
         });
       }
+      // Star-shaped photos (luxury portrait): the export engine can't clip to a star, so the photo is cut here
+      function _xfBakeClips(root) {
+        root.querySelectorAll('[data-xf-clip="star"]').forEach((el) => {
+          let c = el.querySelector(":scope > canvas");
+          if (!c) {
+            const w = el.clientWidth,
+              h = el.clientHeight;
+            if (!w || !h) return;
+            c = document.createElement("canvas");
+            c.width = w;
+            c.height = h;
+            const fx = c.getContext("2d");
+            fx.fillStyle = getComputedStyle(el).backgroundColor || "#222";
+            fx.fillRect(0, 0, w, h);
+            el.style.background = "none";
+            c.style.cssText = `position:absolute;left:0;top:0;width:${w}px;height:${h}px;display:block;pointer-events:none;`;
+            el.insertBefore(c, el.firstChild);
+          }
+          const out = document.createElement("canvas");
+          out.width = c.width;
+          out.height = c.height;
+          const x = out.getContext("2d");
+          x.beginPath();
+          _luxStarPts(c.width, c.height).forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py)));
+          x.closePath();
+          x.clip();
+          x.drawImage(c, 0, 0);
+          const cx = c.getContext("2d");
+          cx.clearRect(0, 0, c.width, c.height);
+          cx.drawImage(out, 0, 0);
+          el.style.clipPath = "none";
+          el.style.backgroundColor = "transparent";
+        });
+      }
       // <img> with object-fit → a canvas of exactly the same size and place, holding the exact crop
       async function _xfBakeImgs(root) {
         const imgs = [...root.querySelectorAll("img")].filter((im) => {
@@ -9707,6 +9750,11 @@ Your message, caption, or call to action goes right here.</textarea
           await _xfBakeBackgrounds(root);
         } catch (e) {
           console.warn("Export photo prep (backgrounds) failed:", e);
+        }
+        try {
+          _xfBakeClips(root);
+        } catch (e) {
+          console.warn("Export shape prep failed:", e);
         }
         try {
           await _xfBakeImgs(root);
@@ -11211,7 +11259,7 @@ Post:
       const _pbFilled = (s) => !!(s && (s.header || s.body || s.pinTitle || s.desc));
 
       // ── Your main post is never touched: a batch post borrows the post settings only while it is drawn ──
-      const PB_SWAP = ["header", "content", "bg", "bgX", "bgY", "bgScale", "bgFit", "bgInfo", "bg2", "bg3", "fnPrefix", "platform", "photoCredits"];
+      const PB_SWAP = ["header", "content", "bg", "bgX", "bgY", "bgScale", "bgFit", "bgInfo", "bg2", "bg3", "fnPrefix", "platform", "photoCredits", "palIdx", "ovBg", "ovPrimary", "ovAccent", "ovHighlight", "ovShapes", "ovOverlay"];
       let _pbBusy = 0;
       const _pbDeferred = { save: false, sync: false, render: false };
       function _pbApply(slot) {
@@ -11237,6 +11285,7 @@ Post:
         }
         S.fnPrefix = headerToPrefix(slot.header || "") || saved.fnPrefix || "BrandPost";
         S.platform = _pb.pid;
+        _pbApplyPal(slot);
         return saved;
       }
       function _pbRestore(saved) {
@@ -11877,7 +11926,7 @@ Post:
             <div class="pb-top"><span class="pb-num">${no}</span><span class="pb-topic" title="${escHtml(s.topic || "")}">${escHtml((s.topic || "").replace(/\s*\|\s*/g, " · ")) || _pbCap(nn) + " " + no}</span></div>
             <div class="pb-thumb${_pbFilled(s) ? "" : " empty"}" id="pb-thumb-${i}" onclick="pbSelect(${i})"></div>
             <div class="pb-photo"><button type="button" class="pb-mini" onclick="pbPickLayout(${i})" title="Choose another layout for ${nn} ${no}">🎨 Layout</button><button type="button" class="pb-mini" onclick="pbUpload(${i})" title="Upload a photo for ${nn} ${no}">🖼 Upload</button><button type="button" class="pb-mini" onclick="pbUnsplash(${i})" title="Find a photo for ${nn} ${no} on Unsplash">🔍 Unsplash</button><button type="button" class="pb-mini" onclick="pbRecent(${i})" title="Use a photo from your recently used photos">🕘 Recent</button>${s.photo ? `<button type="button" class="pb-mini" onclick="pbUseMain(${i})" title="Use your main photo instead" aria-label="Use your main photo for ${nn} ${no}">↺</button>` : ""}</div>
-            <div class="pb-meta"><span class="pb-lay" title="${lay}">Layout ${lay}</span><span class="pb-src">${src}</span></div>
+            <div class="pb-meta"><span class="pb-lay" title="${lay}">Layout ${lay}</span><span class="pb-src">${src}</span>${_pbPalSelect(i)}</div>
             <input class="pb-in" data-f="header" value="${v("header")}" placeholder="Headline on the image" aria-label="${_pbCap(nn)} ${no} headline"/>
             ${pin ? `<input class="pb-in" data-f="pinTitle" value="${v("pinTitle")}" placeholder="Pin title" aria-label="Pin ${no} title"/>` : `<textarea class="pb-in" data-f="desc" rows="3" placeholder="${escHtml(cfg.text)}" aria-label="${_pbCap(nn)} ${no} ${escHtml(cfg.text)}">${v("desc")}</textarea>${_pbCountHtml(i)}`}
             <details class="pb-more"><summary>${moreLabel}</summary>
@@ -11930,7 +11979,7 @@ Post:
         _pbStatus(`${_pbCap(_pbNoun(1))} ${i + 1} selected: press <b>Ctrl+V</b> to paste its content.`);
       }
       function _pbLock(on) {
-        document.querySelectorAll("#pb-overlay .pb-act, #pb-overlay .us-more, #pb-overlay .pb-mini, #pb-overlay .us-x, #pb-overlay .pb-plat").forEach((b) => (b.disabled = !!on));
+        document.querySelectorAll("#pb-overlay .pb-act, #pb-overlay .us-more, #pb-overlay .pb-mini, #pb-overlay .us-x, #pb-overlay .pb-plat, #pb-overlay .pb-sw, #pb-overlay .pb-pal, #pb-overlay .pb-cust input, #pb-overlay #pb-others-cb").forEach((b) => (b.disabled = !!on));
         document.getElementById("pb-overlay").classList.toggle("pb-working", !!on);
       }
       const _pbIcon = (pid) => (typeof platIcon === "function" ? platIcon(pid, 13) : "");
@@ -12001,12 +12050,16 @@ Post:
             <div class="pb-plats" role="radiogroup" aria-label="Which platform this batch is for">${PB_ORDER.map(
               (pid) => `<button type="button" role="radio" class="pb-plat" data-pid="${pid}" aria-checked="false" style="--pc:${_pbColor(pid)}" onclick="pbSetPlatform('${pid}')">${_pbIcon(pid)}<span>${escHtml(_pbName(pid))}</span></button>`,
             ).join("")}</div>
+            <div class="pb-colors" id="pb-colors"></div>
             <div class="pb-drop"><textarea id="pb-paste" rows="2" aria-label="Paste your 10-post document"></textarea></div>
             <div class="pb-grid" id="pb-grid"></div>
+            <div class="pb-prog" id="pb-prog" hidden role="progressbar" aria-label="Creating images" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="pb-prog-track"><div class="pb-prog-fill" id="pb-prog-fill"></div></div><span class="pb-prog-pct" id="pb-prog-pct">0%</span><span class="pb-prog-txt" id="pb-prog-txt"></span></div>
             <div class="pb-foot"><span class="pb-status" id="pb-status" role="status" aria-live="polite"></span>
               <span class="pb-note" id="pb-note" hidden></span>
               <button type="button" class="pb-act" id="pb-save" onclick="pbSaveAll()">⬇ Save all as images</button>
               <button type="button" class="pb-act" id="pb-send" onclick="pbSend(false)">🗂 Send to Drafts</button>
+              <label class="pb-others" id="pb-others" hidden><input type="checkbox" id="pb-others-cb" /> <span id="pb-others-txt"></span></label>
+              <button type="button" class="pb-act" id="pb-today" onclick="pbScheduleToday()" title="Spread across the rest of today, each post to its own platform">⚡ Schedule today</button>
               <button type="button" class="pb-act pb-primary" id="pb-sched" onclick="pbSend(true)" title="On the platform's best days and times">📅 Schedule on best days</button></div>
           </div>`;
         document.body.appendChild(ov);
@@ -12171,6 +12224,131 @@ Post:
       function _pbList() {
         return _pb.slots.map((s, i) => [s, i]).filter(([s]) => _pbFilled(s) && Number.isInteger(s.layout));
       }
+      // ── Progress bar: how far along the images are ──
+      function _pbProgStart(total, verb) {
+        const box = document.getElementById("pb-prog");
+        clearTimeout(_pbProgStart._t);
+        if (box) {
+          box.hidden = false;
+          box.classList.remove("done");
+        }
+        const prog = {
+          done: 0,
+          total,
+          verb: verb || "Creating",
+          step(label) {
+            _pbProgShow(this.done, this.total, `${label || this.verb + " image"} ${this.done + 1} of ${this.total}…`);
+          },
+          tick() {
+            this.done++;
+            _pbProgShow(this.done, this.total, this.done < this.total ? `${this.verb} image ${this.done + 1} of ${this.total}…` : "Finishing…");
+          },
+        };
+        _pbProgShow(0, total, `${prog.verb} image 1 of ${total}…`);
+        return prog;
+      }
+      function _pbProgShow(done, total, text) {
+        const box = document.getElementById("pb-prog");
+        if (!box) return;
+        const pct = total ? Math.round((done / total) * 100) : 0;
+        box.setAttribute("aria-valuenow", String(pct));
+        box.setAttribute("aria-valuetext", text || pct + "%");
+        const f = document.getElementById("pb-prog-fill");
+        if (f) f.style.width = pct + "%";
+        const t = document.getElementById("pb-prog-txt");
+        if (t) t.textContent = text || "";
+        const n = document.getElementById("pb-prog-pct");
+        if (n) n.textContent = pct + "%";
+      }
+      function _pbProgDone(text, failed) {
+        const box = document.getElementById("pb-prog");
+        if (!box) return;
+        if (!failed) _pbProgShow(1, 1, text || "Done ✓");
+        else {
+          const t = document.getElementById("pb-prog-txt");
+          if (t) t.textContent = text || "Stopped";
+        }
+        box.classList.toggle("done", !failed);
+        box.classList.toggle("failed", !!failed);
+        clearTimeout(_pbProgStart._t);
+        _pbProgStart._t = setTimeout(() => {
+          box.hidden = true;
+          box.classList.remove("done", "failed");
+        }, 3500);
+      }
+      // ── One Scheduler post per batch post ──
+      function _pbItem(s, pid, img, fname, mode, at) {
+        const cfg = _pbCfg(pid);
+        const text = cfg.linkInText && s.link && !/https?:\/\//i.test(s.desc || "") ? (s.desc ? s.desc + "\n\n" : "") + s.link : s.desc || "";
+        return {
+          id: Date.now() + Math.random(),
+          toDrafts: true,
+          scheduleOpen: mode !== "drafts",
+          at: at || null,
+          dataUrl: img,
+          platformImages: { [pid]: img },
+          gifDataUrl: null,
+          imageName: fname,
+          platformNames: { [pid]: fname },
+          platform: pid,
+          selectedPlatforms: [pid],
+          templateName: NAMES[s.layout] || "",
+          header: s.header || "",
+          content: s.body || "",
+          captions: text ? { [pid]: text } : {},
+          pinTitle: pid === "pinterest" ? s.pinTitle || "" : "",
+          link: cfg.linkInText ? "" : s.link || "",
+          links: s.link && !cfg.linkInText ? { [pid]: s.link } : {},
+          altText: s.alt || "",
+          alts: s.alt ? { [pid]: s.alt } : {},
+          format: "png",
+          sentAt: new Date().toISOString(),
+          accountId: (typeof _pfAccounts !== "undefined" && _pfAccounts[_pfActiveAccount] && _pfAccounts[_pfActiveAccount].id) || "acct1",
+          accountName: typeof activePfAccountName === "function" ? activePfAccountName() : "",
+        };
+      }
+      function _pbSchedWin() {
+        try {
+          const f = document.getElementById("sched-frame");
+          const w = f && f.contentWindow;
+          if (w && typeof w._ppItemsToDrafts === "function") return w;
+        } catch (e) {}
+        return null;
+      }
+      function _pbListFor(pid) {
+        return (_pb.byPid[pid] || []).map((s, i) => [s, i]).filter(([s]) => _pbFilled(s) && Number.isInteger(s.layout));
+      }
+      // Render each post of one platform's batch and hand it to that platform in the Scheduler
+      async function _pbSendPins(pid, list, mode, times, prog) {
+        const prev = _pb.pid;
+        _pb.pid = pid;
+        let n = 0;
+        try {
+          const sw = _pbSchedWin();
+          for (let k = 0; k < list.length; k++) {
+            const [s] = list[k];
+            prog.step(`${mode === "drafts" ? "Sending" : "Scheduling"} ${_pbName(pid)} image`);
+            const fname = _pbWithSync(s, () => _mpFileName(s.layout, pid));
+            const c = await _pbWith(s, () => renderToCanvasForPlatform(s.layout, pid));
+            if (c) {
+              const img = await compressForQueue(c);
+              const item = _pbItem(s, pid, img, fname, mode, times ? times[k] : null);
+              if (sw) sw._ppItemsToDrafts([item]);
+              else {
+                const key = activePfQueueKey();
+                const q = JSON.parse(localStorage.getItem(key) || "[]");
+                q.push(item);
+                localStorage.setItem(key, JSON.stringify(q.slice(-10)));
+              }
+              n++;
+            }
+            prog.tick();
+          }
+        } finally {
+          _pb.pid = prev;
+        }
+        return n;
+      }
       async function pbSaveAll() {
         const list = _pbList();
         if (!list.length) return _pbStatus(`Paste content into at least one ${_pbNoun(1)} first.`);
@@ -12179,18 +12357,23 @@ Post:
         _pb.busy = true;
         _pbLock(true);
         _mpCancel();
+        const prog = _pbProgStart(list.length, "Creating");
         let n = 0;
         try {
           for (const [s, i] of list) {
             _pbStatus(`Saving ${_pbNoun(1)} ${i + 1}… (${n + 1} of ${list.length})`);
+            prog.step("Creating image");
             const name = _pbWithSync(s, () => _mpFileName(s.layout, pid));
             const blob = await _pbWith(s, () => _mpBlob(s.layout, pid));
             await xfSaveBlob(blob, name, false, true);
             n++;
+            prog.tick();
           }
           _pbStatus(`Saved ${n} ${_pbNoun(n)} as images.`);
+          _pbProgDone(`Done ✓ ${n} image${n === 1 ? "" : "s"} saved`);
         } catch (e) {
           _pbStatus("Couldn't save: " + escHtml(e.message || String(e)));
+          _pbProgDone("Stopped: " + (e.message || String(e)), true);
         } finally {
           _pb.busy = false;
           _pbLock(false);
@@ -12208,69 +12391,264 @@ Post:
         _pb.busy = true;
         _pbLock(true);
         _mpCancel();
-        let sw = null;
+        const prog = _pbProgStart(list.length, "Creating");
         try {
-          const f = document.getElementById("sched-frame");
-          const w = f && f.contentWindow;
-          if (w && typeof w._ppItemsToDrafts === "function") sw = w;
-        } catch (e) {}
-        let n = 0;
-        try {
-          for (const [s, i] of list) {
-            _pbStatus(`${scheduleOpen ? "Scheduling" : "Sending"} ${_pbNoun(1)} ${i + 1}… (${n + 1} of ${list.length})`);
-            const fname = _pbWithSync(s, () => _mpFileName(s.layout, pid));
-            const c = await _pbWith(s, () => renderToCanvasForPlatform(s.layout, pid));
-            if (!c) continue;
-            const img = await compressForQueue(c);
-            // Platforms without a link field get the link at the end of the post
-            const text = cfg.linkInText && s.link && !/https?:\/\//i.test(s.desc || "") ? (s.desc ? s.desc + "\n\n" : "") + s.link : s.desc || "";
-            const item = {
-              id: Date.now() + Math.random(),
-              toDrafts: true,
-              scheduleOpen: !!scheduleOpen,
-              dataUrl: img,
-              platformImages: { [pid]: img },
-              gifDataUrl: null,
-              imageName: fname,
-              platformNames: { [pid]: fname },
-              platform: pid,
-              selectedPlatforms: [pid],
-              templateName: NAMES[s.layout] || "",
-              header: s.header || "",
-              content: s.body || "",
-              captions: text ? { [pid]: text } : {},
-              pinTitle: pid === "pinterest" ? s.pinTitle || "" : "",
-              link: cfg.linkInText ? "" : s.link || "",
-              links: s.link && !cfg.linkInText ? { [pid]: s.link } : {},
-              altText: s.alt || "",
-              alts: s.alt ? { [pid]: s.alt } : {},
-              format: "png",
-              sentAt: new Date().toISOString(),
-              accountId: (typeof _pfAccounts !== "undefined" && _pfAccounts[_pfActiveAccount] && _pfAccounts[_pfActiveAccount].id) || "acct1",
-              accountName: typeof activePfAccountName === "function" ? activePfAccountName() : "",
-            };
-            if (sw) sw._ppItemsToDrafts([item]);
-            else {
-              const key = activePfQueueKey();
-              const q = JSON.parse(localStorage.getItem(key) || "[]");
-              q.push(item);
-              localStorage.setItem(key, JSON.stringify(q.slice(-10)));
-            }
-            n++;
-          }
+          _pbStatus(`${scheduleOpen ? "Scheduling" : "Sending"} ${list.length} ${_pbNoun(list.length)}…`);
+          const n = await _pbSendPins(pid, list, scheduleOpen ? "best" : "drafts", null, prog);
           const msg = scheduleOpen
             ? `📅 ${n} ${_pbNoun(n)} scheduled on ${escHtml(name)}'s best days and times. The Scheduler lists the dates.`
             : `🗂 ${n} ${_pbNoun(n)} sent to ${escHtml(name)} Drafts. Schedule them from Drafts (or Plan my week) whenever you're ready.`;
           _pbStatus(msg);
           _mpToast(msg, 9000);
+          _pbProgDone(`Done ✓ ${n} image${n === 1 ? "" : "s"} ${scheduleOpen ? "scheduled" : "sent"}`);
         } catch (e) {
           _pbStatus("Couldn't send: " + escHtml(e.message || String(e)));
+          _pbProgDone("Stopped: " + (e.message || String(e)), true);
         } finally {
           _pb.busy = false;
           _pbLock(false);
           _mpScheduleScoring();
         }
       }
+      // ── ⚡ Schedule today: spread across the rest of today, each post to its own platform ──
+      const _pbYmd = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      const _pbHm = (d) => String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+      function _pbTodayTimes(n) {
+        const now = new Date();
+        const start = new Date(now.getTime() + 10 * 60e3);
+        start.setSeconds(0, 0);
+        start.setMinutes(Math.ceil(start.getMinutes() / 5) * 5);
+        const latest = new Date(now);
+        latest.setHours(23, 55, 0, 0);
+        if (start > latest || start.getDate() !== now.getDate()) return null;
+        const end = new Date(now);
+        end.setHours(22, 0, 0, 0);
+        let span = Math.max(0, end - start);
+        if (span < (n - 1) * 10 * 60e3) span = Math.min(latest - start, (n - 1) * 10 * 60e3);
+        const out = [];
+        let last = 0;
+        for (let i = 0; i < n; i++) {
+          const t = new Date(start.getTime() + (n > 1 ? (span * i) / (n - 1) : 0));
+          t.setSeconds(0, 0);
+          t.setMinutes(Math.round(t.getMinutes() / 5) * 5);
+          if (t.getTime() <= last) t.setTime(last + 5 * 60e3);
+          if (t > latest || t.getDate() !== now.getDate()) t.setTime(latest.getTime());
+          last = t.getTime();
+          out.push({ date: _pbYmd(now), time: _pbHm(t) });
+        }
+        return out;
+      }
+      // Other platforms that have a batch waiting
+      function _pbStoredPids() {
+        return PB_ORDER.filter((pid) => {
+          if (pid === _pb.pid || _pbCfg(pid).noScheduler) return false;
+          if (_pb.byPid[pid]) return _pbListFor(pid).length > 0 || _pb.byPid[pid].some((s) => _pbFilled(s));
+          try {
+            const a = JSON.parse(localStorage.getItem(_pbKey(pid)) || "null");
+            return Array.isArray(a) && a.some((s) => s && _pbFilled(s));
+          } catch (e) {
+            return false;
+          }
+        });
+      }
+      function _pbOthersSync() {
+        const box = document.getElementById("pb-others");
+        if (!box) return;
+        const others = _pbStoredPids();
+        box.hidden = !others.length;
+        const t = document.getElementById("pb-others-txt");
+        if (t) t.textContent = others.length ? `Also schedule my other batches today (${others.map((p) => _pbName(p)).join(", ")})` : "";
+      }
+      async function pbScheduleToday() {
+        if (_pb.busy) return;
+        const cb = document.getElementById("pb-others-cb");
+        const withOthers = !!(cb && cb.checked && !document.getElementById("pb-others").hidden);
+        const pids = [_pb.pid].concat(withOthers ? _pbStoredPids() : []).filter((pid) => !_pbCfg(pid).noScheduler);
+        if (!pids.length) return _pbStatus(`${escHtml(_pbName(_pb.pid))} isn't in the Scheduler yet: use ⬇ Save all as images, then post them with Open ↗.`);
+        for (const pid of pids) {
+          if (pid === _pb.pid) continue;
+          await _pbLoad(pid);
+          await _pbEnsureLayoutsFor(pid);
+        }
+        const jobs = pids.map((pid) => ({ pid, list: pid === _pb.pid ? _pbList() : _pbListFor(pid) })).filter((j) => j.list.length);
+        if (!jobs.length) return _pbStatus(`Paste content into at least one ${_pbNoun(1)} first.`);
+        const times = {};
+        for (const j of jobs) {
+          const t = _pbTodayTimes(j.list.length);
+          if (!t) return _pbStatus("It's too late in the day to schedule today. Try 📅 Schedule on best days.");
+          times[j.pid] = t;
+        }
+        // A brand that keeps weekends clear: check first
+        try {
+          const ws = typeof _l2Brand === "function" ? _l2Brand() : "ws_a";
+          const d = new Date().getDay();
+          if ((d === 0 || d === 6) && localStorage.getItem(ws + "_pp_weekends_off") === "1" && !confirm("This brand keeps weekends clear. Schedule today anyway?")) return;
+        } catch (e) {}
+        const total = jobs.reduce((a, j) => a + j.list.length, 0);
+        _pb.busy = true;
+        _pbLock(true);
+        _mpCancel();
+        const prog = _pbProgStart(total, "Creating");
+        const done = [];
+        try {
+          for (const j of jobs) {
+            const n = await _pbSendPins(j.pid, j.list, "today", times[j.pid], prog);
+            done.push(`${_pbName(j.pid)} ${n} (${_pbClock(times[j.pid][0].time)}–${_pbClock(times[j.pid][times[j.pid].length - 1].time)})`);
+          }
+          const msg = `⚡ Scheduled for today: ${done.join(" · ")}. Each post went to its own platform, spread across the rest of the day.`;
+          _pbStatus(escHtml(msg));
+          _mpToast(escHtml(msg), 9000);
+          _pbProgDone(`Done ✓ ${total} image${total === 1 ? "" : "s"} scheduled for today`);
+        } catch (e) {
+          _pbStatus("Couldn't schedule: " + escHtml(e.message || String(e)));
+          _pbProgDone("Stopped: " + (e.message || String(e)), true);
+        } finally {
+          _pb.busy = false;
+          _pbLock(false);
+          _mpScheduleScoring();
+        }
+      }
+      const _pbClock = (hm) => {
+        const [h, m] = hm.split(":").map(Number);
+        return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+      };
+      // ── Colors in the Batch: your saved color schemes or custom colors, for the whole batch or one post ──
+      const PB_PAL_KEY = "bpc_batch_pal";
+      function _pbPalAll() {
+        try {
+          return JSON.parse(localStorage.getItem(PB_PAL_KEY) || "{}") || {};
+        } catch (e) {
+          return {};
+        }
+      }
+      function _pbPalSpec(pid) {
+        return _pbPalAll()[pid || _pb.pid] || { mode: "main" };
+      }
+      function _pbPalSet(spec) {
+        const all = _pbPalAll();
+        all[_pb.pid] = spec;
+        try {
+          localStorage.setItem(PB_PAL_KEY, JSON.stringify(all));
+        } catch (e) {}
+        _pbRenderColors();
+        for (let i = 0; i < PB_N; i++) _pbRenderCard(i);
+      }
+      const _pbSchemes = () => S.savedSlots || [];
+      function _pbApplyPal(slot) {
+        const spec = slot && Number.isInteger(slot.pal) ? { mode: "slot", slot: slot.pal } : _pbPalSpec();
+        let c = null;
+        if (spec.mode === "slot") {
+          const sl = _pbSchemes()[spec.slot];
+          if (sl) {
+            S.palIdx = spec.slot;
+            c = sl;
+          }
+        } else if (spec.mode === "custom" && spec.colors) c = spec.colors;
+        if (!c) return;
+        S.ovBg = c.bg || null;
+        S.ovPrimary = c.primary || null;
+        S.ovAccent = c.accent || null;
+        S.ovHighlight = c.highlight || null;
+        S.ovShapes = c.shapes || c.accent || null;
+        S.ovOverlay = c.overlayTint || c.bg || null;
+      }
+      const _PB_ROLES = [
+        ["bg", "Background"],
+        ["primary", "Primary"],
+        ["accent", "Accent"],
+        ["highlight", "Highlight"],
+        ["shapes", "Shapes"],
+      ];
+      function _pbDots(c) {
+        return _PB_ROLES.map(([k]) => `<i style="background:${escHtml((c && (c[k] || (k === "shapes" && c.accent))) || "#333")}"></i>`).join("");
+      }
+      function _pbRenderColors() {
+        const box = document.getElementById("pb-colors");
+        if (!box) return;
+        const spec = _pbPalSpec();
+        const main = (typeof PAL === "function" && PAL()) || {};
+        const chips = [`<button type="button" class="pb-sw${spec.mode === "main" ? " on" : ""}" aria-pressed="${spec.mode === "main"}" onclick="pbPal('main')" title="The colors your main post uses"><span class="pb-dots">${_pbDots(main)}</span>Main post's</button>`];
+        _pbSchemes().forEach((sl, i) => {
+          if (!sl) return;
+          const on = spec.mode === "slot" && spec.slot === i;
+          chips.push(`<button type="button" class="pb-sw${on ? " on" : ""}" aria-pressed="${on}" onclick="pbPal('slot', ${i})" title="Color scheme ${i + 1}"><span class="pb-dots">${_pbDots(sl)}</span>${i + 1}</button>`);
+        });
+        const cust = spec.mode === "custom";
+        chips.push(`<button type="button" class="pb-sw${cust ? " on" : ""}" aria-pressed="${cust}" onclick="pbPal('custom')" title="Pick your own colors for this batch">✎ Custom</button>`);
+        const cc = (cust && spec.colors) || {};
+        box.innerHTML =
+          `<span class="pb-col-lab">🎨 Colors for this batch</span>${chips.join("")}` +
+          (cust
+            ? `<span class="pb-cust">${_PB_ROLES.map(([k, lab]) => `<label title="${lab}"><input type="color" value="${escHtml(cc[k] || main[k] || "#333333")}" onchange="pbPalColor('${k}', this.value)" aria-label="${lab} color"/><span>${lab}</span></label>`).join("")}</span>`
+            : "");
+      }
+      function pbPal(mode, slot) {
+        if (mode === "slot") return _pbPalSet({ mode: "slot", slot });
+        if (mode === "custom") {
+          const cur = _pbPalSpec();
+          const main = (typeof PAL === "function" && PAL()) || {};
+          const base = cur.mode === "custom" && cur.colors ? cur.colors : cur.mode === "slot" && _pbSchemes()[cur.slot] ? _pbSchemes()[cur.slot] : main;
+          const colors = {};
+          _PB_ROLES.forEach(([k]) => (colors[k] = base[k] || (k === "shapes" ? base.accent : "") || "#333333"));
+          return _pbPalSet({ mode: "custom", colors });
+        }
+        _pbPalSet({ mode: "main" });
+      }
+      function pbPalColor(k, v) {
+        const spec = _pbPalSpec();
+        if (spec.mode !== "custom") return;
+        spec.colors = Object.assign({}, spec.colors, { [k]: v });
+        _pbPalSet(spec);
+      }
+      function _pbPalSelect(i) {
+        const s = _pb.slots[i];
+        const v = Number.isInteger(s.pal) ? String(s.pal) : "";
+        const opts = [`<option value="">Batch colors</option>`].concat(_pbSchemes().map((sl, k) => (sl ? `<option value="${k}" ${v === String(k) ? "selected" : ""}>Scheme ${k + 1}</option>` : "")));
+        return `<select class="pb-pal" onchange="pbSetPinPal(${i}, this.value)" aria-label="Colors for ${_pbNoun(1)} ${i + 1}" title="Colors for this ${_pbNoun(1)} only">${opts.join("")}</select>`;
+      }
+      function pbSetPinPal(i, v) {
+        const s = _pb.slots[i];
+        if (!s) return;
+        s.pal = v === "" ? null : +v;
+        _pbSave();
+        _pbRenderCard(i);
+      }
+      const _pbRAOrig = _pbRenderAll;
+      _pbRenderAll = function () {
+        const r = _pbRAOrig.apply(this, arguments);
+        try {
+          _pbRenderColors();
+          _pbOthersSync();
+        } catch (e) {}
+        return r;
+      };
+      (function _pbNewStyles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          .pb-colors { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 18px 10px; }
+          .pb-col-lab { font-size: 11.5px; font-weight: 700; color: var(--muted); margin-right: 2px; }
+          .pb-sw { display: inline-flex; align-items: center; gap: 5px; font: 600 11px 'DM Sans', sans-serif; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; }
+          .pb-sw.on { border-color: #f5a623; box-shadow: 0 0 0 1px #f5a623; }
+          .pb-dots { display: inline-flex; }
+          .pb-dots i { width: 9px; height: 14px; display: block; }
+          .pb-dots i:first-child { border-radius: 3px 0 0 3px; } .pb-dots i:last-child { border-radius: 0 3px 3px 0; }
+          .pb-cust { display: inline-flex; flex-wrap: wrap; gap: 8px; margin-left: 4px; }
+          .pb-cust label { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--muted); cursor: pointer; }
+          .pb-cust input[type=color] { width: 26px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 5px; background: none; cursor: pointer; }
+          .pb-pal { font-size: 10.5px; padding: 1px 4px; border-radius: 5px; max-width: 110px; margin-left: auto; }
+          .pb-prog { margin: 0 18px 8px; display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+          .pb-prog[hidden] { display: none; }
+          .pb-prog-track { height: 10px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; border: 1px solid var(--border); }
+          .pb-prog-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #f5a623, #ffcf6b); transition: width .35s ease; }
+          .pb-prog.done .pb-prog-fill { background: linear-gradient(90deg, #22c55e, #6ee7a2); }
+          .pb-prog.failed .pb-prog-fill { background: #ef4444; }
+          .pb-prog-pct { font: 800 12px 'DM Sans', sans-serif; min-width: 36px; text-align: right; }
+          .pb-prog-txt { grid-column: 1 / -1; font-size: 11.5px; color: var(--muted); }
+          .pb-others { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); cursor: pointer; }
+          .pb-others[hidden] { display: none; }
+          @media (prefers-reduced-motion: reduce) { .pb-prog-fill { transition: none; } }`;
+        document.head.appendChild(st);
+      })();
       (function _pbStyles() {
         const st = document.createElement("style");
         st.textContent = `
@@ -14797,6 +15175,193 @@ Post:
       // ══════════════════════════════════════════
       // 20 TEMPLATES
       // ══════════════════════════════════════════
+      // ══════════════════════════════════════════
+      // LUXURY LAYOUTS (v84): gold and silver borders for any platform, plus three gold portrait frames
+      // (circle, square, star) to feature an important person. Metallic finishes are gradients, so every
+      // download matches the preview; the star photo is cut in the download step (see _xfBakeClips).
+      // ══════════════════════════════════════════
+      const _LUX = {
+        gold: "linear-gradient(135deg,#6e5012 0%,#b8892d 16%,#f6e39a 34%,#d4af37 50%,#fff1b8 64%,#b08a2e 82%,#6e5012 100%)",
+        silver: "linear-gradient(135deg,#55575e 0%,#a4a7b0 16%,#f4f5f7 34%,#bfc2c9 50%,#ffffff 64%,#8c8f98 82%,#4f5158 100%)",
+      };
+      const _luxM = (m) => (m === "silver" ? _LUX.silver : _LUX.gold);
+      const _luxS = (m) => (m === "silver" ? "#c9ccd3" : "#d4af37");
+      const _luxStops = (m) =>
+        m === "silver"
+          ? [["0", "#55575e"], ["0.16", "#a4a7b0"], ["0.34", "#f4f5f7"], ["0.5", "#bfc2c9"], ["0.64", "#ffffff"], ["0.82", "#8c8f98"], ["1", "#4f5158"]]
+          : [["0", "#6e5012"], ["0.16", "#b8892d"], ["0.34", "#f6e39a"], ["0.5", "#d4af37"], ["0.64", "#fff1b8"], ["0.82", "#b08a2e"], ["1", "#6e5012"]];
+      let _luxUid = 0;
+      const _luxSvgAt = (x, y, w, h, inner) =>
+        `<div style="position:absolute;left:${Math.round(x)}px;top:${Math.round(y)}px;width:${Math.round(w)}px;height:${Math.round(h)}px;line-height:0;"><svg width="${Math.round(w)}" height="${Math.round(h)}" viewBox="0 0 ${Math.round(w)} ${Math.round(h)}" style="display:block;">${inner}</svg></div>`;
+      function _luxGrad(m) {
+        const id = "luxg" + ++_luxUid;
+        return { id, defs: `<defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">${_luxStops(m).map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join("")}</linearGradient></defs>` };
+      }
+      // A five-point star that fills its box evenly (points as fractions of width and height)
+      function _luxStarPts(w, h) {
+        const cy = 0.5 + (1 - 0.9045) / 2,
+          pts = [];
+        for (let i = 0; i < 10; i++) {
+          const a = ((-90 + i * 36) * Math.PI) / 180,
+            r = i % 2 ? 0.5 * 0.382 : 0.5;
+          pts.push([(0.5 + r * Math.cos(a)) * w, (cy + r * Math.sin(a)) * h]);
+        }
+        return pts;
+      }
+      const _luxStarCss = () => "polygon(" + _luxStarPts(100, 100).map(([x, y]) => `${x.toFixed(2)}% ${y.toFixed(2)}%`).join(",") + ")";
+      // Divider: line · diamond · line
+      function _luxRule(W, m) {
+        const u = W / 1080,
+          len = Math.round(96 * u),
+          th = Math.max(2, Math.round(2.5 * u)),
+          dm = Math.max(8, Math.round(14 * u)),
+          g = _luxGrad(m);
+        return `<div style="display:flex;align-items:center;justify-content:center;gap:${Math.round(12 * u)}px;margin:${Math.round(16 * u)}px 0;"><span style="display:block;width:${len}px;height:${th}px;background:${_luxM(m)};"></span><svg width="${dm}" height="${dm}" viewBox="0 0 10 10" style="display:block;">${g.defs}<polygon points="5,0 10,5 5,10 0,5" fill="url(#${g.id})"/></svg><span style="display:block;width:${len}px;height:${th}px;background:${_luxM(m)};"></span></div>`;
+      }
+      // Centered headline, divider, text (the formal look), in your fonts and sizes
+      function _luxText(W, p, m, mult) {
+        const keys = ["hAlign", "bAlign", "bodyAlign", "cAlign", "tAlign"],
+          keep = keys.map((k) => S[k]);
+        keys.forEach((k) => (S[k] = "center"));
+        try {
+          return `<div style="text-align:center;">${hdr(W, p.text, (mult || 1) * fScale())}${_luxRule(W, m)}${body(W, rgba(p.text, 0.86), fScale())}</div>`;
+        } finally {
+          keys.forEach((k, i) => (S[k] = keep[i]));
+        }
+      }
+      const _luxTop = (sp, H) => (sp && (sp.top ?? sp.t)) || Math.round(H * 0.06);
+      // 89–90. Gold / Silver Frame: a metal frame around the photo, a fine inner line, text at the bottom
+      function _luxFramed(p, W, H, m) {
+        const k = Math.min(W, H) / 1080,
+          t = Math.round(24 * k),
+          gap = Math.round(12 * k),
+          hl = Math.max(2, Math.round(3 * k)),
+          iw = W - 2 * t,
+          ih = H - 2 * t,
+          sp = safePad(W, H),
+          side = t + gap * 3;
+        return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${_luxM(m)};"><div style="position:absolute;left:${t}px;top:${t}px;width:${iw}px;height:${ih}px;overflow:hidden;${bgDiv(iw, ih)}"></div><div style="position:absolute;left:${t}px;top:${t}px;width:${iw}px;height:${ih}px;background:linear-gradient(to top,${rgba(p.bg, Math.min(oa() + 0.3, 0.96))} 0%,${rgba(p.bg, oa() * 0.6)} 52%,${rgba(p.bg, oa() * 0.2)} 100%);"></div><div style="position:absolute;left:${t + gap}px;top:${t + gap}px;right:${t + gap}px;bottom:${t + gap}px;border:${hl}px solid ${_luxS(m)};"></div>${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;left:${Math.max(sp.left, side)}px;right:${Math.max(sp.right, side)}px;bottom:${Math.max(sp.bot, tagSafe(W, H).b, side)}px;">${_luxText(W, p, m)}</div></div>`;
+      }
+      // Art Deco corner: an L in metal, a finer inner L, and a diamond where they meet
+      function _luxCorner(x, y, fx, fy, k, m) {
+        const L = Math.round(130 * k),
+          th = Math.max(3, Math.round(6 * k)),
+          L2 = Math.round(L * 0.62),
+          th2 = Math.max(2, Math.round(2.5 * k)),
+          off = Math.round(18 * k),
+          dm = Math.round(22 * k),
+          g = _luxGrad(m);
+        const bar = (bx, by, bw, bh) => `<div style="position:absolute;left:${Math.round(bx)}px;top:${Math.round(by)}px;width:${Math.round(bw)}px;height:${Math.round(bh)}px;background:${_luxM(m)};"></div>`;
+        const ex = (d) => (fx > 0 ? x + d : x - d);
+        const ey = (d) => (fy > 0 ? y + d : y - d);
+        return (
+          bar(fx > 0 ? x : x - L, fy > 0 ? y : y - th, L, th) +
+          bar(fx > 0 ? x : x - th, fy > 0 ? y : y - L, th, L) +
+          bar(fx > 0 ? ex(off) : ex(off) - L2, fy > 0 ? ey(off) : ey(off) - th2, L2, th2) +
+          bar(fx > 0 ? ex(off) : ex(off) - th2, fy > 0 ? ey(off) : ey(off) - L2, th2, L2) +
+          _luxSvgAt(ex(off) - dm / 2, ey(off) - dm / 2, dm, dm, `${g.defs}<polygon points="${dm / 2},0 ${dm},${dm / 2} ${dm / 2},${dm} 0,${dm / 2}" fill="url(#${g.id})"/>`)
+        );
+      }
+      // 91–92. Gold / Silver Deco Corners: photo panel with a metal line, deco corners, centered text
+      function _luxDeco(p, W, H, m) {
+        const k = Math.min(W, H) / 1080,
+          o = ort(),
+          sp = safePad(W, H),
+          mg = Math.round(46 * k),
+          hl = Math.max(2, Math.round(3 * k));
+        const corners = _luxCorner(mg, mg, 1, 1, k, m) + _luxCorner(W - mg, mg, -1, 1, k, m) + _luxCorner(mg, H - mg, 1, -1, k, m) + _luxCorner(W - mg, H - mg, -1, -1, k, m);
+        const base = `background:${p.bg};background-image:radial-gradient(ellipse at 50% 40%,${rgba(p.primary || p.accent, 0.22)} 0%,transparent 70%);`;
+        if (o === "wide") {
+          const pw = Math.round(W * 0.44),
+            ph = H - 2 * mg * 2,
+            px = mg * 2,
+            py = mg * 2;
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;${base}"><div style="position:absolute;left:${px}px;top:${py}px;width:${pw}px;height:${ph}px;overflow:hidden;${bgDiv(pw, ph)}"></div><div style="position:absolute;left:${px - hl * 3}px;top:${py - hl * 3}px;width:${pw + hl * 4}px;height:${ph + hl * 4}px;border:${hl}px solid ${_luxS(m)};"></div>${corners}${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;left:${px + pw + Math.round(W * 0.05)}px;right:${Math.max(sp.right, mg * 2)}px;top:${mg * 2}px;bottom:${Math.max(sp.bot, tagSafe(W, H).b, mg * 2)}px;display:flex;flex-direction:column;justify-content:center;">${_luxText(W, p, m, 0.9)}</div></div>`;
+        }
+        const pw = W - 2 * mg * 2,
+          ph = Math.round(H * (o === "tall" ? 0.46 : 0.42)),
+          px = mg * 2,
+          py = Math.max(mg * 2, _luxTop(sp, H));
+        return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;${base}"><div style="position:absolute;left:${px}px;top:${py}px;width:${pw}px;height:${ph}px;overflow:hidden;${bgDiv(pw, ph)}"></div><div style="position:absolute;left:${px - hl * 3}px;top:${py - hl * 3}px;width:${pw + hl * 4}px;height:${ph + hl * 4}px;border:${hl}px solid ${_luxS(m)};"></div>${corners}${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;left:${Math.max(sp.left, mg * 2)}px;right:${Math.max(sp.right, mg * 2)}px;top:${py + ph + Math.round(H * 0.035)}px;bottom:${Math.max(sp.bot, tagSafe(W, H).b, mg * 2)}px;display:flex;flex-direction:column;justify-content:center;">${_luxText(W, p, m)}</div></div>`;
+      }
+      // 93. Gold Hairline Luxe: full photo, a fine gold border, a short gold crest line, text at the bottom
+      function _luxHairline(p, W, H) {
+        const k = Math.min(W, H) / 1080,
+          sp = safePad(W, H),
+          ins = Math.round(34 * k),
+          hl = Math.max(2, Math.round(2.5 * k)),
+          crest = Math.round(150 * k);
+        return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;${bgDiv(W, H)}"><div style="position:absolute;inset:0;background:linear-gradient(to top,${rgba(p.bg, Math.min(oa() + 0.28, 0.96))} 0%,${rgba(p.bg, oa() * 0.55)} 50%,${rgba(p.bg, oa() * 0.25)} 100%);"></div><div style="position:absolute;left:${ins}px;top:${ins}px;right:${ins}px;bottom:${ins}px;border:${hl}px solid ${_luxS("gold")};"></div><div style="position:absolute;left:${Math.round((W - crest) / 2)}px;top:${ins - Math.round(hl * 1.5)}px;width:${crest}px;height:${hl * 4}px;background:${_luxM("gold")};"></div>${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;left:${Math.max(sp.left, ins * 2)}px;right:${Math.max(sp.right, ins * 2)}px;bottom:${Math.max(sp.bot, tagSafe(W, H).b, ins * 2)}px;">${_luxText(W, p, "gold")}</div></div>`;
+      }
+      // 94. Silver Split Luxe: photo on one side, a silver bar, text on a panel with a silver line
+      function _luxSplit(p, W, H) {
+        const k = Math.min(W, H) / 1080,
+          o = ort(),
+          sp = safePad(W, H),
+          bar = Math.max(6, Math.round(12 * k)),
+          hl = Math.max(2, Math.round(2.5 * k)),
+          ins = Math.round(30 * k);
+        if (o === "wide") {
+          const pw = Math.round(W * 0.5);
+          return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;left:0;top:0;width:${pw}px;height:${H}px;overflow:hidden;${bgDiv(pw, H)}"></div><div style="position:absolute;left:${pw}px;top:0;width:${bar}px;height:${H}px;background:${_luxM("silver")};"></div><div style="position:absolute;left:${pw + bar + ins}px;top:${ins}px;right:${ins}px;bottom:${ins}px;border:${hl}px solid ${_luxS("silver")};"></div>${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;left:${pw + bar + ins * 2}px;right:${Math.max(sp.right, ins * 2)}px;top:${ins * 2}px;bottom:${Math.max(sp.bot, tagSafe(W, H).b, ins * 2)}px;display:flex;flex-direction:column;justify-content:center;">${_luxText(W, p, "silver", 0.9)}</div></div>`;
+        }
+        const ph = Math.round(H * (o === "tall" ? 0.52 : 0.48));
+        return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;left:0;top:0;width:${W}px;height:${ph}px;overflow:hidden;${bgDiv(W, ph)}"></div><div style="position:absolute;left:0;top:${ph}px;width:${W}px;height:${bar}px;background:${_luxM("silver")};"></div><div style="position:absolute;left:${ins}px;top:${ph + bar + ins}px;right:${ins}px;bottom:${ins}px;border:${hl}px solid ${_luxS("silver")};"></div>${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;left:${Math.max(sp.left, ins * 2)}px;right:${Math.max(sp.right, ins * 2)}px;top:${ph + bar + ins * 2}px;bottom:${Math.max(sp.bot, tagSafe(W, H).b, ins * 2)}px;display:flex;flex-direction:column;justify-content:center;">${_luxText(W, p, "silver")}</div></div>`;
+      }
+      // 95–97. Gold portrait frames (circle, square, star) to feature a person, text below (or beside on wide posts)
+      function _luxPortrait(p, W, H, shape) {
+        const k = Math.min(W, H) / 1080,
+          o = ort(),
+          sp = safePad(W, H),
+          ring = Math.round(18 * k),
+          gapR = Math.max(3, Math.round(6 * k)),
+          hl = Math.max(2, Math.round(2.5 * k)),
+          ins = Math.round(30 * k);
+        const star = shape === "star";
+        let d, cx, cy, textCss;
+        if (o === "wide") {
+          d = Math.round(star ? Math.min(H * 0.78, W * 0.5) : Math.min(H * 0.6, W * 0.42));
+          cx = Math.round(W * 0.07 + d / 2 + ring);
+          cy = Math.round(H / 2);
+          const tl = Math.round(cx + d / 2 + ring + W * 0.05);
+          textCss = `left:${tl}px;right:${Math.max(sp.right, ins * 2)}px;top:${ins * 2}px;bottom:${Math.max(sp.bot, tagSafe(W, H).b, ins * 2)}px;justify-content:center;`;
+        } else {
+          d = Math.round(star ? Math.min(W * 0.72, H * (o === "tall" ? 0.5 : 0.46)) : Math.min(W * 0.54, H * (o === "tall" ? 0.4 : 0.36)));
+          cx = Math.round(W / 2);
+          cy = Math.round(Math.max(_luxTop(sp, H), ins * 2) + ring * 2 + d / 2);
+          textCss = `left:${Math.max(sp.left, ins * 2)}px;right:${Math.max(sp.right, ins * 2)}px;top:${Math.round(cy + d / 2 + ring + H * 0.035)}px;bottom:${Math.max(sp.bot, tagSafe(W, H).b, ins * 2)}px;justify-content:center;`;
+        }
+        const R = d / 2;
+        let frame;
+        if (star) {
+          const Sz = Math.round(d + ring * 2),
+            sx = Math.round(cx - Sz / 2),
+            sy = Math.round(cy - Sz / 2),
+            inner = Math.round(Sz * 0.8),
+            cyN = 0.5 + (1 - 0.9045) / 2,
+            ix = Math.round(sx + (Sz - inner) * 0.5),
+            iy = Math.round(sy + (Sz - inner) * cyN),
+            g = _luxGrad("gold"),
+            pts = _luxStarPts(Sz, Sz).map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" "),
+            gapN = Math.round(Sz * 0.83),
+            gx = Math.round(sx + (Sz - gapN) * 0.5),
+            gy = Math.round(sy + (Sz - gapN) * cyN),
+            gpts = _luxStarPts(gapN, gapN).map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+          frame =
+            _luxSvgAt(sx, sy, Sz, Sz, `${g.defs}<polygon points="${pts}" fill="url(#${g.id})"/>`) +
+            _luxSvgAt(gx, gy, gapN, gapN, `<polygon points="${gpts}" fill="${p.bg}"/>`) +
+            `<div data-xf-clip="star" style="position:absolute;left:${ix}px;top:${iy}px;width:${inner}px;height:${inner}px;clip-path:${_luxStarCss()};${bgDiv(inner, inner)}"></div>`;
+        } else {
+          const rad = shape === "circle" ? "50%" : Math.round(6 * k) + "px";
+          const box = (r, css) => `<div style="position:absolute;left:${Math.round(cx - r)}px;top:${Math.round(cy - r)}px;width:${Math.round(2 * r)}px;height:${Math.round(2 * r)}px;border-radius:${rad};${css}"></div>`;
+          frame =
+            box(R + ring + gapR * 2.5, `border:${hl}px solid ${_luxS("gold")};opacity:.75;box-sizing:border-box;`) +
+            box(R + ring, `background:${_luxM("gold")};box-shadow:0 ${Math.round(10 * k)}px ${Math.round(30 * k)}px rgba(0,0,0,.35);`) +
+            box(R + gapR, `background:${p.bg};`) +
+            `<div style="position:absolute;left:${Math.round(cx - R)}px;top:${Math.round(cy - R)}px;width:${Math.round(d)}px;height:${Math.round(d)}px;border-radius:${rad};overflow:hidden;${bgDiv(Math.round(d), Math.round(d))}"></div>`;
+        }
+        return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};background-image:radial-gradient(ellipse at ${o === "wide" ? "28% 50%" : "50% 32%"},${rgba(p.primary || p.accent, 0.28)} 0%,transparent 62%);"><div style="position:absolute;left:${ins}px;top:${ins}px;right:${ins}px;bottom:${ins}px;border:${hl}px solid ${_luxS("gold")};opacity:.85;"></div><div style="position:absolute;left:${ins + hl * 3}px;top:${ins + hl * 3}px;right:${ins + hl * 3}px;bottom:${ins + hl * 3}px;border:1px solid ${rgba("#d4af37", 0.45)};"></div>${frame}${logoHTML(W, H)}${siteTag(W, H)}<div style="position:absolute;display:flex;flex-direction:column;${textCss}">${_luxText(W, p, "gold", o === "wide" ? 0.9 : 1)}</div></div>`;
+      }
       const templates = [
         // 1. Horizon Glow
         (p, W, H) => {
@@ -15572,6 +16137,24 @@ Post:
               .join("");
           return `<div style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};"><div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 37%,${rgba(p.primary, 0.3)} 0%,transparent 58%);pointer-events:none;"></div><svg style="position:absolute;inset:0;pointer-events:none;" width="${W}" height="${H}">${outerRays}${innerRays}<ellipse cx="${cx}" cy="${cy}" rx="${haloR}" ry="${haloR * 0.92}" fill="none" stroke="${rgba(p.accent, 0.22)}" stroke-width="${W * 0.005}"/><ellipse cx="${cx}" cy="${cy}" rx="${haloR * 1.38}" ry="${haloR * 1.27}" fill="none" stroke="${rgba(p.accent, 0.1)}" stroke-width="${W * 0.002}"/></svg><div style="position:absolute;top:${cy - halfH - W * 0.012}px;left:${cx - halfW - W * 0.012}px;width:${(halfW + W * 0.012) * 2}px;height:${(halfH + W * 0.012) * 2}px;border-radius:50%;background:${rgba(p.accent, 0.18)};"></div><div style="position:absolute;top:${cy - halfH}px;left:${cx - halfW}px;width:${ovalW}px;height:${ovalH}px;border-radius:50%;overflow:hidden;border:${W * 0.008}px solid ${p.accent};box-shadow:0 0 ${W * 0.04}px ${rgba(p.accent, 0.55)},0 0 ${W * 0.015}px ${rgba(p.accent, 0.3)} inset;">${S.bg ? `<img src="${S.bg}" style="width:100%;height:100%;${bgFitPos("bg")}${bgZoomCss("bg")}">` : `<div style="width:100%;height:100%;background:${rgba(p.primary, 0.3)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${W * 0.012}px;"><span style="font-size:${halfH * 0.55}px;opacity:.35;">👤</span><span style="font-family:${S.font};font-size:${W * 0.018}px;color:${rgba(p.text, 0.4)};">Image</span></div>`}</div><div style="position:absolute;top:${cy + halfH + H * 0.028}px;left:${safePad(W, H).left}px;right:${safePad(W, H).right}px;text-align:center;"><div style="display:flex;align-items:center;justify-content:center;gap:${W * 0.018}px;margin-bottom:${H * 0.018}px;"><div style="height:${W * 0.0035}px;flex:1;background:${rgba(p.accent, 0.45)};border-radius:2px;"></div><div style="width:${W * 0.022}px;height:${W * 0.022}px;background:${p.accent};clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);flex-shrink:0;"></div><div style="height:${W * 0.0035}px;flex:1;background:${rgba(p.accent, 0.45)};border-radius:2px;"></div></div>${hdr(W, p.text, fScale())}<div style="margin-top:${H * 0.016}px;">${body(W, rgba(p.text, 0.78), fScale())}</div></div>${logoHTML(W, H)}${siteTag(W, H)}</div>`;
         },
+        // 89. Gold Frame
+        (p, W, H) => _luxFramed(p, W, H, "gold"),
+        // 90. Silver Frame
+        (p, W, H) => _luxFramed(p, W, H, "silver"),
+        // 91. Gold Deco Corners
+        (p, W, H) => _luxDeco(p, W, H, "gold"),
+        // 92. Silver Deco Corners
+        (p, W, H) => _luxDeco(p, W, H, "silver"),
+        // 93. Gold Hairline Luxe
+        (p, W, H) => _luxHairline(p, W, H),
+        // 94. Silver Split Luxe
+        (p, W, H) => _luxSplit(p, W, H),
+        // 95. Gold Circle Portrait
+        (p, W, H) => _luxPortrait(p, W, H, "circle"),
+        // 96. Gold Square Portrait
+        (p, W, H) => _luxPortrait(p, W, H, "square"),
+        // 97. Gold Star Portrait
+        (p, W, H) => _luxPortrait(p, W, H, "star"),
       ];
 
       // ══════════════════════════════════════════
@@ -19849,6 +20432,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
         { label: "Holiday",    keywords: ["holiday", "christmas", "halloween", "easter", "mother", "father", "valentine", "new year"] },
         { label: "Info",       keywords: ["tip", "fact", "did you know", "stat", "checklist", "steps", "how to", "guide"] },
         { label: "Review",     keywords: ["review", "testimonial", "rating", "feedback", "star"] },
+        { label: "Luxury",     keywords: ["gold", "silver", "luxe", "luxury"] },
         { label: "Event",      keywords: ["event", "announce", "launch", "date", "open house", "coming soon"] },
       ];
 
@@ -28597,7 +29181,7 @@ function renderCalendarView() {
         const platLabel = plat.id === 'google' ? 'G·Biz' : plat.name.substring(0, 7);
         const hidden = idx >= MAX_VISIBLE_CHIPS ? ' cal-chip-hidden' : '';
 
-        return `<div class="cal-post-chip${hidden}"
+        return `<div class="cal-post-chip${hidden}${post.publishStatus === 'published' ? ' is-live' : ''}${post.imagePurged ? ' purged' : ''}"
             draggable="true"
             data-post-id="${post.id}"
             data-plat-id="${plat.id}"
@@ -28609,7 +29193,7 @@ function renderCalendarView() {
             title="${escapeHtml(getPostSummary(post))} — ${plat.name} @ ${timeLabel}">
           <div class="cal-post-chip-icon">${plat.icon.replace('width="20" height="20"','width="9" height="9"')}</div>
           <span class="cal-post-chip-plat" style="color:${plat.color}">${escapeHtml(platLabel)}</span>
-          <span class="cal-post-chip-time" style="color:${plat.color}">${timeLabel}</span>
+          ${post.publishStatus === 'published' ? '<span class="cal-live" title="Live">✓</span>' : ''}<span class="cal-post-chip-time" style="color:${plat.color}">${timeLabel}</span>
           <span class="cal-post-chip-title">${title}</span>
           ${tagHtml}
         </div>`;
@@ -29690,12 +30274,13 @@ function render() {
           <div class="post-list">
             ${(() => {
               const q = state.postSearch;
-              const _all = currentPosts.filter(p => !p.manualUpload && matchesPostSearch(p, q));
+              const _live = currentPosts.filter(p => p.publishStatus === 'published' && matchesPostSearch(p, q));
+              const _all = currentPosts.filter(p => !p.manualUpload && p.publishStatus !== 'published' && matchesPostSearch(p, q));
               const _showAll = !!(state.showAllPosts && state.showAllPosts[state.activePlatform]);
               const _mode = (q || state.bulkMode || (state.activeTagFilter && state.activeTagFilter.length)) ? 'none' : _showAll ? 'all' : 'next';
               const filtered = _mode === 'next' ? _ppNextUp(_all, 3) : _all;
               if (_all.length === 0 && q) return `<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">No posts match "<strong>${escapeHtml(q)}</strong>"</div>`;
-              return _ppListHead(_all, filtered, _mode) + filtered.map(post => {
+              return _ppListHead(_all, filtered, _mode, _live) + filtered.map(post => {
               const isSelected = (state.bulkSelected||new Set()).has(String(post.id));
               const overdue = isPostOverdue(post);
               const statusBorder = post.publishStatus==='published'?'#22c55e':post.publishStatus==='failed'?'#ef4444':overdue?'#f59e0b':post.scheduledDate?platform.color:'#4b5078';
@@ -29780,7 +30365,7 @@ function render() {
     ${state.showComposer ? renderComposerModal(platform) : ''}
 
     <!_PPESC_-- BATCH SCHEDULE MODAL -->
-    ${state.showBatchScheduleModal ? renderBatchScheduleModal() : ''}${state.showPlanWeek ? renderPlanWeek() : ''}${state.showToday ? renderTodayList() : ''}${state.showBestFit ? renderBestFit() : ''}${state.showBestTimes ? renderBestTimes() : ''}
+    ${state.showBatchScheduleModal ? renderBatchScheduleModal() : ''}${state.showPlanWeek ? renderPlanWeek() : ''}${state.showToday ? renderTodayList() : ''}${state.showBestFit ? renderBestFit() : ''}${state.showRedist ? renderRedistribute() : ''}${state.showBestTimes ? renderBestTimes() : ''}
 
     <!_PPESC_-- HASHTAG SET MODAL -->
     ${state.showHashtagSetModal ? renderHashtagSetModal() : ''}
@@ -31955,7 +32540,7 @@ async function _ppItemsToDrafts(items) {
         await savePosts(state.posts);
         render();
         const k = Object.keys(sched)[0], total = Object.values(sched).reduce((a, d) => a + d.length, 0);
-        showToast('📅 Scheduled ' + total + ' post' + (total === 1 ? '' : 's') + ' on their best days and times: ' + Object.keys(sched).map(p => PLATFORMS[p].name + ' ' + sched[p].map(_ppNiceDay).join(', ')).join(' · ') + '.');
+        showToast('📅 Scheduled ' + total + ' post' + (total === 1 ? '' : 's') + (Object.values(sched).every(ds => ds.every(d => d === _ppDayStr(new Date()))) ? ' for today: ' : ' on their best days and times: ') + Object.keys(sched).map(p => PLATFORMS[p].name + ' ' + sched[p].map(_ppNiceDay).join(', ')).join(' · ') + '.');
       }
     }
   } catch (e) {
@@ -32896,11 +33481,11 @@ function _ppFitPlan(opts) {
     const pid = pl.id;
     if (!ppBestSlots(pid).length) return;
     const all = state.posts[pid] || [];
-    const upcoming = all.filter(p => p.scheduledDate && p.publishStatus !== 'published' && _ppT(p.scheduledDate, p.scheduledTime) > now).sort(byT);
+    const upcoming = all.filter(p => p.scheduledDate && p.publishStatus !== 'published' && !p.pinnedDay && _ppT(p.scheduledDate, p.scheduledTime) > now).sort(byT);
     const drafts = opts.drafts ? (state.drafts[pid] || []) : [];
     if (!upcoming.length && !drafts.length) return;
     const onBest = (p) => !_ppSkipDay(p.scheduledDate) && _ppDayTimes(pid, new Date(p.scheduledDate + 'T00:00:00').getDay()).includes(p.scheduledTime);
-    const occ = _ppOcc(pid, null, all.filter(p => p.scheduledDate && (p.publishStatus === 'published' || _ppT(p.scheduledDate, p.scheduledTime) <= now)));
+    const occ = _ppOcc(pid, null, all.filter(p => p.scheduledDate && (p.publishStatus === 'published' || p.pinnedDay || _ppT(p.scheduledDate, p.scheduledTime) <= now)));
     const free = (q) => _ppFreeAt(pid, occ, q), take = (q) => _ppTakeAt(occ, q);
     const holDays = {}, keep = [], move = [];
     upcoming.forEach(p => {
@@ -33102,6 +33687,332 @@ function renderCalendarStatsBar() {
     .od-cap { opacity: .7; font-size: 10px; }`;
   document.head.appendChild(st);
 })();
+// ── A post with a live link is Live: off the schedule lists, kept on the calendar ──
+function _ppLiveUrl(p) {
+  const u = [p && p.liveUrl, p && p.tiktokLiveUrl, p && p.ytLiveUrl].find(x => x && /^https?:\/\/\S+/i.test(String(x).trim()));
+  return u ? String(u).trim() : '';
+}
+const _ppHm = (d) => String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+function _ppNormalizeLive() {
+  const now = new Date(), today = _ppDayStr(now);
+  let changed = 0;
+  const posts = {};
+  Object.keys(state.posts || {}).forEach(pid => {
+    posts[pid] = (state.posts[pid] || []).map(p => {
+      const u = _ppLiveUrl(p);
+      if (!u) return p;
+      const early = !!(p.scheduledDate && p.scheduledDate > today); // it went live before its planned day
+      if (p.publishStatus === 'published' && p.liveAt && p.scheduledDate && !early) return p;
+      changed++;
+      const move = !p.scheduledDate || early;
+      return { ...p, liveUrl: p.liveUrl || u, publishStatus: 'published', liveAt: p.liveAt || Date.now(),
+        scheduledDate: move ? today : p.scheduledDate, scheduledTime: move ? _ppHm(now) : (p.scheduledTime || _ppHm(now)) };
+    });
+  });
+  if (changed) { state.posts = posts; savePosts(state.posts); }
+  return changed;
+}
+const _ppSavePostOrig = savePost;
+savePost = function () {
+  const r = _ppSavePostOrig.apply(this, arguments);
+  try { if (_ppNormalizeLive()) { render(); showToast('✅ Marked Live: it moved off the schedule and stays on the calendar.'); } } catch (e) {}
+  return r;
+};
+// ── After 30 days a live post's images are cleared to save space (a tiny preview stays); it opens the live post instead ──
+function _ppTinyThumb(src) {
+  return new Promise(res => {
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const k = Math.min(1, 120 / Math.max(im.naturalWidth || 1, im.naturalHeight || 1));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round((im.naturalWidth || 1) * k)); c.height = Math.max(1, Math.round((im.naturalHeight || 1) * k));
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        res(c.toDataURL('image/jpeg', 0.6));
+      } catch (e) { res(''); }
+    };
+    im.onerror = () => res('');
+    im.src = src;
+  });
+}
+let _ppPurging = false;
+async function _ppPurgeLive(days) {
+  if (_ppPurging) return 0;
+  _ppPurging = true;
+  try {
+    const cutoff = Date.now() - (days || 30) * 864e5, done = {};
+    let n = 0;
+    for (const pid of Object.keys(state.posts || {})) {
+      for (const p of (state.posts[pid] || [])) {
+        const when = p.liveAt || (p.scheduledDate ? _ppT(p.scheduledDate, p.scheduledTime) : 0);
+        if (p.imagePurged || p.publishStatus !== 'published' || !_ppLiveUrl(p) || !when || when > cutoff || !(p.image || p.imageOriginal)) continue;
+        const src = p.image || p.imageOriginal;
+        const thumb = !p.isVideo && /^data:image\//.test(src) ? await _ppTinyThumb(src) : '';
+        (done[pid] = done[pid] || {})[String(p.id)] = { src, thumb };
+        n++;
+      }
+    }
+    if (n) {
+      // applied to the posts as they are now (nothing edited meanwhile is lost)
+      const posts = { ...state.posts };
+      Object.keys(done).forEach(pid => {
+        posts[pid] = (posts[pid] || []).map(p => { const d = done[pid][String(p.id)]; return d && (p.image || p.imageOriginal) === d.src ? { ...p, image: d.thumb, imageOriginal: '', imagePurged: true, purgedAt: Date.now() } : p; });
+      });
+      state.posts = posts;
+      await savePosts(state.posts);
+      render();
+    }
+    return n;
+  } finally { _ppPurging = false; }
+}
+function _ppLiveTick() { try { if (_ppNormalizeLive()) render(); _ppPurgeLive(); } catch (e) {} }
+setTimeout(_ppLiveTick, 2500);
+setTimeout(_ppLiveTick, 9000);
+setInterval(_ppLiveTick, 15 * 60e3);
+if (typeof switchWorkspace === 'function') {
+  const _ppSwLive = switchWorkspace;
+  switchWorkspace = async function () { const r = await _ppSwLive.apply(this, arguments); _ppLiveTick(); return r; };
+}
+// ── The Live posts section under each platform's list ──
+function ppToggleLive() { state.showLive = Object.assign({}, state.showLive || {}); state.showLive[state.activePlatform] = !state.showLive[state.activePlatform]; render(); }
+function _ppLiveSection(live) {
+  if (!live || !live.length) return '';
+  const open = !!(state.showLive && state.showLive[state.activePlatform]);
+  const when = (p) => p.liveAt || _ppT(p.scheduledDate || '1970-01-01', p.scheduledTime);
+  const items = live.slice().sort((a, b) => when(b) - when(a));
+  return `<div class="live-sec"><button type="button" class="live-head" aria-expanded="${open}" onclick="ppToggleLive()">✅ Live posts <b>${live.length}</b><span>${open ? 'Hide' : 'Show'}</span></button>` +
+    (open ? `<div class="live-list">${items.map(p => { const u = _ppLiveUrl(p);
+      return `<div class="live-row">${p.image ? `<img src="${escapeHtml(p.image)}" alt=""/>` : `<span class="live-noimg">🔗</span>`}<span class="live-name">${escapeHtml(String(getPostSummary(p) || 'Post').slice(0, 64))}</span><span class="live-when">${p.scheduledDate ? _ppNiceDay(p.scheduledDate) : ''}</span>` +
+        (u ? `<a class="live-open" href="${escapeHtml(u)}" target="_blank" rel="noopener">Open live post ↗</a>` : `<button type="button" class="live-add" onclick="openComposer('${p.id}')">Add live link</button>`) +
+        (p.imagePurged ? `<span class="live-cleared" title="The full image was cleared after 30 days to save space">image cleared</span>` : '') + `</div>`; }).join('')}</div>` : '') + `</div>`;
+}
+_ppListHead = (function (orig) { return function (all, filtered, mode, live) { return orig.apply(this, arguments) + _ppLiveSection(live || []); }; })(_ppListHead);
+// Calendar: a live post whose images were cleared opens the live post
+calChipClick = (function (orig) { return function (e, postId, platId) {
+  const p = (state.posts[platId] || []).find(x => String(x.id) === String(postId));
+  const u = p && _ppLiveUrl(p);
+  if (p && u && p.imagePurged && !_didDrag) { if (e) e.stopPropagation(); window.open(u, '_blank', 'noopener'); return; }
+  return orig.apply(this, arguments);
+}; })(calChipClick);
+// ── ⚡ Schedule today from the Batch: each post at its own time today ──
+_ppScheduleItemOpen = (function (orig) { return async function (item, pid, fmt, sched) {
+  if (!(item && item.at && item.at.date && item.at.time)) return orig.apply(this, arguments);
+  const imageName = _ppItemName(item, pid, fmt);
+  const posts = state.posts[pid] || [];
+  if (posts.some(p => p.imageName === imageName && p.fromBrandCreator)) return;
+  if (posts.length >= MAX_POSTS) return;
+  const imageData = await getImageForPlatform(item, pid, fmt);
+  const post = { ...defaultForm(pid), ..._draftTextFields(_ppSrcOf(item, pid)), id: Date.now() + Math.random(), platform: pid, image: imageData, imageOriginal: imageData, imageName,
+    scheduledDate: item.at.date, scheduledTime: item.at.time, publishStatus: 'scheduled', fromBrandCreator: true, pinnedDay: true };
+  state.posts = { ...state.posts, [pid]: sortPosts([...(state.posts[pid] || []), post]) };
+  _pcShowPlatform(pid);
+  (sched[pid] = sched[pid] || []).push(item.at.date);
+}; })(_ppScheduleItemOpen);
+(function _liveStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .live-sec { margin: 4px 0 12px; }
+    .live-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(34,197,94,.35); background: rgba(34,197,94,.08); color: var(--text-primary, #e8eaf0); font: 700 12.5px 'DM Sans', system-ui, sans-serif; cursor: pointer; }
+    .live-head b { color: #22c55e; }
+    .live-head span { margin-left: auto; font-size: 11px; color: var(--text-muted); font-weight: 600; }
+    .live-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+    .live-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg-card); font-size: 12px; }
+    .live-row img, .live-noimg { width: 38px; height: 38px; object-fit: cover; border-radius: 6px; flex: none; display: flex; align-items: center; justify-content: center; background: var(--bg-elevated); }
+    .live-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .live-when { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+    .live-open { color: #22c55e; font-weight: 700; text-decoration: none; white-space: nowrap; }
+    .live-add { font-size: 11px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; }
+    .live-cleared { font-size: 10px; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 5px; padding: 1px 5px; white-space: nowrap; }
+    .cal-post-chip.is-live { opacity: .82; }
+    .cal-live { color: #22c55e; font-weight: 900; margin-right: 2px; }
+    .live-head:focus-visible, .live-open:focus-visible, .live-add:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }`;
+  document.head.appendChild(st);
+})();
+// ── ⚖️ Redistribute: a day with more posts than a platform's daily limit; the extras move to the next best day and time ──
+// Stays put: live posts, your "Schedule today" picks, and posts whose time has passed. Holiday and timely posts keep their day first.
+function _ppMovable(p, nowMs) {
+  return !!p.scheduledDate && p.publishStatus !== 'published' && p.publishStatus !== 'publishing' && !p.pinnedDay && !p.manualUpload && _ppT(p.scheduledDate, p.scheduledTime) > nowMs;
+}
+function _ppKeepRank(p, nowMs) { return _ppHolidayOf(_ppAllText(p), nowMs) ? 0 : p.timely ? 1 : 2; }
+function ppOverbooked(onlyDay, onlyPid) {
+  const now = Date.now(), today = _ppDayStr(new Date(now)), out = [];
+  Object.keys(state.posts || {}).forEach(pid => {
+    if (!PLATFORMS[pid] || (onlyPid && pid !== onlyPid)) return;
+    const cap = ppDailyCap(pid), byDay = new Map();
+    (state.posts[pid] || []).forEach(p => {
+      if (!p.scheduledDate || p.scheduledDate < today || (onlyDay && p.scheduledDate !== onlyDay)) return;
+      if (!byDay.has(p.scheduledDate)) byDay.set(p.scheduledDate, []);
+      byDay.get(p.scheduledDate).push(p);
+    });
+    byDay.forEach((list, date) => {
+      if (list.length <= cap) return;
+      const fixed = list.filter(p => !_ppMovable(p, now));
+      const movable = list.filter(p => _ppMovable(p, now)).sort((x, y) => _ppKeepRank(x, now) - _ppKeepRank(y, now) || _ppT(x.scheduledDate, x.scheduledTime) - _ppT(y.scheduledDate, y.scheduledTime));
+      const room = Math.max(0, cap - fixed.length);
+      if (movable.length > room) out.push({ pid, date, n: list.length, cap, fixed, keep: movable.slice(0, room), extra: movable.slice(room) });
+    });
+  });
+  return out.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0) || (x.pid < y.pid ? -1 : 1));
+}
+// Where each extra goes: its platform's next best day and time after the busy day (never onto another full day)
+function _ppRedistPlan(onlyDay, off) {
+  const now = Date.now(), over = ppOverbooked(onlyDay).filter(o => !(off && off.has(o.pid + '|' + o.date))), occBy = {}, moves = [];
+  over.forEach(o => { const occ = occBy[o.pid] || (occBy[o.pid] = _ppOcc(o.pid)); const d = occ.get(o.date); if (d) d.n -= o.extra.length; });
+  over.forEach(o => {
+    const occ = occBy[o.pid], from = Math.max(_ppT(o.date, '23:59') + 60e3, now);
+    o.extra.forEach(p => {
+      const h = _ppHolidayOf(_ppAllText(p), now);
+      let s = ppSlotsFrom(o.pid, from, 180).find(x => _ppFreeAt(o.pid, occ, x) && (!h || x.date <= h.end)) || null, earlier = false;
+      if (!s && h) {
+        // A holiday post can't go past its holiday: the nearest free best time earlier in the lead-up
+        const cands = ppSlotsFrom(o.pid, Math.max(now, _ppT(h.start, '00:00')), 120).filter(x => x.date < o.date && _ppFreeAt(o.pid, occ, x));
+        s = cands.length ? cands[cands.length - 1] : null;
+        earlier = !!s;
+      }
+      if (s) _ppTakeAt(occ, s);
+      moves.push({ pid: o.pid, day: o.date, p, to: s, earlier, hname: h ? h.name : '', holiday: h && !s ? h.name : '' });
+    });
+  });
+  return { over, moves };
+}
+function ppOpenRedistribute(day) { state.redist = { day: day || '', off: [] }; state.showRedist = true; render(); }
+function ppCloseRedistribute() { state.showRedist = false; render(); }
+function ppRedistToggle(key) { const r = state.redist || { day: '', off: [] }, off = new Set(r.off || []); off.has(key) ? off.delete(key) : off.add(key); state.redist = { ...r, off: [...off] }; render(); }
+function ppRedistShowAll() { state.redist = { day: '', off: [] }; render(); }
+function renderRedistribute() {
+  const r = state.redist || { day: '', off: [] }, off = new Set(r.off || []);
+  const all = ppOverbooked(r.day), plan = _ppRedistPlan(r.day, off), byKey = new Map();
+  plan.moves.forEach(m => { const k = m.pid + '|' + m.day; if (!byKey.has(k)) byKey.set(k, []); byKey.get(k).push(m); });
+  const total = plan.moves.filter(m => m.to).length;
+  const name = (p) => escapeHtml(String(getPostSummary(p) || 'Post').slice(0, 64));
+  const img = (p) => p.image ? `<img src="${escapeHtml(p.image)}" alt=""/>` : `<span class="rd-noimg" aria-hidden="true">🖼</span>`;
+  const why = (p) => p.publishStatus === 'published' ? 'live' : p.pinnedDay ? 'your pick for this day' : _ppT(p.scheduledDate, p.scheduledTime) <= Date.now() ? 'time has passed' : _ppHolidayOf(_ppAllText(p)) ? 'holiday post' : p.timely ? 'timely post' : '';
+  const stays = (list) => {
+    if (list.length <= 3) return list.map(p => `${name(p)} <span>(${_ppClock(p.scheduledTime)}${why(p) ? ', ' + why(p) : ''})</span>`).join(' · ');
+    const ts = list.map(p => p.scheduledTime || '').filter(Boolean).sort(), notes = {};
+    list.forEach(p => { const w = why(p); if (w) notes[w] = (notes[w] || 0) + 1; });
+    return `${list.length} posts <span>(${ts.length ? _ppClock(ts[0]) + '–' + _ppClock(ts[ts.length - 1]) : ''}${Object.keys(notes).map(w => ', ' + notes[w] + ' ' + w).join('')})</span>`;
+  };
+  const days = all.map(o => {
+    const k = o.pid + '|' + o.date, on = !off.has(k), pl = PLATFORMS[o.pid], ms = byKey.get(k) || [], stay = [...o.fixed, ...o.keep];
+    return `<div class="pw-sec rd-sec${on ? '' : ' off'}" style="border-left-color:${pl.color}">
+      <label class="pw-head rd-head"><input type="checkbox" ${on ? 'checked' : ''} onchange="ppRedistToggle('${k}')" aria-label="Redistribute ${escapeHtml(pl.name)} on ${_ppNiceDay(o.date)}"/><span style="color:${pl.color};font-weight:700">${escapeHtml(pl.name)}</span> · ${_ppNiceDay(o.date)}<span class="pw-count">${o.n} posts · limit ${o.cap} a day</span></label>
+      ${on ? `<div class="pw-list">${ms.map(m => `<div class="bp-row bf-row">${img(m.p)}<span class="bp-name">${name(m.p)}</span><span class="bf-when">${_ppClock(m.p.scheduledTime)} → ${m.to ? `<b>${_ppSlotLabel(m.to)}</b>` : ''}</span>${m.to ? (m.earlier ? `<span class="bf-why">earlier in the ${escapeHtml(m.hname)} lead-up: no free best time after this day before ${escapeHtml(m.hname)}</span>` : '') : `<span class="bf-why warn">⚠ No free best time before ${escapeHtml(m.holiday || 'the next 6 months')}; left as is</span>`}</div>`).join('')}</div>
+        ${stay.length ? `<div class="rd-stay">Stays on this day: ${stays(stay)}</div>` : ''}` : `<div class="rd-stay">Left as is.</div>`}
+    </div>`;
+  }).join('');
+  return `<div class="overlay" onclick="ppCloseRedistribute()" style="z-index:820"><div class="modal" style="max-width:760px" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="rd-title">
+    <div class="modal-header"><h2 class="modal-title" id="rd-title">⚖️ Redistribute overbooked days</h2><button class="close-btn" onclick="ppCloseRedistribute()" aria-label="Close">×</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;max-height:68vh;overflow-y:auto">
+      <div class="pw-top"><span>These days have more posts than the platform's daily limit (one a day; Pinterest: up to ${ppDailyCap('pinterest')}). The extra posts move to that platform's next best day and time${ppWeekendsOff() ? ', on weekdays' : ''}. Live posts and your "Schedule today" picks stay put, and holiday posts stay in their holiday's lead-up.</span>${r.day ? `<button type="button" class="rd-all" onclick="ppRedistShowAll()">Show every overbooked day</button>` : ''}</div>
+      ${all.length ? days : `<div class="pw-empty">🎉 No overbooked days${r.day ? ' on ' + _ppNiceDay(r.day) : ''}: every platform is within its daily limit.</div>`}
+    </div>
+    <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;padding:16px 20px">
+      <button class="btn-cancel" onclick="ppCloseRedistribute()">${all.length ? 'Cancel' : 'Close'}</button>
+      ${all.length ? `<button class="btn-save" id="rd-apply" ${total ? '' : 'disabled'} onclick="ppApplyRedistribute()">Move ${total} post${total === 1 ? '' : 's'} →</button>` : ''}
+    </div></div></div>`;
+}
+function ppApplyRedistribute() {
+  const r = state.redist || { day: '', off: [] };
+  const moves = _ppRedistPlan(r.day, new Set(r.off || [])).moves.filter(m => m.to);
+  state.showRedist = false;
+  if (!moves.length) { render(); showToast('Nothing to move.'); return; }
+  const undo = [], posts = { ...state.posts };
+  moves.forEach(m => {
+    posts[m.pid] = (posts[m.pid] || []).map(p => {
+      if (String(p.id) !== String(m.p.id)) return p;
+      undo.push({ pid: m.pid, id: String(p.id), date: p.scheduledDate, time: p.scheduledTime, to: m.to });
+      return { ...p, scheduledDate: m.to.date, scheduledTime: m.to.time };
+    });
+  });
+  [...new Set(moves.map(m => m.pid))].forEach(pid => (posts[pid] = sortPosts(posts[pid])));
+  state.posts = posts;
+  savePosts(state.posts);
+  render();
+  const days = new Set(moves.map(m => m.pid + '|' + m.day)).size;
+  _ppUndoBar(`⚖️ Moved ${moves.length} post${moves.length === 1 ? '' : 's'} off ${days} overbooked day${days === 1 ? '' : 's'} to their next best days and times.`, () => ppUndoRedistribute(undo));
+}
+function ppUndoRedistribute(undo) {
+  const posts = { ...state.posts };
+  let n = 0;
+  undo.forEach(u => {
+    posts[u.pid] = (posts[u.pid] || []).map(p => (String(p.id) === u.id && p.scheduledDate === u.to.date && p.scheduledTime === u.to.time ? (n++, { ...p, scheduledDate: u.date, scheduledTime: u.time }) : p));
+  });
+  [...new Set(undo.map(u => u.pid))].forEach(pid => (posts[pid] = sortPosts(posts[pid])));
+  state.posts = posts;
+  savePosts(state.posts);
+  render();
+  showToast(`↩ Undone: ${n} post${n === 1 ? '' : 's'} back where ${n === 1 ? 'it was' : 'they were'}.`);
+}
+function _ppUndoBar(msg, undoFn) {
+  const old = document.getElementById('pp-undo-bar');
+  if (old) old.remove();
+  const bar = document.createElement('div');
+  bar.id = 'pp-undo-bar';
+  bar.className = 'pp-undo-bar';
+  bar.setAttribute('role', 'status');
+  bar.innerHTML = `<span></span><button type="button" class="pp-undo">↩ Undo</button><button type="button" class="pp-undo-x" aria-label="Dismiss">✕</button>`;
+  bar.querySelector('span').textContent = msg;
+  bar.querySelector('.pp-undo').onclick = () => { bar.remove(); undoFn(); };
+  bar.querySelector('.pp-undo-x').onclick = () => bar.remove();
+  document.body.appendChild(bar);
+  setTimeout(() => bar.remove(), 20000);
+}
+// The tools card: ⚖️ Redistribute next to ✨ Best fit, and the overbooked days listed like the gaps
+renderComingUp = (function (orig) { return function () {
+  let html = orig.apply(this, arguments);
+  try {
+    const over = ppOverbooked();
+    const bf = 'onclick="ppOpenBestFit()">✨ Best fit</button>';
+    const btn = `<button type="button" class="cu-btn${over.length ? ' cu-warn' : ''}" onclick="ppOpenRedistribute()" title="Days with more posts than a platform's daily limit: move the extras to the next best day and time">⚖️ Redistribute${over.length ? ` <span class="cu-n warn">${over.length}</span>` : ''}</button>`;
+    if (html.includes(bf)) html = html.replace(bf, bf + btn);
+    if (over.length) {
+      const note = `<div class="cu-gaps cu-over" role="note"><div class="cu-gh">⚠ Overbooked days</div>${over.slice(0, 5).map(o => `<button type="button" class="cu-gap" onclick="ppOpenRedistribute('${o.date}')" title="Redistribute this day"><b style="color:${PLATFORMS[o.pid].color}">${escapeHtml(PLATFORMS[o.pid].name)}</b> ${_ppNiceDay(o.date)} · ${o.n} posts, limit ${o.cap}</button>`).join('')}${over.length > 5 ? `<button type="button" class="cu-gap" onclick="ppOpenRedistribute()">+${over.length - 5} more…</button>` : ''}</div>`;
+      const gi = html.indexOf('<div class="cu-gaps"');
+      html = gi >= 0 ? html.slice(0, gi) + note + html.slice(gi) : html.replace(/<\/div>\s*$/, note + '</div>');
+    }
+  } catch (e) {}
+  return html;
+}; })(renderComingUp);
+// The calendar: an overbooked day shows ⚠; click it to redistribute that day
+_ppCalCap = (function (orig) { return function (ds, n) {
+  const base = orig.apply(this, arguments);
+  try {
+    const f = _ppCalOnly(), over = ppOverbooked(ds, f || '');
+    if (!over.length) return base;
+    const extra = over.reduce((a, o) => a + o.extra.length, 0);
+    const tip = over.map(o => `${PLATFORMS[o.pid].name}: ${o.n} posts, limit ${o.cap} a day`).join(' · ');
+    return `<button type="button" class="cal-over" onclick="event.stopPropagation(); ppOpenRedistribute('${ds}')" title="${escapeHtml(tip)}. Click to redistribute.">⚠ ${f ? over[0].n + '/' + over[0].cap : extra + ' over'}</button>`;
+  } catch (e) { return base; }
+}; })(_ppCalCap);
+(function _redistStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .cu-btn.cu-warn { border-color: rgba(239,68,68,.55); }
+    .cu-n.warn { background: #ef4444; color: #fff; }
+    .cu-over .cu-gh { color: #ef4444; }
+    .cal-over { position: absolute; top: 4px; right: 5px; z-index: 2; font: 800 9.5px 'DM Sans', system-ui, sans-serif; padding: 1px 5px; border-radius: 6px; border: none; background: #ef4444; color: #fff; cursor: pointer; line-height: 1.5; }
+    .cal-over:hover { background: #dc2626; }
+    .cal-over:focus-visible, .rd-all:focus-visible, .pp-undo:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
+    .rd-head { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .rd-head input { width: 16px; height: 16px; margin: 0; accent-color: #f5a623; }
+    .rd-sec.off { opacity: .6; }
+    .rd-stay { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; line-height: 1.5; }
+    .rd-stay span { opacity: .8; }
+    .rd-noimg { width: 38px; height: 38px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; background: var(--bg-elevated); flex: none; }
+    .rd-all { margin-left: auto; font-size: 11.5px; padding: 4px 10px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; white-space: nowrap; }
+    .pp-undo-bar { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 9999; display: flex; align-items: center; gap: 12px; max-width: min(640px, calc(100vw - 32px)); padding: 11px 14px; border-radius: 12px; background: #1c1f2b; color: #e8eaf0; border: 1px solid rgba(255,255,255,.12); box-shadow: 0 10px 30px rgba(0,0,0,.45); font: 500 13px 'DM Sans', system-ui, sans-serif; }
+    .pp-undo { flex: none; padding: 5px 12px; border-radius: 8px; border: none; background: #f5a623; color: #111; font-weight: 800; cursor: pointer; }
+    .pp-undo-x { flex: none; border: none; background: transparent; color: inherit; opacity: .7; cursor: pointer; font-size: 14px; }`;
+  document.head.appendChild(st);
+})();
+// ── Posts sent from the Post Creator show up right away (not on the next 3-second check) ──
+startIncomingPoller = (function (o) { return function () { window._ppPollerOn = true; return o.apply(this, arguments); }; })(startIncomingPoller);
+window.addEventListener('storage', (e) => {
+  if (!window._ppPollerOn || !e.key || !/postflow_incoming_queue$/.test(e.key) || !e.newValue) return;
+  clearTimeout(window._ppInstantT);
+  window._ppInstantT = setTimeout(() => { try { checkIncomingQueue(); } catch (err) {} }, 60);
+});
 function _draftTextFields(draft) {
   let header = draft.srcHeader, content = draft.srcContent;
   if (header == null && content == null && draft.fromBrandCreator && draft.notes && draft.notes.includes(' · ')) {
