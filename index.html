@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v90</span>
+              <span class="sb-version">v92</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -4014,6 +4014,14 @@
         <div class="sec-label" style="display: flex; align-items: center; justify-content: space-between"><span>💧 Watermark</span><span class="l2-hint">logo + website</span></div>
         <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 8px; cursor: pointer"><input type="checkbox" id="wm-on" onchange="wmSet('wmOn', this.checked)" /> Add a watermark of our logo and website</label>
         <div id="wm-opts" style="display: none">
+          <div class="field-label">Logo</div>
+          <div class="wm-seg" role="radiogroup" aria-label="Which logo the watermark uses">
+            <button type="button" role="radio" data-k="wmLogoSrc" data-v="main" onclick="wmSet('wmLogoSrc', 'main')">Your logo</button>
+            <button type="button" role="radio" data-k="wmLogoSrc" data-v="logo2" id="wm-src-logo2" onclick="wmSet('wmLogoSrc', 'logo2')">Farmers logo</button>
+            <button type="button" role="radio" data-k="wmLogoSrc" data-v="custom" id="wm-src-custom" onclick="wmPickLogo()">Upload…</button>
+          </div>
+          <input type="file" id="wm-logo-file" accept="image/*" style="display: none" onchange="wmLogoFile(this.files[0])" aria-label="Upload a logo for the watermark" />
+          <div class="wm-prev"><img id="wm-preview" alt="How the watermark will look" style="display: none" /><span id="wm-prev-txt"></span></div>
           <div class="field-label">Style</div>
           <div class="wm-seg" role="radiogroup" aria-label="Watermark style">
             <button type="button" role="radio" data-k="wmStyle" data-v="center" onclick="wmSet('wmStyle', 'center')">◉ Center</button>
@@ -4211,6 +4219,10 @@
       </div>
 
       <div class="sec sec-divider">
+        <div class="pc-clear-row" role="group" aria-label="Clear text or use the blank layout">
+          <button type="button" onclick="pcClearAllText()" title="Clears the headline, body, captions, Pinterest title and alt text. Undo is right there.">🧹 Clear all text</button>
+          <button type="button" onclick="pcUseBlank()" title="Just your photo: no text, no shapes. Your watermark goes on top if it's on.">▢ Blank layout</button>
+        </div>
         <div class="elem-section elem-section-header">
           <span class="elem-section-label">▪ Header Text Settings</span>
           <input
@@ -5053,10 +5065,11 @@ Your message, caption, or call to action goes right here.</textarea
         wmOn: false,
         wmStyle: "center",
         wmShow: "both",
-        wmColor: "white",
+        wmColor: "original",
         wmOpacity: 20,
         wmSize: 50,
         wmBrands: ["ws_a", "ws_b", "ws_c"],
+        wmLogoSrc: "main",
         logo2Pos: "br",
         logo2Size: 50,
         logo2Back: "none",
@@ -6299,6 +6312,7 @@ Your message, caption, or call to action goes right here.</textarea
         "Gold Circle Portrait",
         "Gold Square Portrait",
         "Gold Star Portrait",
+        "Blank Photo Only",
       ];
 
       let selected = new Set();
@@ -6408,6 +6422,7 @@ Your message, caption, or call to action goes right here.</textarea
             wmOpacity: S.wmOpacity,
             wmSize: S.wmSize,
             wmBrands: S.wmBrands,
+            wmLogoSrc: S.wmLogoSrc,
             logo2Pos: S.logo2Pos,
             logo2Size: S.logo2Size,
             logo2Back: S.logo2Back,
@@ -8863,7 +8878,7 @@ Your message, caption, or call to action goes right here.</textarea
             item.appendChild(wrap);
             const btns = document.createElement("div");
             btns.className = "mp-pv-btns";
-            btns.innerHTML = `<button type="button" class="mp-pv-open" onclick="mpOpenPlatform(${use},'${pk}',this)" title="${(MP_OPEN[pk] || {}).paste ? "Copies the image" : "Saves the image, copies the caption,"} and opens ${_mpName(pk)}. Nothing is posted.">${platIcon(pk, 11)} Open ${_mpShort(pk)} ↗</button><button type="button" class="mp-pv-save" onclick="mpSavePlatform(${use},'${pk}',this)" title="Download the ${_mpName(pk)} version">⬇ Save</button><button type="button" class="mp-pv-cap${pcOver(pk) ? " over" : ""}" onclick="pcCopyCaption('${pk}', this)" title="Copy the ${_mpName(pk)} caption">📋 Caption</button><button type="button" class="mp-pv-layout" onclick="mixOpenPicker(${idx},'${pk}')" title="Use a different layout for ${_mpName(pk)} only">⟳ Layout</button><button type="button" class="mp-pv-save mp-pv-send1" onclick="mpSendOne(${idx},'${pk}')" title="Send only this ${_mpName(pk)} image to the Scheduler">📤 Send</button>`;
+            btns.innerHTML = `<button type="button" class="mp-pv-open" onclick="mpOpenPlatform(${use},'${pk}',this)" title="${(MP_OPEN[pk] || {}).paste ? "Copies the image" : "Saves the image, copies the caption,"} and opens ${_mpName(pk)}. Nothing is posted.">${platIcon(pk, 11)} Open ${_mpShort(pk)} ↗</button><button type="button" class="mp-pv-save" onclick="mpSavePlatform(${use},'${pk}',this)" title="Download the ${_mpName(pk)} version">⬇ Save</button><button type="button" class="mp-pv-cap${pcOver(pk) ? " over" : ""}" onclick="pcCopyCaption('${pk}', this)" title="Copy the ${_mpName(pk)} caption">📋 Caption</button><button type="button" class="mp-pv-layout" onclick="mixOpenPicker(${idx},'${pk}')" title="Use a different layout for ${_mpName(pk)} only">⟳ Layout</button><button type="button" class="mp-pv-send1" onclick="mpSendOne(${idx},'${pk}')" title="Send only this ${_mpName(pk)} image to the Scheduler">📤 Send</button>`;
             item.appendChild(btns);
             row.appendChild(item);
             inners.push(inner);
@@ -8955,6 +8970,13 @@ Your message, caption, or call to action goes right here.</textarea
         _pfPickerStep = 2;
         renderPfPicker();
       }
+      (function _mpSendOneStyles() {
+        const st = document.createElement("style");
+        st.textContent = `.mp-pv-send1 { display: inline-flex; align-items: center; gap: 5px; border-radius: 7px; font: 600 11px "DM Sans", sans-serif; padding: 5px 9px; cursor: pointer; border: 1px solid var(--border); background: var(--panel); color: var(--text); }
+          .mp-pv-send1:hover { border-color: #f5a623; }
+          .mp-pv-send1:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }`;
+        document.head.appendChild(st);
+      })();
       // ══════════════════════════════════════════
       // UNSPLASH PHOTO SEARCH (v59)
       // Search free Unsplash photos with your own Access Key and put them in any image
@@ -13777,7 +13799,53 @@ Post:
       const _WM_WS = ["ws_a", "ws_b", "ws_c"];
       const _wmBrand = () => _WM_WS[typeof _pfActiveAccount === "number" ? _pfActiveAccount : 0] || "ws_a";
       const _wmBrands = () => (Array.isArray(S.wmBrands) ? S.wmBrands : _WM_WS.slice());
-      const _wmLogo = () => (typeof S.logo === "string" ? S.logo : "") || "";
+      const _wmLogo = () => {
+        const src = S.wmLogoSrc || "main";
+        try {
+          if (src === "logo2" && localStorage.getItem("bpc_logo2")) return localStorage.getItem("bpc_logo2");
+          if (src === "custom" && localStorage.getItem("bpc_wm_logo")) return localStorage.getItem("bpc_wm_logo");
+        } catch (e) {}
+        return (typeof S.logo === "string" ? S.logo : "") || "";
+      };
+      // A logo on a plain background (a JPG, or a PNG with a white box): the background is taken out from the edges in,
+      // so the watermark is the logo itself (and White or Black follow its shape instead of making a square)
+      function _wmLogoCanvas(img, w, h) {
+        const c = document.createElement("canvas");
+        c.width = w;
+        c.height = h;
+        const x = c.getContext("2d");
+        x.drawImage(img, 0, 0, w, h);
+        let d;
+        try {
+          d = x.getImageData(0, 0, w, h);
+        } catch (e) {
+          return c;
+        }
+        const px = d.data,
+          at = (i, j) => (j * w + i) * 4,
+          cs = [at(0, 0), at(w - 1, 0), at(0, h - 1), at(w - 1, h - 1)];
+        if (!cs.every((k) => px[k + 3] > 245)) return c; // already has see-through areas
+        const r0 = px[cs[0]], g0 = px[cs[0] + 1], b0 = px[cs[0] + 2];
+        const dist = (k) => Math.abs(px[k] - r0) + Math.abs(px[k + 1] - g0) + Math.abs(px[k + 2] - b0);
+        if (!cs.every((k) => dist(k) <= 60)) return c; // the corners differ: not a plain background
+        const seen = new Uint8Array(w * h), st = [];
+        for (let i = 0; i < w; i++) st.push(i, 0, i, h - 1);
+        for (let j = 0; j < h; j++) st.push(0, j, w - 1, j);
+        while (st.length) {
+          const j = st.pop(), i = st.pop();
+          if (i < 0 || j < 0 || i >= w || j >= h) continue;
+          const n = j * w + i;
+          if (seen[n]) continue;
+          seen[n] = 1;
+          const k = n * 4, dd = dist(k);
+          if (dd <= 70) {
+            px[k + 3] = 0;
+            st.push(i + 1, j, i - 1, j, i, j + 1, i, j - 1);
+          } else if (dd <= 150) px[k + 3] = Math.round((px[k + 3] * (dd - 70)) / 80); // soft edge
+        }
+        x.putImageData(d, 0, 0);
+        return c;
+      }
       const _wmSite = () => String(S.siteURL || "").trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
       const _wmFam = () => S.hFont || S.font || "sans-serif";
       function wmShown() {
@@ -13795,7 +13863,7 @@ Post:
         try {
           ready = document.fonts.check(`700 72px ${_wmFam()}`);
         } catch (e) {}
-        return [S.wmShow || "both", S.wmColor || "white", _wmSite(), _wmFam(), ready, l.length, l.slice(0, 80), l.slice(-80)].join("|");
+        return [S.wmShow || "both", S.wmColor || "original", _wmSite(), _wmFam(), ready, S.wmLogoSrc || "main", l.length, l.slice(0, 80), l.slice(-80)].join("|");
       }
       const _wmImg = (src) =>
         new Promise((res) => {
@@ -13808,7 +13876,7 @@ Post:
       async function _wmBuild() {
         const key = _wmCfgKey(),
           show = S.wmShow || "both",
-          color = S.wmColor || "white";
+          color = S.wmColor || "original";
         const logo = show !== "site" && _wmLogo() ? await _wmImg(_wmLogo()) : null;
         const text = show !== "logo" ? _wmSite() : "";
         if (!logo && !text) return { key, none: true };
@@ -13842,13 +13910,14 @@ Post:
         c.height = H0;
         const x = c.getContext("2d");
         if (logo) {
-          if (color === "original") x.drawImage(logo, (W0 - lw) / 2, pad, lw, lh);
+          const lc = _wmLogoCanvas(logo, lw, lh); // your logo, its plain background taken out
+          if (color === "original") x.drawImage(lc, (W0 - lw) / 2, pad);
           else {
             const t = document.createElement("canvas");
             t.width = lw;
             t.height = lh;
             const tx = t.getContext("2d");
-            tx.drawImage(logo, 0, 0, lw, lh);
+            tx.drawImage(lc, 0, 0);
             tx.globalCompositeOperation = "source-in";
             tx.fillStyle = color === "black" ? "#000000" : "#ffffff";
             tx.fillRect(0, 0, lw, lh);
@@ -13901,6 +13970,9 @@ Post:
               }
               if (_wmA && !_wmA.none) _wmOld.push(_wmA);
               _wmA = a;
+              try {
+                wmSync();
+              } catch (e) {}
               setTimeout(() => {
                 _wmOld.splice(0).forEach((o) => {
                   try {
@@ -14037,7 +14109,7 @@ Post:
         on.checked = !!S.wmOn;
         const opts = document.getElementById("wm-opts");
         if (opts) opts.style.display = S.wmOn ? "" : "none";
-        const cur = { wmStyle: S.wmStyle || "center", wmShow: S.wmShow || "both", wmColor: S.wmColor || "white" };
+        const cur = { wmStyle: S.wmStyle || "center", wmShow: S.wmShow || "both", wmColor: S.wmColor || "original", wmLogoSrc: S.wmLogoSrc || "main" };
         document.querySelectorAll("#wm-section .wm-seg button[data-k]").forEach((b) => {
           const sel = cur[b.dataset.k] === b.dataset.v;
           b.setAttribute("aria-checked", sel ? "true" : "false");
@@ -14053,6 +14125,30 @@ Post:
         if (bx) {
           const names = _WM_WS.map((w, i) => (typeof _pfAccounts !== "undefined" && _pfAccounts[i] && (_pfAccounts[i].name || _pfAccounts[i].label)) || "Brand " + (i + 1));
           bx.innerHTML = _WM_WS.map((w, i) => `<label class="wm-brand"><input type="checkbox" ${_wmBrands().includes(w) ? "checked" : ""} onchange="wmToggleBrand('${w}')" /> ${escHtml(names[i])}</label>`).join("");
+        }
+        // Which logo: the Farmers logo only once it's uploaded; your upload once there is one
+        let has2 = false, hasU = false;
+        try {
+          has2 = !!localStorage.getItem("bpc_logo2");
+          hasU = !!localStorage.getItem("bpc_wm_logo");
+        } catch (e) {}
+        const b2 = document.getElementById("wm-src-logo2");
+        if (b2) {
+          b2.disabled = !has2;
+          b2.title = has2 ? "Use your Farmers logo" : "Upload a Farmers logo in the Logo section first";
+        }
+        const bu = document.getElementById("wm-src-custom");
+        if (bu) {
+          bu.textContent = hasU ? "Uploaded logo" : "Upload…";
+          bu.title = hasU ? (S.wmLogoSrc === "custom" ? "Click to replace it" : "Use the logo you uploaded for the watermark") : "Upload a logo just for the watermark";
+        }
+        // The watermark as it will look
+        const pv = document.getElementById("wm-preview"), pt = document.getElementById("wm-prev-txt");
+        if (pv) {
+          const ok = wmShown() && _wmA && !_wmA.none;
+          if (ok && pv.getAttribute("src") !== _wmA.stamp) pv.src = _wmA.stamp;
+          pv.style.display = ok ? "" : "none";
+          if (pt) pt.textContent = ok ? "Preview" : S.wmOn ? "Building the preview…" : "";
         }
         const note = document.getElementById("wm-note");
         if (note) {
@@ -14091,6 +14187,157 @@ Post:
           .wm-hint { font-size: 11px; line-height: 1.45; color: var(--muted); margin-top: 4px; }
           .wm-note { font-size: 11px; color: #f5a623; margin-top: 6px; }
           .wm-note:empty { display: none; }`;
+        document.head.appendChild(st);
+      })();
+      // Upload a logo just for the watermark (kept at a sensible size)
+      function wmPickLogo() {
+        let has = false;
+        try {
+          has = !!localStorage.getItem("bpc_wm_logo");
+        } catch (e) {}
+        if (has && S.wmLogoSrc !== "custom") return wmSet("wmLogoSrc", "custom");
+        const f = document.getElementById("wm-logo-file");
+        if (f) f.click();
+      }
+      function wmLogoFile(file) {
+        if (!file) return;
+        const rd = new FileReader();
+        rd.onload = async () => {
+          const im = await _wmImg(rd.result);
+          if (!im) return;
+          const k = Math.min(1, 800 / Math.max(im.naturalWidth || 1, im.naturalHeight || 1));
+          const c = document.createElement("canvas");
+          c.width = Math.max(1, Math.round((im.naturalWidth || 1) * k));
+          c.height = Math.max(1, Math.round((im.naturalHeight || 1) * k));
+          c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+          try {
+            localStorage.setItem("bpc_wm_logo", c.toDataURL("image/png"));
+          } catch (e) {
+            if (typeof _mpToast === "function") _mpToast("That logo is too big to keep. Try a smaller file.", 6000);
+            return;
+          }
+          wmSet("wmLogoSrc", "custom");
+        };
+        rd.readAsDataURL(file);
+        const inp = document.getElementById("wm-logo-file");
+        if (inp) inp.value = "";
+      }
+      // Once: the watermark shows your logo as designed (it used to default to a white silhouette)
+      setTimeout(() => {
+        try {
+          if (!localStorage.getItem("bpc_wm_color_v2")) {
+            if ((S.wmColor || "white") === "white") S.wmColor = "original";
+            localStorage.setItem("bpc_wm_color_v2", "1");
+            if (typeof debounceSave === "function") debounceSave();
+            wmSync();
+            if (wmShown()) {
+              _wmEnsure();
+              _wmRerender();
+            }
+          }
+        } catch (e) {}
+      }, 600);
+      (function _wmStyles2() {
+        const st = document.createElement("style");
+        st.textContent = `
+          .wm-prev { display: flex; align-items: center; gap: 10px; margin: 2px 0 10px; }
+          .wm-prev img { max-width: 150px; max-height: 70px; padding: 6px; border-radius: 8px; border: 1px solid var(--border);
+            background: repeating-conic-gradient(#555 0% 25%, #777 0% 50%) 50% / 14px 14px; }
+          .wm-prev span { font-size: 11px; color: var(--muted); }
+          .wm-seg button:disabled { opacity: .45; cursor: not-allowed; }`;
+        document.head.appendChild(st);
+      })();
+      // ══════════════════════════════════════════
+      // CLEAR ALL TEXT + BLANK LAYOUT (v92): wipe the words (with Undo), and a photo-only layout for the watermark
+      // ══════════════════════════════════════════
+      const BLANK_NAME = "Blank Photo Only";
+      const _blankIdx = () => NAMES.indexOf(BLANK_NAME);
+      // 🧹 Every word goes: headline, body, main caption, each platform's caption, Pinterest title, alt text.
+      // Your photo, logo, colors, website, links and watermark stay.
+      function pcClearAllText() {
+        window._pcCleared = {
+          header: S.header, content: S.content, originalPost: S.originalPost,
+          captions: JSON.parse(JSON.stringify(S.captions || {})), pinTitle: S.pinTitle, altText: S.altText,
+          alts: S.alts ? JSON.parse(JSON.stringify(S.alts)) : undefined,
+        };
+        _pcSetText({ header: "", content: "", originalPost: "", captions: {}, pinTitle: "", altText: "", alts: S.alts ? {} : undefined });
+        _mpToast(`🧹 All text cleared. Your photo, logo, colors and watermark are unchanged. <button type="button" class="pc-undo" onclick="pcUndoClear()">↩ Undo</button>`, 12000);
+      }
+      function pcUndoClear() {
+        const k = window._pcCleared;
+        if (!k) return;
+        window._pcCleared = null;
+        _pcSetText(k);
+        _mpToast("↩ Your text is back.", 3500);
+      }
+      function _pcSetText(v) {
+        S.header = v.header || "";
+        S.content = v.content || "";
+        S.originalPost = v.originalPost || "";
+        S.captions = v.captions || {};
+        S.pinTitle = v.pinTitle || "";
+        S.altText = v.altText || "";
+        if (v.alts !== undefined) S.alts = v.alts;
+        [["headerText", S.header], ["contentText", S.content], ["originalPostText", S.originalPost]].forEach(([id, val]) => {
+          const el = document.getElementById(id);
+          if (el) el.value = val;
+        });
+        try {
+          if (typeof _pcSyncUI === "function") _pcSyncUI(true);
+        } catch (e) {}
+        if (typeof debounceSave === "function") debounceSave();
+        render();
+      }
+      // ▢ The blank layout: just your photo; the watermark (if it's on) goes over it
+      function pcUseBlank() {
+        const i = _blankIdx();
+        if (i < 0) return;
+        try {
+          selected.clear();
+          toggleSel(i);
+        } catch (e) {}
+        const card = document.querySelectorAll("#grid .tcard")[i];
+        if (card) {
+          if (card.style.display === "none") {
+            const all = [...document.querySelectorAll("#filter-chips *")].find((x) => x.textContent.trim() === "All");
+            if (all) all.click();
+          }
+          setTimeout(() => {
+            const c = document.querySelectorAll("#grid .tcard")[i];
+            if (c) c.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 60);
+        }
+        _mpToast(
+          S.wmOn
+            ? `▢ Blank layout picked: just your photo, with your watermark on top.`
+            : `▢ Blank layout picked: just your photo. Turn on the watermark in the Logo section (💧 Watermark) to add your logo and website.`,
+          8000
+        );
+      }
+      // Never picked for you (⭐ Best, Batch): it sits last in each platform's order, but you can always choose it
+      if (typeof _mixOrder === "function") {
+        const _blankMixOrig = _mixOrder;
+        _mixOrder = function () {
+          const o = _blankMixOrig.apply(this, arguments), b = _blankIdx();
+          return Array.isArray(o) && b >= 0 && o.includes(b) ? [...o.filter((i) => i !== b), b] : o;
+        };
+      }
+      // …and it's never scored, so it can't earn ⭐ Best
+      if (typeof _scoreCard === "function") {
+        const _blankScoreOrig = _scoreCard;
+        _scoreCard = function (card) {
+          if (card && card.querySelector && card.querySelector('[data-blank="1"]')) return null;
+          return _blankScoreOrig.apply(this, arguments);
+        };
+      }
+      (function _blankStyles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          .pc-clear-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+          .pc-clear-row button { flex: 1 1 auto; font: 700 11.5px 'DM Sans', sans-serif; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; }
+          .pc-clear-row button:hover { border-color: #f5a623; }
+          .pc-clear-row button:focus-visible, .pc-undo:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
+          .pc-undo { margin-left: 8px; font: 800 12px 'DM Sans', sans-serif; padding: 3px 10px; border-radius: 7px; border: none; background: #f5a623; color: #111; cursor: pointer; }`;
         document.head.appendChild(st);
       })();
       // ══════════════════════════════════════════
@@ -16562,6 +16809,8 @@ Post:
         (p, W, H) => _luxPortrait(p, W, H, "square"),
         // 97. Gold Star Portrait
         (p, W, H) => _luxPortrait(p, W, H, "star"),
+        // 98. Blank Photo Only: just your photo (or the background color), so the watermark can go on it and nothing else
+        (p, W, H) => `<div data-blank="1" style="width:${W}px;height:${H}px;position:relative;overflow:hidden;background:${p.bg};${bgDiv(W, H)}"></div>`,
       ];
 
       // ══════════════════════════════════════════
@@ -20848,6 +21097,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
         { label: "Info",       keywords: ["tip", "fact", "did you know", "stat", "checklist", "steps", "how to", "guide"] },
         { label: "Review",     keywords: ["review", "testimonial", "rating", "feedback", "star"] },
         { label: "Luxury",     keywords: ["gold", "silver", "luxe", "luxury"] },
+        { label: "Blank",      keywords: ["blank"] },
         { label: "Event",      keywords: ["event", "announce", "launch", "date", "open house", "coming soon"] },
       ];
 
