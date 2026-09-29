@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v88</span>
+              <span class="sb-version">v89</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -28519,7 +28519,7 @@ function renderDraftsView(platform) {
     const iconSmall = draftPlatform.icon.replace('width="20" height="20"', 'width="12" height="12"');
     return `
       <div class="draft-card${state.draftSelectMode&&state.selectedDrafts.has(String(draft.id))?' draft-selected':''}">
-        <div class="draft-thumb-wrap" onclick="${state.draftSelectMode?`toggleDraftSelect('${draft.id}')`:`scheduleFromDraft('${draft.id}')`}">
+        <div class="draft-thumb-wrap" onclick="${state.draftSelectMode?`toggleDraftSelect('${draft.id}')`:`scheduleFromDraft('${draft.id}')`}">${_ppDraftBox(draft)}
           <img src="${draft.imageThumb}" alt="${escapeHtml(draft.imageName)}"/>
           <!_PPESC_-- Platform badge top-left -->
           <div style="position:absolute;top:7px;left:7px;width:24px;height:24px;border-radius:50%;
@@ -28529,7 +28529,7 @@ function renderDraftsView(platform) {
             z-index:5;pointer-events:none;flex-shrink:0">
             <span style="color:#fff;display:flex;align-items:center">${iconSmall}</span>
           </div>
-          ${state.draftSelectMode ? `
+          ${false ? `
             <div style="position:absolute;inset:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:6">
               <div style="width:22px;height:22px;border-radius:50%;border:2.5px solid #fff;background:${state.selectedDrafts.has(String(draft.id))?'#22c55e':'transparent'};display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff">
                 ${state.selectedDrafts.has(String(draft.id))?'✓':''}
@@ -28592,17 +28592,7 @@ function renderDraftsView(platform) {
           Upload
         </label>
         <input type="file" id="draft-file-input" accept="image/*,video/mp4,video/mov,video/webm,video/quicktime" multiple style="display:none" onchange="handleDraftUpload(event)"/>
-        ${state.draftSelectMode ? `
-          <button onclick="selectAllDrafts()" class="bulk-btn bulk-btn-ghost" style="font-size:11px">Select All</button>
-          <button onclick="openBatchScheduleModal()" class="bulk-btn bulk-btn-blue" style="font-size:11px" ${state.selectedDrafts.size===0?'disabled':''}>
-            📅 Schedule ${state.selectedDrafts.size>0?state.selectedDrafts.size+' ':''} Selected
-          </button>
-          <button onclick="toggleDraftSelectMode()" class="bulk-btn bulk-btn-ghost" style="font-size:11px">✕ Cancel</button>
-        ` : `
-          <button onclick="toggleDraftSelectMode()" class="bulk-btn bulk-btn-ghost" style="font-size:11px;margin-left:4px" title="Select multiple drafts to batch schedule">
-            ☰ Batch Schedule
-          </button>
-        `}
+        ${_ppDraftSelBar()}
       </div>
       <div class="drafts-count-bar">${used} / ${MAX_DRAFTS} drafts</div>
     </div>
@@ -34861,6 +34851,112 @@ function ppTodayLinkSave() {
     .td-link-err { flex-basis: 100%; font-size: 12px; color: #f87171; }
     .td-link-err:empty { display: none; }
     .td-live:focus-visible, .td-link-btn:focus-visible, .td-linkrow input:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }`;
+  document.head.appendChild(st);
+})();
+// ── Your picks in Drafts: each platform keeps its own (saved per brand) ──
+function _ppSelLoad() { try { return JSON.parse(localStorage.getItem(wsKey('pp_draft_sel')) || '{}') || {}; } catch (e) { return {}; } }
+function _ppSelSave() { try { localStorage.setItem(wsKey('pp_draft_sel'), JSON.stringify(state.draftSel || {})); } catch (e) {} }
+function _ppSelIds(pid) {
+  const have = new Set((state.drafts[pid] || []).map(d => String(d.id)));
+  return ((state.draftSel || {})[pid] || []).map(String).filter(id => have.has(id));
+}
+function _ppSelSync() {
+  state.draftSel = state.draftSel || _ppSelLoad();
+  const pid = state.activePlatform, ids = [...(state.selectedDrafts || [])].map(String);
+  if (ids.length) state.draftSel[pid] = ids; else delete state.draftSel[pid];
+  Object.keys(state.draftSel).forEach(k => { const v = _ppSelIds(k); if (v.length) state.draftSel[k] = v; else delete state.draftSel[k]; });
+  _ppSelSave();
+}
+function _ppSelActivate(pid) {
+  state.draftSel = state.draftSel || _ppSelLoad();
+  state.selectedDrafts = new Set(_ppSelIds(pid));
+  state.draftSelectMode = state.selectedDrafts.size > 0; // once something is picked, clicking a draft picks it too
+}
+toggleDraftSelect = function (draftId) {
+  const s = new Set(state.selectedDrafts), id = String(draftId);
+  if (s.has(id)) s.delete(id); else s.add(id);
+  state.selectedDrafts = s; state.draftSelectMode = s.size > 0;
+  _ppSelSync(); render();
+};
+selectAllDrafts = function () {
+  state.selectedDrafts = new Set((state.drafts[state.activePlatform] || []).map(d => String(d.id)));
+  state.draftSelectMode = state.selectedDrafts.size > 0;
+  _ppSelSync(); render();
+};
+function clearDraftSelection() { state.selectedDrafts = new Set(); state.draftSelectMode = false; _ppSelSync(); render(); }
+toggleDraftSelectMode = function () { clearDraftSelection(); };
+// Switching platforms or brands brings back that platform's picks
+switchPlatform = (function (orig) { return function () {
+  try { _ppSelSync(); } catch (e) {}
+  const r = orig.apply(this, arguments);
+  try { _ppSelActivate(state.activePlatform); render(); } catch (e) {}
+  return r;
+}; })(switchPlatform);
+switchWorkspace = (function (orig) { return async function () {
+  const r = await orig.apply(this, arguments);
+  try { state.draftSel = _ppSelLoad(); _ppSelActivate(state.activePlatform); render(); } catch (e) {}
+  return r;
+}; })(switchWorkspace);
+startIncomingPoller = (function (o) { return function () {
+  try { state.draftSel = _ppSelLoad(); _ppSelActivate(state.activePlatform); render(); } catch (e) {}
+  return o.apply(this, arguments);
+}; })(startIncomingPoller);
+// After 📅 Schedule selected: the scheduled drafts leave Drafts, and so do their picks
+confirmBatchSchedule = (function (orig) { return function () { const r = orig.apply(this, arguments); try { _ppSelSync(); } catch (e) {} return r; }; })(confirmBatchSchedule);
+// ── The pick box on each draft ──
+function _ppDraftBox(draft) {
+  const on = state.selectedDrafts && state.selectedDrafts.has(String(draft.id));
+  return `<button type="button" class="dsel-box${on ? ' on' : ''}" role="checkbox" aria-checked="${on}" aria-label="Pick ${escapeHtml(draft.imageName || 'this draft')} to schedule" title="${on ? 'Picked: click to unpick' : 'Pick this draft to schedule'}" onclick="event.stopPropagation(); toggleDraftSelect('${draft.id}')">${on ? '✓' : ''}</button>`;
+}
+// ── The bar: select all, clear, schedule this platform's picks, or every platform's picks ──
+function _ppDraftSelBar() {
+  const pid = state.activePlatform, total = (state.drafts[pid] || []).length;
+  if (!total) return '';
+  const n = state.selectedDrafts ? state.selectedDrafts.size : 0;
+  const others = Object.keys(state.draftSel || {}).filter(k => k !== pid && PLATFORMS[k]).map(k => ({ pid: k, n: _ppSelIds(k).length })).filter(o => o.n);
+  const all = n + others.reduce((a, o) => a + o.n, 0);
+  return `<div class="dsel-bar" role="group" aria-label="Pick drafts to schedule">
+    <button type="button" class="bulk-btn bulk-btn-ghost" onclick="selectAllDrafts()" ${n === total ? 'disabled' : ''}>☑ Select all</button>
+    <button type="button" class="bulk-btn bulk-btn-ghost" onclick="clearDraftSelection()" ${n ? '' : 'disabled'}>Clear</button>
+    <span class="dsel-n" role="status">${n} of ${total} picked</span>
+    <button type="button" class="bulk-btn bulk-btn-blue" onclick="openBatchScheduleModal()" ${n ? '' : 'disabled'} title="Spread the picked drafts across the calendar">📅 Schedule ${n ? n + ' ' : ''}picked</button>
+    ${others.length ? `<span class="dsel-others">Also picked: ${others.map(o => `<button type="button" class="dsel-plat" style="color:${PLATFORMS[o.pid].color}" onclick="switchPlatform('${o.pid}')" title="Go to ${escapeHtml(PLATFORMS[o.pid].name)}'s drafts">${escapeHtml(PLATFORMS[o.pid].name)} ${o.n}</button>`).join(' · ')}</span>
+      <button type="button" class="bulk-btn bulk-btn-blue dsel-all" onclick="ppScheduleAllSelected()" title="Each platform's picks go on its own best days and times">📅 Schedule all ${all} picked</button>` : ''}
+  </div>`;
+}
+// Every platform's picks, each on its own best days and times (the same as 📅 Schedule picked, on Best days & times)
+function ppScheduleAllSelected() {
+  _ppSelSync();
+  const back = state.activePlatform, done = [];
+  Object.keys(state.draftSel || {}).forEach(pid => {
+    const ids = _ppSelIds(pid);
+    if (!ids.length || !PLATFORMS[pid]) return;
+    const before = (state.posts[pid] || []).length;
+    state.activePlatform = pid;
+    state.selectedDrafts = new Set(ids);
+    state.batchScheduleForm = { startDate: _ppDayStr(new Date()), time: ppDefaultTime(pid), spacing: 'best' };
+    confirmBatchSchedule();
+    const got = (state.posts[pid] || []).length - before;
+    if (got) done.push(`${PLATFORMS[pid].name} ${got}`);
+  });
+  state.activePlatform = back;
+  _ppSelActivate(back);
+  _ppSelSync();
+  render();
+  showToast(done.length ? `📅 Scheduled on each platform's best days and times: ${done.join(' · ')}.` : 'Nothing was picked.');
+}
+(function _dselStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .dsel-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: 6px; }
+    .dsel-n { font-size: 11.5px; color: var(--text-muted); margin: 0 4px; }
+    .dsel-others { font-size: 11.5px; color: var(--text-muted); }
+    .dsel-plat { background: none; border: none; padding: 0 2px; font: 700 11.5px 'DM Sans', system-ui, sans-serif; cursor: pointer; text-decoration: underline; }
+    .dsel-box { position: absolute; top: 7px; right: 7px; z-index: 7; width: 26px; height: 26px; border-radius: 7px; border: 2px solid #fff; background: rgba(0,0,0,.45); color: #fff; font: 900 15px 'DM Sans', system-ui, sans-serif; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 1px 6px rgba(0,0,0,.5); padding: 0; }
+    .dsel-box.on { background: #22c55e; border-color: #22c55e; }
+    .dsel-box:hover { border-color: #f5a623; }
+    .dsel-box:focus-visible, .dsel-plat:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
+    .draft-card.draft-selected { outline: 2px solid #22c55e; outline-offset: -2px; border-radius: 12px; }`;
   document.head.appendChild(st);
 })();
 function _draftTextFields(draft) {
