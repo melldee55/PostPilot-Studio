@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v87</span>
+              <span class="sb-version">v88</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -32729,7 +32729,7 @@ function _ppRemind(post, platform) {
   card.innerHTML = `<button type="button" class="pp-rem-x" aria-label="Dismiss">✕</button>
     <div class="pp-rem-title">⏰ Time to post on <b style="color:${platform.color}">${escapeHtml(platform.name)}</b></div>
     <div class="pp-rem-text">${escapeHtml(String(raw).slice(0, 90))}</div>
-    <div class="pp-rem-actions"><button type="button" class="pp-rem-go" style="background:${platform.color}">Post ↗</button><button type="button" class="pp-rem-done">✓ Posted</button></div>`;
+    <div class="pp-rem-actions"><button type="button" class="pp-rem-go" style="background:${platform.color};color:${_ppInk(platform.color)} !important">Post ↗</button><button type="button" class="pp-rem-done">✓ Posted</button></div>`;
   card.querySelector('.pp-rem-x').onclick = () => card.remove();
   card.querySelector('.pp-rem-go').onclick = (e) => postOnPlatform(post.id, platform.id, e.currentTarget);
   card.querySelector('.pp-rem-done').onclick = () => { updatePostStatus(post.id, platform.id, 'published'); card.remove(); };
@@ -33203,8 +33203,8 @@ function renderTodayList() {
       <span class="td-plat" style="color:${pl.color}">${escapeHtml(pl.name)}</span>
       ${p.image ? `<img src="${escapeHtml(p.image)}" alt=""/>` : ''}
       <span class="td-text">${escapeHtml(((typeof getPostSummary === 'function' ? getPostSummary(p) : '') || p.title || p.caption || '').slice(0, 80))}</span>
-      <span class="td-act">${posted ? '<span class="td-ok">Posted</span>' : `<button class="btn-edit pp-post-btn" style="background:${pl.color}" onclick="postOnPlatform('${p.id}','${pl.id}',this)">Post ↗</button><button class="btn-edit" onclick="updatePostStatus('${p.id}','${pl.id}','published')">✓ Posted</button>`}
-        <button class="btn-edit" style="background:var(--bg-elevated)" onclick="ppCloseToday(); switchPlatform('${pl.id}'); openComposer('${p.id}')">Edit</button></span>
+      <span class="td-act">${posted ? '<span class="td-ok">Posted</span>' : `<button class="btn-edit pp-post-btn" style="background:${pl.color};color:${_ppInk(pl.color)} !important" onclick="postOnPlatform('${p.id}','${pl.id}',this)">Post ↗</button><button class="btn-edit" onclick="updatePostStatus('${p.id}','${pl.id}','published')">✓ Posted</button>`}
+        ${_ppTdLinkBtn(p, pl)}<button class="btn-edit" style="background:var(--bg-elevated)" onclick="ppCloseToday(); switchPlatform('${pl.id}'); openComposer('${p.id}')">Edit</button></span>${_ppTdLinkRow(p, pl)}
     </div>`;
   };
   return `<div class="overlay" onclick="ppCloseToday()" style="z-index:820"><div class="modal" style="max-width:720px" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="td-title">
@@ -34788,6 +34788,79 @@ _ppCalCap = (function (orig) { return function (ds, n) {
     .rd-note { font-size: 12px; color: #f5a623; margin: -2px 0 6px; }
     .cal-pick { position: absolute; top: 4px; right: 5px; z-index: 2; font: 800 11px 'DM Sans', system-ui, sans-serif; width: 22px; height: 18px; padding: 0; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-secondary); cursor: pointer; opacity: .6; line-height: 1; }
     .cal-cell:hover .cal-pick, .cal-pick:hover, .cal-pick:focus-visible { opacity: 1; border-color: #f5a623; color: var(--text-primary, #fff); }`;
+  document.head.appendChild(st);
+})();
+// Dark text on light platform colors (Twitter / X), white on the rest
+function _ppInk(c) {
+  let h = String(c || '').trim().replace(/^#/, '');
+  if (/^[0-9a-f]{3}$/i.test(h)) h = h.split('').map(x => x + x).join('');
+  if (!/^[0-9a-f]{6}$/i.test(h)) return '#fff';
+  const n = parseInt(h, 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return 0.299 * r + 0.587 * g + 0.114 * b > 160 ? '#111' : '#fff';
+}
+// ── 🔗 The live link, right in the Today list ──
+function _ppTdKey(p, pl) { return pl.id + '|' + p.id; }
+function _ppTdLinkBtn(p, pl) {
+  const u = _ppLiveUrl(p);
+  if (u) return `<a class="td-live" href="${escapeHtml(u)}" target="_blank" rel="noopener" title="${escapeHtml(u)}">🔗 Live ↗</a><button class="btn-edit td-link-btn" onclick="ppTodayLink('${p.id}','${pl.id}')" aria-label="Change the live link for this ${escapeHtml(pl.name)} post" title="Change the live link">✎</button>`;
+  return `<button class="btn-edit td-link-btn" onclick="ppTodayLink('${p.id}','${pl.id}')" aria-label="Add the live link for this ${escapeHtml(pl.name)} post" title="Paste the live link">🔗</button>`;
+}
+function _ppTdLinkRow(p, pl) {
+  if (state.todayLink !== _ppTdKey(p, pl)) return '';
+  return `<div class="td-linkrow"><input id="td-link-input" type="url" inputmode="url" autocomplete="off" placeholder="Paste the live link for this ${escapeHtml(pl.name)} post (https://…)" value="${escapeHtml(_ppLiveUrl(p))}" aria-label="Live link for this ${escapeHtml(pl.name)} post"
+      onkeydown="if (event.key === 'Enter') { event.preventDefault(); ppTodayLinkSave(); } else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); ppTodayLinkCancel(); }"
+      onpaste="setTimeout(() => { if (_ppCleanUrl(this.value)) ppTodayLinkSave(); }, 0)"/>
+    <button class="btn-edit td-link-save" onclick="ppTodayLinkSave()">Save</button><button class="btn-edit" style="background:var(--bg-elevated)" onclick="ppTodayLinkCancel()">Cancel</button>
+    <span class="td-link-err" role="status" aria-live="polite"></span></div>`;
+}
+function ppTodayLink(id, pid) {
+  state.todayLink = pid + '|' + id;
+  render();
+  setTimeout(() => { const i = document.getElementById('td-link-input'); if (i) { i.focus(); i.select(); } }, 30);
+}
+function ppTodayLinkCancel() { state.todayLink = null; render(); }
+// A pasted address: "instagram.com/p/…" works too
+function _ppCleanUrl(v) {
+  v = String(v || '').trim();
+  if (!v || /\s/.test(v)) return '';
+  if (!/^https?:\/\//i.test(v)) v = 'https://' + v.replace(/^\/+/, '');
+  try { const u = new URL(v); return /\.[a-z]{2,}$/i.test(u.hostname) ? u.href : ''; } catch (e) { return ''; }
+}
+function ppTodayLinkSave() {
+  const key = state.todayLink;
+  if (!key) return;
+  const i = key.indexOf('|'), pid = key.slice(0, i), id = key.slice(i + 1);
+  const input = document.getElementById('td-link-input');
+  const url = _ppCleanUrl(input ? input.value : '');
+  if (!url) {
+    const e = document.querySelector('.td-link-err');
+    if (e) e.textContent = "That doesn't look like a link. Paste the post's web address (https://…).";
+    if (input) input.focus();
+    return;
+  }
+  // TikTok and YouTube keep their own live link field (as in the post editor); the link marks it Live
+  const field = pid === 'tiktok' ? 'tiktokLiveUrl' : pid === 'youtube' ? 'ytLiveUrl' : 'liveUrl';
+  state.posts = { ...state.posts, [pid]: (state.posts[pid] || []).map(p => (String(p.id) === id ? { ...p, [field]: url, liveUrl: url } : p)) };
+  state.todayLink = null;
+  _ppNormalizeLive();
+  savePosts(state.posts);
+  try { if (typeof recalcStreak === 'function') recalcStreak(pid); } catch (e) {}
+  render();
+  showToast(`✅ ${PLATFORMS[pid] ? PLATFORMS[pid].name : 'The'} post is Live. Its link is saved.`);
+}
+(function _tdLinkStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .td-row { flex-wrap: wrap; }
+    .td-link-btn { min-width: 34px; }
+    .td-live { font: 700 12px 'DM Sans', system-ui, sans-serif; color: #22c55e; text-decoration: none; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(34,197,94,.4); white-space: nowrap; }
+    .td-live:hover { background: rgba(34,197,94,.1); }
+    .td-linkrow { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0 2px 34px; }
+    .td-linkrow input { flex: 1 1 260px; min-width: 200px; padding: 8px 10px; border-radius: 8px; border: 1px solid #f5a623; background: var(--bg-elevated); color: var(--text-primary, #e8eaf0); font: 13px 'DM Sans', system-ui, sans-serif; }
+    .td-link-save { background: #f5a623 !important; color: #111 !important; font-weight: 800; }
+    .td-link-err { flex-basis: 100%; font-size: 12px; color: #f87171; }
+    .td-link-err:empty { display: none; }
+    .td-live:focus-visible, .td-link-btn:focus-visible, .td-linkrow input:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }`;
   document.head.appendChild(st);
 })();
 function _draftTextFields(draft) {
