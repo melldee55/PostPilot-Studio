@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v93</span>
+              <span class="sb-version">v94</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -14441,6 +14441,307 @@ Post:
           .pc-clear-row button:hover { border-color: #f5a623; }
           .pc-clear-row button:focus-visible, .pc-undo:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
           .pc-undo { margin-left: 8px; font: 800 12px 'DM Sans', sans-serif; padding: 3px 10px; border-radius: 7px; border: none; background: #f5a623; color: #111; cursor: pointer; }`;
+        document.head.appendChild(st);
+      })();
+      // ══════════════════════════════════════════
+      // TIDY LAYOUT (v94): the same controls, reorganized. Tabs in the sidebar, one "✨ New post" menu, a quieter
+      // toolbar, card buttons on hover, and a bar for selected layouts. ⚙ More → "Classic layout" switches back.
+      // ══════════════════════════════════════════
+      const _uxClassic = () => {
+        try {
+          return localStorage.getItem("pp_ux_classic") === "1";
+        } catch (e) {
+          return false;
+        }
+      };
+      const UX_TABS = [
+        ["write", "✍️", "Write"],
+        ["photo", "🖼", "Photo"],
+        ["style", "🎨", "Style"],
+        ["brand", "🏷", "Brand"],
+        ["more", "⚙", "More"],
+      ];
+      // Which tab each sidebar block belongs to (matched by what it contains, so nothing depends on its position)
+      function _uxTabOf(sec) {
+        const t = (sec.textContent || "").replace(/\s+/g, " ").trim().slice(0, 80);
+        const id = sec.id || "";
+        if (/^(l2-section|wm-section)$/.test(id) || /^Logo upload/.test(t) || /Website \/ Handle Badge/.test(t)) return "brand";
+        if (/^(ai-gen-section|original-post-section|pc-captions-section)$/.test(id) || sec.querySelector("#headerText, #contentText") || /^Platforms/.test(t) || /Body Text Settings/.test(t)) return "write";
+        if (/^Background Image/.test(t)) return "photo";
+        if (id === "my-fonts-section" || /Panel Settings/.test(t) || id === "ux-style-pal") return "style";
+        if (id === "download-settings-section" || id === "ux-classic-sec" || /Reset All/.test(t)) return "more";
+        return "write";
+      }
+      function uxTab(name) {
+        const side = document.getElementById("sidebar");
+        if (!side) return;
+        document.querySelectorAll("#ux-tabs button").forEach((b) => {
+          const on = b.dataset.tab === name;
+          b.classList.toggle("on", on);
+          b.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        side.querySelectorAll(":scope > .sec").forEach((s) => s.classList.toggle("ux-hide", _uxTabOf(s) !== name));
+        try {
+          localStorage.setItem("pp_ux_tab", name);
+        } catch (e) {}
+      }
+      // Open the tab holding an element (used by the New post menu and anything that points you to a setting)
+      function uxShow(el) {
+        const sec = el && el.closest ? el.closest("#sidebar > .sec") : null;
+        if (sec) uxTab(_uxTabOf(sec));
+        if (el && el.scrollIntoView) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "center" }), 40);
+      }
+      // ── ✨ New post: every way to start, in one menu ──
+      const _uxBtnByText = (re) => [...document.querySelectorAll("#sidebar button")].find((b) => re.test((b.textContent || "").trim()));
+      function uxNewPost(kind) {
+        uxMenu(false);
+        if (kind === "paste") {
+          const b = _uxBtnByText(/^📋\s*Paste post content/);
+          if (b) b.click();
+        } else if (kind === "timely" && typeof tiOpen === "function") tiOpen();
+        else if (kind === "ai") uxShow(document.getElementById("ai-gen-section"));
+        else if (kind === "batch" && typeof pbOpen === "function") pbOpen();
+        else if (kind === "blank" && typeof pcClearAllText === "function") pcClearAllText();
+        else if (kind === "photo" && typeof pcUseBlank === "function") pcUseBlank();
+      }
+      function uxMenu(open) {
+        const m = document.getElementById("ux-new-menu"),
+          b = document.getElementById("ux-new");
+        if (!m || !b) return;
+        const show = open === undefined ? m.hidden : open;
+        m.hidden = !show;
+        b.setAttribute("aria-expanded", show ? "true" : "false");
+        if (show) setTimeout(() => (m.querySelector("button") || {}).focus && m.querySelector("button").focus(), 20);
+      }
+      // ── 📅 Coming up: the holiday reminders fold into one line (and repeats are dropped) ──
+      function _uxFoldHolidays() {
+        const a = document.getElementById("date-notif"),
+          u = document.getElementById("upcoming-notifs");
+        if (!u && !a) return;
+        if (u) {
+          const seen = new Set();
+          [...u.children].forEach((c) => {
+            const k = (c.textContent || "").replace(/\s+/g, " ").replace(/✕/g, "").trim().toLowerCase();
+            if (seen.has(k)) c.remove();
+            else seen.add(k);
+          });
+        }
+        let row = document.getElementById("ux-coming");
+        if (!row) {
+          row = document.createElement("button");
+          row.type = "button";
+          row.id = "ux-coming";
+          row.className = "ux-coming";
+          row.onclick = () => {
+            const open = !document.getElementById("sidebar").classList.contains("ux-hol-open");
+            document.getElementById("sidebar").classList.toggle("ux-hol-open", open);
+            row.setAttribute("aria-expanded", open ? "true" : "false");
+          };
+          (a || u).parentNode.insertBefore(row, a || u);
+        }
+        const n = (a && a.offsetHeight !== 0 ? 1 : a && a.textContent.trim() ? 1 : 0) + (u ? u.children.length : 0);
+        row.hidden = !n;
+        row.innerHTML = `📅 Coming up <b>${n}</b><span>${document.getElementById("sidebar").classList.contains("ux-hol-open") ? "Hide" : "Show"}</span>`;
+      }
+      // ── The floating bar for selected layouts ──
+      function _uxSelBar() {
+        let bar = document.getElementById("ux-selbar");
+        const n = typeof selected !== "undefined" && selected ? selected.size : 0;
+        if (!bar) {
+          bar = document.createElement("div");
+          bar.id = "ux-selbar";
+          bar.className = "ux-selbar";
+          bar.setAttribute("role", "toolbar");
+          bar.setAttribute("aria-label", "Selected layouts");
+          document.body.appendChild(bar);
+        }
+        bar.hidden = !n;
+        if (!n) return;
+        bar.innerHTML = `<span class="ux-sel-n">${n} selected</span>
+          <button type="button" onclick="downloadBatch('selected')">⬇ Save</button>
+          ${typeof openPfPickerBatch === "function" ? `<button type="button" onclick="openPfPickerBatch()">📤 Send</button>` : ""}
+          <button type="button" onclick="if (!previewOpen) togglePreview(); else renderPreview();">🔍 Preview</button>
+          <button type="button" onclick="uxSelectAll()">☑ All</button>
+          <button type="button" class="ux-sel-x" onclick="selected.clear(); render();" aria-label="Clear the selection">✕ Clear</button>`;
+      }
+      // ── Layouts ▾: one menu for the filter chips ──
+      function _uxFilterMenu() {
+        const chips = document.getElementById("filter-chips");
+        if (!chips) return;
+        let sel = document.getElementById("ux-filter");
+        const btns = [...chips.querySelectorAll("button, .fchip")].filter((b) => (b.textContent || "").trim());
+        if (!sel) {
+          sel = document.createElement("select");
+          sel.id = "ux-filter";
+          sel.className = "ux-filter";
+          sel.setAttribute("aria-label", "Show layouts");
+          sel.onchange = () => {
+            const b = [...chips.querySelectorAll("button, .fchip")].find((x) => x.textContent.trim() === sel.value);
+            if (b) b.click();
+          };
+          chips.parentNode.insertBefore(sel, chips);
+        }
+        const cur = (btns.find((b) => b.classList.contains("active") || b.classList.contains("on") || b.getAttribute("aria-pressed") === "true") || btns[0] || {}).textContent;
+        sel.innerHTML = btns.map((b) => `<option ${b.textContent.trim() === (cur || "").trim() ? "selected" : ""}>${escHtml(b.textContent.trim())}</option>`).join("");
+      }
+      function uxBuild() {
+        if (_uxClassic()) return;
+        const side = document.getElementById("sidebar");
+        if (!side || document.getElementById("ux-tabs")) return;
+        document.body.classList.add("ux");
+        // ✨ New post
+        const np = document.createElement("div");
+        np.className = "ux-new-wrap";
+        np.innerHTML = `<button type="button" id="ux-new" class="ux-new" aria-haspopup="true" aria-expanded="false" onclick="uxMenu()">✨ New post <span aria-hidden="true">▾</span></button>
+          <div id="ux-new-menu" class="ux-new-menu" role="menu" hidden>
+            <button type="button" role="menuitem" onclick="uxNewPost('paste')">📋 Paste a post brief</button>
+            <button type="button" role="menuitem" onclick="uxNewPost('timely')">📰 From a timely idea</button>
+            <button type="button" role="menuitem" onclick="uxNewPost('ai')">✦ AI draft</button>
+            <button type="button" role="menuitem" onclick="uxNewPost('batch')">📦 A batch of 10</button>
+            <button type="button" role="menuitem" onclick="uxNewPost('blank')">🧹 Start blank (clear all text)</button>
+            <button type="button" role="menuitem" onclick="uxNewPost('photo')">▢ Photo only (blank layout)</button>
+          </div>`;
+        const head = side.querySelector(".sb-head");
+        (head && head.nextSibling ? side.insertBefore(np, head.nextSibling) : side.prepend(np));
+        np.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            uxMenu(false);
+            document.getElementById("ux-new").focus();
+          }
+        });
+        document.addEventListener("click", (e) => {
+          if (!np.contains(e.target)) uxMenu(false);
+        });
+        // Tabs
+        const tabs = document.createElement("div");
+        tabs.id = "ux-tabs";
+        tabs.className = "ux-tabs";
+        tabs.setAttribute("role", "tablist");
+        tabs.innerHTML = UX_TABS.map(([k, ic, nm]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="false" onclick="uxTab('${k}')"><span aria-hidden="true">${ic}</span>${nm}</button>`).join("");
+        const firstSec = side.querySelector(":scope > .sec");
+        side.insertBefore(tabs, firstSec);
+        // The palette goes into Style
+        const pal = document.getElementById("palRow");
+        if (pal) {
+          const box = document.createElement("div");
+          box.className = "sec";
+          box.id = "ux-style-pal";
+          box.innerHTML = `<div class="sec-label">🎨 Color palette</div>`;
+          box.appendChild(pal);
+          const cz = [...document.querySelectorAll("#topbar button")].find((b) => /Customize/.test(b.textContent || ""));
+          if (cz) box.appendChild(cz);
+          side.insertBefore(box, firstSec);
+        }
+        // The old one-off buttons live in the New post menu now
+        [/^📋\s*Paste post content/, /^📦\s*Batch/, /^📰\s*Timely ideas/].forEach((re) => {
+          const b = _uxBtnByText(re);
+          if (b) b.classList.add("ux-dup-hidden");
+        });
+        // In the top bar: the palette's old label, and None / Preview (they're on the selection bar)
+        [...document.querySelectorAll("#topbar *")].forEach((el) => {
+          const tx = (el.textContent || "").trim();
+          if (!el.children.length && tx === "Palette:") el.classList.add("ux-dup-hidden");
+          if (el.tagName === "BUTTON" && /^(☐\s*None|🔍\s*Preview)$/.test(tx)) el.classList.add("ux-dup-hidden");
+        });
+        const cr = side.querySelector(".pc-clear-row");
+        if (cr) cr.classList.add("ux-dup-hidden");
+        // Classic layout switch (More tab)
+        const more = document.createElement("div");
+        more.className = "sec";
+        more.id = "ux-classic-sec";
+        more.innerHTML = `<div class="sec-label">Layout</div><label class="ux-classic"><input type="checkbox" onchange="uxClassic(this.checked)" /> Use the classic layout (everything on one page)</label>`;
+        side.appendChild(more);
+        let t = "write";
+        try {
+          t = localStorage.getItem("pp_ux_tab") || "write";
+        } catch (e) {}
+        uxTab(UX_TABS.some(([k]) => k === t) ? t : "write");
+        _uxFoldHolidays();
+        _uxFilterMenu();
+        const hb = document.getElementById("history-bar");
+        if (hb) hb.classList.add("ux-fold");
+        _uxSelBar();
+        // Things that redraw: the holidays, the filter chips, the selection
+        new MutationObserver(() => {
+          _uxFoldHolidays();
+        }).observe(side, { childList: true, subtree: false });
+        const u = document.getElementById("upcoming-notifs");
+        if (u) new MutationObserver(() => _uxFoldHolidays()).observe(u, { childList: true });
+        const fc = document.getElementById("filter-chips");
+        if (fc) new MutationObserver(() => _uxFilterMenu()).observe(fc, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "aria-pressed"] });
+      }
+      function uxSelectAll() {
+        const b = [...document.querySelectorAll("#topbar button, #main button")].find((x) => /^☑\s*All$/.test((x.textContent || "").trim()));
+        if (b) b.click();
+      }
+      function uxClassic(on) {
+        try {
+          if (on) localStorage.setItem("pp_ux_classic", "1");
+          else localStorage.removeItem("pp_ux_classic");
+        } catch (e) {}
+        location.reload();
+      }
+      // The selection bar follows every selection change
+      if (typeof toggleSel === "function") {
+        const _uxTS = toggleSel;
+        toggleSel = function () {
+          const r = _uxTS.apply(this, arguments);
+          try {
+            if (!_uxClassic()) _uxSelBar();
+          } catch (e) {}
+          return r;
+        };
+      }
+      if (typeof render === "function") {
+        const _uxR = render;
+        render = function () {
+          const r = _uxR.apply(this, arguments);
+          try {
+            if (!_uxClassic()) _uxSelBar();
+          } catch (e) {}
+          return r;
+        };
+      }
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => setTimeout(uxBuild, 0));
+      else setTimeout(uxBuild, 0);
+      (function _uxStyles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          body.ux #sidebar > .sec.ux-hide { display: none !important; }
+          .ux-tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin: 6px 0 10px; padding: 3px; border-radius: 10px; background: rgba(255,255,255,.04); border: 1px solid var(--border); position: sticky; top: 0; z-index: 5; }
+          .ux-tabs button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 2px; border: none; border-radius: 8px; background: transparent; color: var(--muted); font: 700 10.5px 'DM Sans', sans-serif; cursor: pointer; }
+          .ux-tabs button span { font-size: 15px; }
+          .ux-tabs button.on { background: var(--panel, #1c1f2b); color: var(--text, #fff); box-shadow: 0 0 0 1px var(--hi, #f5a623); }
+          .ux-new-wrap { position: relative; margin: 8px 0 4px; }
+          .ux-new { width: 100%; padding: 10px 12px; border-radius: 10px; border: none; background: var(--hi, #f5a623); color: #1a1206; font: 800 13.5px 'DM Sans', sans-serif; cursor: pointer; }
+          .ux-new-menu { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 50; display: flex; flex-direction: column; padding: 6px; border-radius: 10px; background: #1c1f2b; border: 1px solid var(--border); box-shadow: 0 12px 30px rgba(0,0,0,.5); }
+          .ux-new-menu[hidden] { display: none; }
+          .ux-new-menu button { text-align: left; padding: 9px 10px; border: none; border-radius: 7px; background: transparent; color: inherit; font: 600 12.5px 'DM Sans', sans-serif; cursor: pointer; }
+          .ux-new-menu button:hover, .ux-new-menu button:focus-visible { background: rgba(245,166,35,.14); outline: none; }
+          .ux-coming { width: 100%; display: flex; align-items: center; gap: 6px; padding: 8px 10px; margin: 6px 0; border-radius: 9px; border: 1px solid var(--border); background: transparent; color: inherit; font: 600 12px 'DM Sans', sans-serif; cursor: pointer; }
+          .ux-coming b { color: var(--hi, #f5a623); }
+          .ux-coming span { margin-left: auto; font-size: 11px; color: var(--muted); }
+          body.ux #sidebar:not(.ux-hol-open) #date-notif, body.ux #sidebar:not(.ux-hol-open) #upcoming-notifs { display: none !important; }
+          body.ux #sidebar #date-notif, body.ux #sidebar #upcoming-notifs { max-height: 320px; overflow-y: auto; }
+          body.ux .ux-dup-hidden { display: none !important; }
+          body.ux #filter-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+          body.ux #filter-bar .ux-filter { width: auto; flex: none; margin-left: 0; }
+          body.ux #filter-chips { display: none !important; }
+          .ux-filter { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel, #1c1f2b); color: inherit; font: 600 12px 'DM Sans', sans-serif; margin-left: 8px; }
+          body.ux #history-bar.ux-fold { max-height: 38px; overflow: hidden; }
+          body.ux #history-bar.ux-fold:hover, body.ux #history-bar.ux-fold:focus-within { max-height: 220px; }
+          body.ux #sel-bar { display: none !important; }
+          body.ux .tcard .dl-btn, body.ux .tcard .mp-open, body.ux .tcard .tcard-copy { opacity: 0; transition: opacity .15s; }
+          body.ux .tcard:hover .dl-btn, body.ux .tcard:hover .mp-open, body.ux .tcard:hover .tcard-copy,
+          body.ux .tcard:focus-within .dl-btn, body.ux .tcard:focus-within .mp-open, body.ux .tcard:focus-within .tcard-copy { opacity: 1; }
+          @media (hover: none) { body.ux .tcard .dl-btn, body.ux .tcard .mp-open, body.ux .tcard .tcard-copy { opacity: 1; } }
+          .ux-selbar { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 900; display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 12px; background: #1c1f2b; border: 1px solid var(--hi, #f5a623); box-shadow: 0 10px 30px rgba(0,0,0,.5); font: 600 12.5px 'DM Sans', sans-serif; }
+          .ux-selbar[hidden] { display: none; }
+          .ux-sel-n { padding: 0 6px; color: var(--hi, #f5a623); font-weight: 800; }
+          .ux-selbar button { padding: 7px 11px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: inherit; font: 700 12px 'DM Sans', sans-serif; cursor: pointer; }
+          .ux-selbar button:hover { border-color: var(--hi, #f5a623); }
+          .ux-classic { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; }
+          .ux-tabs button:focus-visible, .ux-new:focus-visible, .ux-coming:focus-visible, .ux-selbar button:focus-visible, .ux-filter:focus-visible { outline: 2px solid var(--hi, #f5a623); outline-offset: 2px; }`;
         document.head.appendChild(st);
       })();
       // ══════════════════════════════════════════
@@ -29202,9 +29503,8 @@ function calCellDrop(e, targetDate) {
   const existingOnDay = (state.posts[platId] || []).filter(
     p => p.scheduledDate === targetDate && String(p.id) !== String(postId)
   );
-  if (existingOnDay.length > 0) {
-    const plat = PLATFORMS[platId];
-    showDragConflictDialog(plat ? plat.name : platId, postId, platId, targetDate);
+  if (existingOnDay.length >= getDailyLimit(platId)) { // only a day at the platform's limit is full
+    _ppDayFullDialog(platId, postId, targetDate, existingOnDay);
   } else {
     applyDragMove(postId, platId, targetDate);
   }
@@ -35363,6 +35663,69 @@ savePost = function (addToQueue) {
 (function _linkMoveStyles() {
   const st = document.createElement('style');
   st.textContent = `.live-plan { color: var(--text-muted); font-size: 10.5px; }`;
+  document.head.appendChild(st);
+})();
+// ── Daily limits: each platform's spam-safe maximum (checked against platform guidance, Oct 2026) ──
+Object.assign(DAILY_LIMITS, { instagram: 3, pinterest: 10, google: 1, linkedin: 3, facebook: 2, tiktok: 4, youtube: 3, bluesky: 5, twitter: 17, tumblr: 5, kofi: 2, patreon: 2, shopify: 999 });
+Object.assign(DAILY_LIMIT_INFO.tiktok, { safe: '1–4', max: 4, note: 'TikTok has no official daily cap for posts you make yourself; 1–4 a day is the usual guidance. Scheduling tools are capped around 15 a day to stop spam.' });
+Object.assign(DAILY_LIMIT_INFO.youtube, { safe: '1–3', max: 3, note: "YouTube doesn't publish a daily upload limit (it varies by channel and blocks bursts as spam). Subscribers are notified about at most 3 uploads a day." });
+Object.assign(DAILY_LIMIT_INFO.bluesky, { safe: '1–5', max: 5, note: 'Bluesky has no daily post cap; its technical limits are far higher. Up to 5 a day keeps a brand account from looking spammy.' });
+Object.assign(DAILY_LIMIT_INFO.pinterest, { note: 'Pinterest has no official cap; 1–5 fresh pins a day is the usual advice (5–10 for high-volume accounts). Around 50+ a day is widely treated as spam. Pins per day lowers this.' });
+Object.assign(DAILY_LIMIT_INFO.google, { note: 'Google Business Profile has no published cap; 1 post a day is the common guidance.' });
+Object.assign(DAILY_LIMIT_INFO.twitter, { note: 'X allows up to 2,400 posts a day, but its automated-posting (API) limit is 17 a day; 3–5 is best for engagement.' });
+// The day a post is dropped on: the platform's posts that day (scheduled and live), not counting the one being moved
+function _ppDayPosts(pid, date, exceptId) {
+  return (state.posts[pid] || []).filter(p => p.scheduledDate === date && String(p.id) !== String(exceptId));
+}
+// A day that already has the platform's limit: say so plainly, and offer the next day with room
+function _ppDayFullDialog(pid, postId, date, onDay) {
+  const old = document.getElementById('drag-conflict-modal');
+  if (old) old.remove();
+  const pl = PLATFORMS[pid] || { name: pid }, lim = getDailyLimit(pid);
+  const live = onDay.filter(p => p.publishStatus === 'published').length, sched = onDay.length - live;
+  let next = null;
+  for (let i = 1; i <= 90 && !next; i++) {
+    const d = new Date(date + 'T12:00:00'); d.setDate(d.getDate() + i);
+    const ds = _ppDayStr(d);
+    if (_ppDayPosts(pid, ds, postId).length < lim) next = ds;
+  }
+  const m = document.createElement('div');
+  m.id = 'drag-conflict-modal';
+  m.className = 'pp-full-overlay';
+  m.innerHTML = `<div class="pp-full" role="alertdialog" aria-modal="true" aria-labelledby="pp-full-t" aria-describedby="pp-full-d">
+    <div class="pp-full-t" id="pp-full-t">🚫 ${escapeHtml(pl.name)} is full on ${_ppNiceDay(date)}</div>
+    <div class="pp-full-d" id="pp-full-d">${escapeHtml(pl.name)} allows ${lim} post${lim === 1 ? '' : 's'} a day to stay clear of spam filters, and ${_ppNiceDay(date)} already has ${onDay.length} (${[sched ? sched + ' scheduled' : '', live ? live + ' live' : ''].filter(Boolean).join(', ')}).</div>
+    <div class="pp-full-b">${next ? `<button type="button" class="pp-full-go" id="pp-full-next">Move to ${_ppNiceDay(next)} instead</button>` : ''}<button type="button" class="pp-full-ok" id="pp-full-ok">OK</button></div></div>`;
+  document.body.appendChild(m);
+  const close = () => m.remove();
+  m.addEventListener('click', (e) => { if (e.target === m) close(); });
+  m.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  document.getElementById('pp-full-ok').onclick = close;
+  if (next) document.getElementById('pp-full-next').onclick = () => { close(); applyDragMove(postId, pid, next); };
+  setTimeout(() => { const b = document.getElementById('pp-full-next') || document.getElementById('pp-full-ok'); if (b) b.focus(); }, 30);
+}
+// In the post editor, the date check doesn't count the post you're editing
+getPostsForDate = (function (orig) { return function (date, pid) {
+  const n = orig.apply(this, arguments);
+  try {
+    if (state.showComposer && state.editingPostId != null) {
+      const p = (state.posts[pid] || []).find(x => String(x.id) === String(state.editingPostId));
+      if (p && p.scheduledDate === date) return Math.max(0, n - 1);
+    }
+  } catch (e) {}
+  return n;
+}; })(getPostsForDate);
+(function _fullStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .pp-full-overlay { position: fixed; inset: 0; z-index: 9000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.62); backdrop-filter: blur(3px); }
+    .pp-full { background: #1a1e28; border: 1px solid #ef4444; border-radius: 12px; padding: 22px 24px; max-width: 400px; width: 90%; box-shadow: 0 12px 48px rgba(0,0,0,.7); font-family: 'DM Sans', sans-serif; }
+    .pp-full-t { font-size: 15px; font-weight: 700; color: #fca5a5; margin-bottom: 8px; }
+    .pp-full-d { font-size: 13px; color: #c3c7d6; line-height: 1.55; margin-bottom: 18px; }
+    .pp-full-b { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+    .pp-full-go { padding: 8px 14px; border-radius: 8px; border: none; background: #f5a623; color: #111; font-weight: 800; cursor: pointer; }
+    .pp-full-ok { padding: 8px 16px; border-radius: 8px; border: 1px solid #323648; background: #1e2230; color: #e8eaf0; cursor: pointer; }
+    .pp-full-go:focus-visible, .pp-full-ok:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }`;
   document.head.appendChild(st);
 })();
 function _draftTextFields(draft) {
