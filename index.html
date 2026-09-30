@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v92</span>
+              <span class="sb-version">v93</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -8697,16 +8697,6 @@ Your message, caption, or call to action goes right here.</textarea
       function _mpFileName(idx, pk) {
         return `${S.fnPrefix || "BrandPost"}_${String(idx + 1).padStart(4, "0")}_${_mpShort(pk).replace(/[^A-Za-z0-9]+/g, "")}.png`;
       }
-      function _mpDownload(blob, name) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = name;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 30000);
-      }
       async function mpOpenPlatform(idx, pk, btn) {
         const info = MP_OPEN[pk] || { url: "", paste: false };
         const nm = _mpName(pk);
@@ -9911,21 +9901,15 @@ Your message, caption, or call to action goes right here.</textarea
         }
         return dir.getFileHandle(`${base} (${Date.now()})${ext}`, { create: true });
       }
-      // Save a file into your folder, or (no folder / not allowed) as a normal download
-      async function xfSaveBlob(blob, name, noFallback, quiet) {
-        if (fsDir && (await _xfFolderReady(true))) {
-          try {
-            const fh = await _xfUniqueHandle(fsDir, name);
-            const w = await fh.createWritable();
-            await w.write(blob);
-            await w.close();
-            if (!quiet) _mpToast(`Saved <b>${escHtml(fh.name)}</b> to your <b>${escHtml(fsDir.name)}</b> folder.`);
-            return { folder: fsDir.name, name: fh.name };
-          } catch (e) {
-            console.warn("Saving to your folder failed:", e);
-          }
-        }
-        if (noFallback) return { folder: null, name };
+      // Write one image into your folder
+      async function _xfWrite(blob, name) {
+        const fh = await _xfUniqueHandle(fsDir, name);
+        const w = await fh.createWritable();
+        await w.write(blob);
+        await w.close();
+        return fh.name;
+      }
+      function _xfDownload(blob, name) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -9934,8 +9918,120 @@ Your message, caption, or call to action goes right here.</textarea
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 30000);
-        if (fsDir && !quiet) _mpToast(`Couldn't save into <b>${escHtml(fsDir.name)}</b>, so it went to Downloads. Click 📁 to reconnect the folder.`);
+      }
+      // The browser only lets a page ask for folder access right as you click. So the moment you click a save or
+      // download button, we ask (once per visit; Chrome's "Allow on every visit" makes it never ask again).
+      let _xfPrimeP = null;
+      function _xfPrime() {
+        if (!fsDir || _xfPerm === "granted" || _xfPrimeP) return;
+        try {
+          _xfPrimeP = fsDir
+            .requestPermission({ mode: "readwrite" })
+            .then((st) => {
+              _xfPerm = st === "granted" ? "granted" : "prompt";
+              _xfSyncFolderUI();
+              return st;
+            })
+            .catch(() => "prompt")
+            .finally(() => setTimeout(() => (_xfPrimeP = null), 0));
+        } catch (e) {
+          _xfPrimeP = null;
+        }
+      }
+      document.addEventListener(
+        "click",
+        (e) => {
+          if (!fsDir || _xfPerm === "granted") return;
+          const el = e.target && e.target.closest ? e.target.closest("button, a, [onclick]") : null;
+          if (!el) return;
+          const sig = ((el.getAttribute("onclick") || "") + " " + (el.id || "") + " " + (el.textContent || "")).toLowerCase();
+          if (/⬇|\bsave\b|savealls*|download|mpsave|xfsave|saveas/.test(sig) && !/draft|preset|slot|palette|scheme|setting|key|schedul|caption|brand|note|queue/.test(sig)) _xfPrime();
+        },
+        true
+      );
+      // Save a file into your folder. With a folder chosen, nothing goes to Downloads behind your back: if the
+      // browser still needs your OK, the images wait and one click saves them all into the folder.
+      const _xfPending = [];
+      async function xfSaveBlob(blob, name, noFallback, quiet) {
+        if (_xfPrimeP) {
+          try {
+            await _xfPrimeP;
+          } catch (e) {}
+        }
+        if (fsDir && (await _xfFolderReady(_xfCanAsk()))) {
+          try {
+            const saved = await _xfWrite(blob, name);
+            if (!quiet) _mpToast(`Saved <b>${escHtml(saved)}</b> to your <b>${escHtml(fsDir.name)}</b> folder.`);
+            return { folder: fsDir.name, name: saved };
+          } catch (e) {
+            console.warn("Saving to your folder failed:", e);
+          }
+        }
+        if (fsDir && window.showDirectoryPicker) { // (even for callers that would otherwise download it themselves)
+          _xfPending.push({ blob, name });
+          _xfAskBar();
+          return { folder: fsDir.name, name, pending: true };
+        }
+        if (noFallback) return { folder: null, name };
+        _xfDownload(blob, name);
         return { folder: null, name };
+      }
+      // Asking only works during a click (otherwise the browser refuses and nothing is gained)
+      const _xfCanAsk = () => !!(navigator.userActivation && navigator.userActivation.isActive);
+      function _xfAskBar() {
+        let bar = document.getElementById("xf-ask");
+        if (!bar) {
+          bar = document.createElement("div");
+          bar.id = "xf-ask";
+          bar.className = "xf-ask";
+          bar.setAttribute("role", "alert");
+          document.body.appendChild(bar);
+        }
+        const n = _xfPending.length;
+        bar.innerHTML = `<span>📁 ${n} image${n === 1 ? " is" : "s are"} waiting to save into your <b>${escHtml(fsDir ? fsDir.name : "")}</b> folder. Your browser needs your OK for this visit.</span>
+          <button type="button" class="xf-ask-go" onclick="xfAllowFolder()">📁 Allow and save ${n === 1 ? "it" : "all " + n}</button>
+          <button type="button" class="xf-ask-dl" onclick="xfPendingToDownloads()">Save to Downloads instead</button>`;
+        bar.hidden = false;
+      }
+      async function xfAllowFolder() {
+        if (!fsDir) return;
+        let st = "prompt";
+        try {
+          st = await fsDir.requestPermission({ mode: "readwrite" });
+        } catch (e) {}
+        _xfPerm = st === "granted" ? "granted" : "prompt";
+        _xfSyncFolderUI();
+        if (_xfPerm !== "granted") {
+          _mpToast(`Your browser didn't allow the <b>${escHtml(fsDir.name)}</b> folder. Click 📁 to choose it again, or save to Downloads instead.`, 8000);
+          return;
+        }
+        let n = 0;
+        while (_xfPending.length) {
+          const job = _xfPending.shift();
+          try {
+            await _xfWrite(job.blob, job.name);
+            n++;
+          } catch (e) {
+            console.warn("Saving to your folder failed:", e);
+            _xfDownload(job.blob, job.name);
+          }
+        }
+        const bar = document.getElementById("xf-ask");
+        if (bar) bar.hidden = true;
+        _mpToast(`Saved ${n} image${n === 1 ? "" : "s"} to your <b>${escHtml(fsDir.name)}</b> folder. From now on they save there straight away.`, 7000);
+      }
+      function xfPendingToDownloads() {
+        while (_xfPending.length) {
+          const job = _xfPending.shift();
+          _xfDownload(job.blob, job.name);
+        }
+        const bar = document.getElementById("xf-ask");
+        if (bar) bar.hidden = true;
+      }
+      // After a reload: if your folder needs this visit's OK, say so once (with the "Allow on every visit" tip)
+      function _xfReconnectNotice() {
+        if (!fsDir || _xfPerm === "granted") return;
+        _mpToast(`📁 Your download folder <b>${escHtml(fsDir.name)}</b> needs one click to reconnect: click 📁 at the top, or just save an image. In Chrome, choose <b>“Allow on every visit”</b> so it stays connected.`, 12000);
       }
       async function xfPickFolder() {
         if (!window.showDirectoryPicker) {
@@ -9989,10 +10085,11 @@ Your message, caption, or call to action goes right here.</textarea
       }
       // The sidebar's existing "Choose…" button now uses the same folder
       pickFolder = xfPickFolder;
-      _xfLoadDir().then((h) => {
+      _xfLoadDir().then(async (h) => {
         if (h && !fsDir) {
           fsDir = h;
-          _xfFolderReady(false);
+          await _xfFolderReady(false);
+          setTimeout(_xfReconnectNotice, 2500);
         } else _xfSyncFolderUI();
       });
 
@@ -10006,6 +10103,12 @@ Your message, caption, or call to action goes right here.</textarea
           .xf-folder-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .xf-folder-btn.set { border-color: var(--hi); }
           .xf-folder-btn.needs::after { content: "Allow"; font-size: 10px; font-weight: 700; color: #1a1206; background: var(--hi); border-radius: 999px; padding: 1px 6px; }
+          .xf-ask { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 10000; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; max-width: min(720px, calc(100vw - 32px)); padding: 12px 14px; border-radius: 12px; background: #1c1f2b; color: #e8eaf0; border: 1px solid var(--hi, #f5a623); box-shadow: 0 10px 30px rgba(0,0,0,.5); font: 500 13px "DM Sans", sans-serif; }
+          .xf-ask[hidden] { display: none; }
+          .xf-ask span { flex: 1 1 260px; }
+          .xf-ask-go { padding: 7px 12px; border-radius: 8px; border: none; background: var(--hi, #f5a623); color: #1a1206; font-weight: 800; cursor: pointer; }
+          .xf-ask-dl { padding: 7px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.25); background: transparent; color: inherit; cursor: pointer; }
+          .xf-ask-go:focus-visible, .xf-ask-dl:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
           .xf-folder-x { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 2px 4px; }
           .xf-folder-x:hover { color: var(--text); }
           .xf-folder-btn:focus-visible, .xf-folder-x:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
@@ -14551,6 +14654,8 @@ Post:
         try {
           _saveAsDirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
           document.getElementById('saveas-folder-display').value = _saveAsDirHandle.name;
+          // Remembered as your download folder, so you only choose it once
+          try { fsDir = _saveAsDirHandle; _xfPerm = 'granted'; _xfStoreDir(fsDir); _xfSyncFolderUI(); } catch (e2) {}
         } catch (e) {
           if (e.name !== 'AbortError') console.warn('showDirectoryPicker:', e);
         }
@@ -35551,6 +35656,8 @@ function downloadFormImage(fmt) {
 
   // ── Helper: save a Blob, preferring showSaveFilePicker ───────────────────
   async function saveBlobWithPicker(blob, suggestedName) {
+    // Inside PostPilot Studio: straight into your chosen download folder (📁)
+    if (window.parent && window.parent !== window && typeof window.parent.xfSaveBlob === 'function') { await window.parent.xfSaveBlob(blob, suggestedName, false, false); return; }
     if (window.showSaveFilePicker) {
       try {
         const exts = fmt === 'gif'
