@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v97</span>
+              <span class="sb-version">v98</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -14948,6 +14948,50 @@ Post:
           .ux-pin-more:focus-visible, .ux-pb-colors:focus-visible, .ux-pb-more:focus-visible { outline: 2px solid var(--hi, #f5a623); outline-offset: 2px; }`;
         document.head.appendChild(st);
       })();
+      // ══════════════════════════════════════════
+      // LIGHTER PICTURES (v98): html2canvas copies the whole page for every picture it takes. With 98 layout
+      // cards, their photos, the sidebar and the Scheduler, one picture took over a second and froze typing.
+      // Every picture now skips the big parts of the page that don't hold what's being pictured; the picture
+      // itself is unchanged. The Recent strip's thumbnail also waits until you've stopped typing.
+      // ══════════════════════════════════════════
+      const _LITE_SKIP = "#grid, #sidebar, #topbar, #filter-bar, #history-bar, #preview-panel, #pb-overlay, #us-overlay, #ti-overlay, .ux-selbar, #ux-selbar, iframe";
+      window.__h2cLite = true; // (tests switch this off to compare pictures)
+      (function _liteWrap() {
+        const orig = window.html2canvas;
+        if (typeof orig !== "function" || orig.__lite) return;
+        const lite = function (target, opts) {
+          if (!window.__h2cLite || !target || !target.ownerDocument) return orig.apply(this, arguments);
+          const o = Object.assign({}, opts || {});
+          const theirs = typeof o.ignoreElements === "function" ? o.ignoreElements : null;
+          o.ignoreElements = function (el) {
+            if (theirs && theirs(el)) return true;
+            if (el === target || !el || !el.matches) return false;
+            try {
+              // Leave out a heavy region only when the thing being pictured isn't inside it
+              return el.matches(_LITE_SKIP) && !el.contains(target);
+            } catch (e) {
+              return false;
+            }
+          };
+          return orig.call(this, target, o);
+        };
+        lite.__lite = true;
+        window.html2canvas = lite;
+      })();
+      // The Recent strip: take its thumbnail once you've paused for 2 seconds, in a quiet moment
+      if (typeof _addToHistory === "function" && !_addToHistory.__lite) {
+        const _liteAdd = _addToHistory;
+        let _liteT = 0;
+        _addToHistory = function () {
+          clearTimeout(_liteT);
+          _liteT = setTimeout(() => {
+            const go = () => _liteAdd();
+            if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 4000 });
+            else go();
+          }, 2000);
+        };
+        _addToHistory.__lite = true;
+      }
       // ══════════════════════════════════════════
       // COPY TO CLIPBOARD
       // ══════════════════════════════════════════
