@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v98</span>
+              <span class="sb-version">v101</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -3532,6 +3532,10 @@
               >
                 LinkedIn
                 <span>1080×1350</span>
+              </button>
+              <button class="plat-opt-btn" data-pid="alignable" onclick="choosePlatform('alignable')" style="--pc: #391590">
+                Alignable
+                <span>1200×750</span>
               </button>
               <button
                 class="plat-opt-btn"
@@ -5117,6 +5121,7 @@ Your message, caption, or call to action goes right here.</textarea
         shopify: { w: 1200, h: 1200, label: "Shopify · 1200×1200 (1:1)", color: "#96BF48" },
         tumblr: { w: 1280, h: 1920, label: "Tumblr · 1280×1920 (2:3)", color: "#35465C" },
         kofi: { w: 1200, h: 630, label: "Ko-Fi · 1200×630 (1.91:1)", color: "#FF5E5B" },
+        alignable: { w: 1200, h: 750, label: "Alignable · 1200×750 (8:5)", color: "#391590" },
         patreon: { w: 1600, h: 400, label: "Patreon · 1600×400 (4:1)", color: "#FF424D" },
       };
 
@@ -5134,6 +5139,7 @@ Your message, caption, or call to action goes right here.</textarea
         bluesky: `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.815 2.736 3.713 3.66 6.383 3.364.136-.02.275-.039.415-.056-.138.022-.276.04-.415.056-3.912.58-7.387 2.005-2.83 7.078 5.013 5.19 6.87-1.113 7.823-4.308.953 3.195 2.05 9.271 7.733 4.308 4.267-4.308 1.172-6.498-2.74-7.078a8.741 8.741 0 0 1-.415-.056c.14.017.279.036.415.056 2.67.297 5.568-.628 6.383-3.364.246-.828.624-5.79.624-6.478 0-.69-.139-1.861-.902-2.206-.659-.298-1.664-.62-4.3 1.24C16.046 4.748 13.087 8.687 12 10.8z"/></svg>`,
         shopify: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 57" fill="currentColor"><path d="M33.3,6.7c0,0-0.6,0.2-1.7,0.5c-0.2-0.6-0.5-1.3-0.8-2c-1.2-2.3-3-3.5-5.1-3.5c-0.1,0-0.3,0-0.4,0c-0.1-0.1-0.1-0.2-0.2-0.2c-0.9-1-2.1-1.5-3.5-1.4C19,0.2,16.5,2.2,14.4,5.7c-1.6,2.5-2.7,5.6-3.1,8c-3.2,1-5.4,1.7-5.4,1.7c-1.6,0.5-1.7,0.5-1.8,2.1C4,18.7,0,50.6,0,50.6l34.7,6.1V6.6C34.1,6.6,33.7,6.7,33.3,6.7z M23,8.6c-1.8,0.6-3.8,1.2-5.8,1.8c0.6-2.2,1.6-4.3,2.9-5.7c0.5-0.5,1.2-1.1,2-1.4C23,4.7,23.1,6.9,23,8.6z M19.3,1.6c0.6,0,1.2,0.1,1.7,0.4c-0.7,0.4-1.5,1-2.1,1.6c-1.7,1.9-3.1,4.8-3.6,7.6c-1.7,0.5-3.3,1-4.8,1.5C11.6,9,15,1.6,19.3,1.6z M19,25.4c0.2,2.9,7.9,3.6,8.4,10.5c0.3,5.5-2.9,9.2-7.5,9.5c-5.6,0.4-8.7-2.9-8.7-2.9l1.2-5c0,0,3.1,2.3,5.5,2.2c1.6-0.1,2.2-1.4,2.1-2.3c-0.2-3.8-6.6-3.6-7-9.9c-0.4-5.3,3.2-10.7,10.9-11.2c2.9-0.2,4.5,0.6,4.5,0.6l-1.7,6.6c0,0-2-0.9-4.3-0.7C19.1,23,19,25.3,19,25.4z M35.6,6.6H34v2.1l-7.3,2.1c0-0.2,0-0.4,0-0.6V6.6H35.6z"/></svg>`,
         tumblr: `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M14.563 24c-5.093 0-7.031-3.756-7.031-6.411V9.747H5.116V6.648c3.63-1.313 4.512-4.596 4.71-6.469C9.84.051 9.941 0 9.999 0h3.517v6.114h4.801v3.633h-4.82v7.47c.016 1.001.375 2.371 2.207 2.371h.09c.631-.02 1.486-.205 1.936-.419l1.156 3.425c-.436.636-2.4 1.374-4.304 1.406z"/></svg>`,
+        alignable: `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="7.5" r="3.5"/><circle cx="17" cy="8.5" r="2.8"/><path d="M1.5 20c0-3.6 2.9-6.3 6.5-6.3s6.5 2.7 6.5 6.3v.8h-13z"/><path d="M15.2 14.3c.6-.2 1.2-.3 1.8-.3 3 0 5.5 2.1 5.5 5.2v.8h-6.4v-.6c0-1.9-.3-3.6-.9-5.1z"/></svg>`,
         kofi: `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M23.881 8.948c-.773-4.085-4.859-4.591-4.859-4.591H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.918zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.884-2.059 3.015z"/></svg>`,
         patreon: `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M14.82 2.41c3.96 0 7.18 3.24 7.18 7.21 0 3.96-3.22 7.18-7.18 7.18-3.98 0-7.21-3.22-7.21-7.18 0-3.97 3.23-7.21 7.21-7.21M2 21.6h3.5V2.41H2V21.6z"/></svg>`,
       };
@@ -5155,7 +5161,7 @@ Your message, caption, or call to action goes right here.</textarea
         instagram: "Instagram", pinterest: "Pinterest", google: "Google Biz", linkedin: "LinkedIn",
         facebook: "Facebook", twitter: "Twitter/X", threads: "Threads", tiktok: "TikTok",
         youtube: "YouTube", bluesky: "Bluesky", shopify: "Shopify", tumblr: "Tumblr",
-        kofi: "Ko-Fi", patreon: "Patreon",
+        kofi: "Ko-Fi", alignable: "Alignable", patreon: "Patreon",
       };
 
       // Formats per platform. best:true marks the default: the size that takes the
@@ -5211,6 +5217,7 @@ Your message, caption, or call to action goes right here.</textarea
         shopify: [{ id: "square", name: "Square", r: "1:1", w: 1200, h: 1200, best: true }],
         tumblr: [{ id: "tall", name: "Tall 2:3", r: "2:3", w: 1280, h: 1920, best: true }],
         kofi: [{ id: "wide", name: "Post 1.91:1", r: "1.91:1", w: 1200, h: 630, best: true }],
+        alignable: [{ id: "post", name: "Post 8:5", r: "8:5", w: 1200, h: 750, best: true }],
         patreon: [{ id: "banner", name: "Banner 4:1", r: "4:1", w: 1600, h: 400, best: true }],
       };
 
@@ -7881,6 +7888,7 @@ Your message, caption, or call to action goes right here.</textarea
           shopify: "Shopify",
           tumblr: "Tumblr",
           kofi: "Ko-Fi",
+          alignable: "Alignable",
           patreon: "Patreon",
         };
         // Replace dot with icon
@@ -8448,7 +8456,7 @@ Your message, caption, or call to action goes right here.</textarea
       // suit each platform, and open the platform with the image ready to paste/upload.
       // Nothing is ever posted for you.
       // ══════════════════════════════════════════
-      const MP_ORDER = ["instagram", "facebook", "linkedin", "pinterest", "tiktok", "youtube", "google", "twitter", "threads", "bluesky", "shopify", "tumblr", "kofi", "patreon"];
+      const MP_ORDER = ["instagram", "facebook", "linkedin", "alignable", "pinterest", "tiktok", "youtube", "google", "twitter", "threads", "bluesky", "shopify", "tumblr", "kofi", "patreon"];
       const MP_MORE = new Set(["shopify", "tumblr", "kofi", "patreon"]);
       const MP_SHORT = { google: "Google", twitter: "X", kofi: "Ko-fi" };
       // Where "Open" takes you. paste: the site takes a pasted image (Ctrl+V); otherwise the file is saved for upload.
@@ -8466,6 +8474,7 @@ Your message, caption, or call to action goes right here.</textarea
         shopify: { url: "https://admin.shopify.com/", paste: false },
         tumblr: { url: "https://www.tumblr.com/new", paste: false },
         kofi: { url: "https://ko-fi.com/", paste: false },
+        alignable: { url: "https://www.alignable.com/", paste: false },
         patreon: { url: "https://www.patreon.com/", paste: false },
       };
       const _mpName = (p) => PLAT_NAMES[p] || p;
@@ -8839,7 +8848,7 @@ Your message, caption, or call to action goes right here.</textarea
       }
       // "Send to PostPilot" starts with the platforms chosen for this post
       // Platforms the Scheduler can hold (Threads isn't one: it uses Open ↗ and 📋 Caption)
-      const MP_SCHEDULER = new Set(["pinterest", "instagram", "google", "linkedin", "shopify", "bluesky", "tiktok", "youtube", "facebook", "twitter", "tumblr", "kofi", "patreon"]);
+      const MP_SCHEDULER = new Set(["pinterest", "instagram", "google", "linkedin", "shopify", "bluesky", "tiktok", "youtube", "facebook", "twitter", "tumblr", "kofi", "alignable", "patreon"]);
       function _mpPfDefaults() {
         const ok = (p) => MP_SCHEDULER.has(p) && PF_PLATFORMS.some((x) => x.id === p);
         return [S.platform].concat(mpList().filter((p) => p !== S.platform)).filter(ok);
@@ -10162,7 +10171,7 @@ Your message, caption, or call to action goes right here.</textarea
       // File names, file type and sizes are unchanged: the brief fills the headline exactly
       // as if you typed it, so the automatic file name is the same.
       // ══════════════════════════════════════════
-      const PC_LIMITS = { instagram: 2200, linkedin: 3000, pinterest: 500, google: 1500, twitter: 280, threads: 500, bluesky: 300 };
+      const PC_LIMITS = { instagram: 2200, linkedin: 3000, pinterest: 500, google: 1500, twitter: 280, threads: 500, bluesky: 300, alignable: 1000 };
       const PC_PIN_TITLE_LIMIT = 100;
       const PC_LINKED = new Set(["instagram", "pinterest", "google", "linkedin", "bluesky", "shopify"]);
       const PC_TAGGY = new Set(["instagram", "facebook", "linkedin", "pinterest", "tiktok", "twitter", "threads", "bluesky"]);
@@ -10171,7 +10180,7 @@ Your message, caption, or call to action goes right here.</textarea
         linkedin: "linkedin", "linked in": "linkedin", pinterest: "pinterest", tiktok: "tiktok", "tik tok": "tiktok",
         youtube: "youtube", yt: "youtube", google: "google", "google business": "google", "google my business": "google", gbp: "google", gmb: "google",
         x: "twitter", twitter: "twitter", "x twitter": "twitter", threads: "threads", bluesky: "bluesky", bsky: "bluesky",
-        shopify: "shopify", tumblr: "tumblr", "ko fi": "kofi", kofi: "kofi", patreon: "patreon",
+        shopify: "shopify", tumblr: "tumblr", "ko fi": "kofi", kofi: "kofi", patreon: "patreon", alignable: "alignable",
         all: "all", "all platforms": "all", default: "all", general: "all", everywhere: "all",
       };
       const PC_KEYS = {
@@ -10474,6 +10483,15 @@ Post:
         text = String(text || "");
         return pid === "twitter" ? text.replace(/https?:\/\/\S+/gi, "x".repeat(23)).length : text.length;
       }
+      // Alignable hides network posts with contact details or sales links
+      function _pcAlignableFlags(t) {
+        t = String(t || "");
+        const f = [];
+        if (/https?:\/\/|www\./i.test(t)) f.push("a link");
+        if (/\b\d{3}[\s.\-)]*\d{3}[\s.\-]\d{4}\b/.test(t)) f.push("a phone number");
+        if (/[\w.+-]+@[\w-]+\.[\w.]+/.test(t)) f.push("an email");
+        return f.join(" and ");
+      }
       function pcOver(pid) {
         const lim = PC_LIMITS[pid];
         return !!lim && pcLen(pid, pcCaptionFor(pid)) > lim;
@@ -10757,6 +10775,8 @@ Post:
         Object.keys(S.captions).forEach((p) => {
           if (pcOver(p)) warn.push(`${_mpName(p)} caption is ${pcLen(p, pcCaptionFor(p)).toLocaleString()} characters (limit ${PC_LIMITS[p].toLocaleString()})`);
         });
+        const alFlags = S.captions && S.captions.alignable ? _pcAlignableFlags(S.captions.alignable) : "";
+        if (alFlags) warn.push(`Alignable caption has ${alFlags}. Alignable hides network posts with contact details or sales links, so take it out there.`);
         if ((S.pinTitle || "").length > PC_PIN_TITLE_LIMIT) warn.push(`Pinterest title is over ${PC_PIN_TITLE_LIMIT} characters`);
         status.textContent = "Done.";
         document.getElementById("pc-brief-result").innerHTML = `
@@ -11434,13 +11454,14 @@ Post:
       // ══════════════════════════════════════════
       const PB_N = 10;
       const PB_KEY = "bpc_pinbatch_v1"; // Pinterest's batch (as before); other platforms: bpc_batch_v1:<platform>
-      const PB_ORDER = ["pinterest", "instagram", "facebook", "linkedin", "google", "twitter", "bluesky", "tiktok", "threads", "shopify", "tumblr", "kofi", "patreon"];
+      const PB_ORDER = ["pinterest", "instagram", "facebook", "linkedin", "alignable", "google", "twitter", "bluesky", "tiktok", "threads", "shopify", "tumblr", "kofi", "patreon"];
       // What each platform's posts need (these match the Scheduler's fields for that platform)
       const PB_CFG = {
         pinterest: { noun: "pin", title: "Pin title", text: "Description", link: "Link", alt: true },
         instagram: { text: "Caption (with hashtags)", link: "Blog link (for your bio or a Story sticker)", alt: true },
         facebook: { text: "Post text", link: "Link (added to the post)", linkInText: true, alt: true },
         linkedin: { text: "Post text", link: "Link", alt: true },
+        alignable: { text: "Post text (start a discussion, no links or phone numbers)", alt: true, max: 1000 },
         google: { text: "Post text", link: "Link (the Learn more button)", alt: true },
         twitter: { text: "Post (280 characters)", link: "Link (added to the post)", linkInText: true, alt: true, max: 280, linkLen: 23 },
         bluesky: { text: "Post (300 characters)", link: "Link", alt: true, max: 300 },
@@ -11796,6 +11817,7 @@ Post:
           ["shopify", /\bshopify\b/i],
           ["tumblr", /\btumblr\b/i],
           ["kofi", /\bko-?fi\b/i],
+          ["alignable", /\balignable\b/i],
           ["patreon", /\bpatreon\b/i],
         ];
         for (const [pid, re] of names) if (re.test(intro)) return pid;
@@ -13265,7 +13287,7 @@ Post:
           link,
           pintitle: head,
           alt: `${head}. ${body}`.trim(),
-          captions: { all: full, tiktok: `${head} ${body}${tags ? " " + tags : ""}`.trim(), youtube: plain, threads: `${head} ${body}${learn}`.slice(0, 500).trim(), shopify: plain, tumblr: plain, kofi: `${head} ${body}${learn}`.trim(), patreon: plain, instagram: cap, facebook: `${head} ${body}${learn}`.trim(), linkedin: `${head}\n\n${body}${learn}`.trim(), pinterest: cap, google: `${head} ${body} Learn More by clicking the button below!`.trim(), twitter: short.length <= 280 ? short : head, bluesky: `${head} ${body}`.slice(0, 280).trim() },
+          captions: { all: full, tiktok: `${head} ${body}${tags ? " " + tags : ""}`.trim(), youtube: plain, threads: `${head} ${body}${learn}`.slice(0, 500).trim(), shopify: plain, tumblr: plain, kofi: `${head} ${body}${learn}`.trim(), alignable: `${head}\n\n${body}\n\nWhat has your experience been?`.slice(0, 1000).trim(), patreon: plain, instagram: cap, facebook: `${head} ${body}${learn}`.trim(), linkedin: `${head}\n\n${body}${learn}`.trim(), pinterest: cap, google: `${head} ${body} Learn More by clicking the button below!`.trim(), twitter: short.length <= 280 ? short : head, bluesky: `${head} ${body}`.slice(0, 280).trim() },
           links: {},
           alts: {},
           plats: S.platforms && S.platforms.length ? S.platforms.slice() : ["instagram", "facebook", "linkedin", "google"],
@@ -14508,7 +14530,7 @@ Post:
         if (/^(ai-gen-section|original-post-section|pc-captions-section)$/.test(id) || sec.querySelector("#headerText, #contentText") || /^Platforms/.test(t) || /Body Text Settings/.test(t)) return "write";
         if (/^Background Image/.test(t)) return "photo";
         if (id === "my-fonts-section" || /Panel Settings/.test(t) || id === "ux-style-pal") return "style";
-        if (id === "download-settings-section" || id === "ux-classic-sec" || /Reset All/.test(t)) return "more";
+        if (id === "download-settings-section" || id === "ux-classic-sec" || id === "picon-sec" || /Reset All/.test(t)) return "more";
         return "write";
       }
       function uxTab(name) {
@@ -14843,45 +14865,6 @@ Post:
             mb.setAttribute("aria-label", `${open ? "Hide" : "Show"} photo, layout, colors, pin title and more for pin ${idx + 1}`);
           }
         });
-        // Platform menu
-        const plats = ov.querySelector(".pb-plats");
-        if (plats) {
-          let sel = document.getElementById("ux-pb-plat");
-          const chips = [...plats.querySelectorAll("button")].filter((b) => (b.textContent || "").trim());
-          if (!sel) {
-            sel = document.createElement("select");
-            sel.id = "ux-pb-plat";
-            sel.className = "ux-filter ux-pb-plat";
-            sel.setAttribute("aria-label", "Platform for this batch");
-            sel.onchange = () => {
-              const b = [...plats.querySelectorAll("button")].find((x) => x.textContent.trim() === sel.value);
-              if (b) b.click();
-            };
-            plats.parentNode.insertBefore(sel, plats);
-          }
-          const cur = chips.find((b) => b.classList.contains("on") || b.classList.contains("active") || b.getAttribute("aria-pressed") === "true");
-          const opts = chips.map((b) => `<option ${b === cur ? "selected" : ""}>${escHtml(b.textContent.trim())}</option>`).join("");
-          if (sel.innerHTML !== opts) sel.innerHTML = opts;
-        }
-        // Colors fold
-        const col = document.getElementById("pb-colors");
-        if (col && !document.getElementById("ux-pb-colors")) {
-          const t = document.createElement("button");
-          t.type = "button";
-          t.id = "ux-pb-colors";
-          t.className = "ux-pb-colors";
-          t.setAttribute("aria-expanded", "false");
-          t.textContent = "🎨 Colors ▾";
-          t.onclick = () => {
-            const open = !col.classList.contains("ux-open");
-            col.classList.toggle("ux-open", open);
-            t.setAttribute("aria-expanded", open ? "true" : "false");
-            t.textContent = open ? "🎨 Colors ▴" : "🎨 Colors ▾";
-          };
-          col.parentNode.insertBefore(t, col);
-          const sel = document.getElementById("ux-pb-plat");
-          if (sel) sel.after(t);
-        }
         // One Schedule button with the other ways beside it (hidden whenever Schedule itself is)
         const sch = document.getElementById("pb-sched");
         const split0 = document.querySelector(".ux-pb-split");
@@ -14932,11 +14915,7 @@ Post:
           .ux-pin-more { margin-left: auto; padding: 3px 8px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: 700 11px 'DM Sans', sans-serif; cursor: pointer; }
           .ux-pin-more:hover { color: var(--text, #fff); border-color: var(--hi, #f5a623); }
           body.ux .ux-pb .pb-top { display: flex; align-items: center; gap: 6px; }
-          body.ux .ux-pb .pb-plats { display: none !important; }
-          body.ux .ux-pb #pb-colors:not(.ux-open) { display: none !important; }
-          body.ux .ux-pb .ux-pb-plat { display: inline-block; width: auto !important; margin: 0 8px 10px 18px; }
           .ux-pb-split[hidden] { display: none !important; }
-          .ux-pb-colors { display: inline-block; width: auto !important; margin: 0 0 10px; padding: 7px 11px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: inherit; font: 700 12px 'DM Sans', sans-serif; cursor: pointer; }
           body.ux .ux-pb #pb-send, body.ux .ux-pb #pb-today { display: none !important; }
           .ux-pb-split { position: relative; display: inline-flex; }
           .ux-pb-more { padding-left: 10px !important; padding-right: 10px !important; margin-left: -4px; }
@@ -14992,6 +14971,245 @@ Post:
         };
         _addToHistory.__lite = true;
       }
+      // ══════════════════════════════════════════
+      // LIGHTER IMAGES (v99): an uploaded photo or logo is kept as a long text copy of the image (often several MB).
+      // Layouts pasted that whole copy into every card, so one redraw of the 98 cards built hundreds of MB of page
+      // code, and the ranking, previews and downloads did the same. While a layout is built, its images are now a
+      // short in-memory address for the same image (the browser loads it once and shares it). Nothing else changes:
+      // your saved photos and logos stay exactly as they are.
+      // ══════════════════════════════════════════
+      const _LIMG_FIELDS = ["bg", "bg2", "bg3", "logo", "logo2", "gif"];
+      const _limgCache = new Map(); // full image text -> short address
+      window.__limgOn = true; // (tests switch this off to compare pictures)
+      function _limgUrl(src) {
+        if (!src || typeof src !== "string" || src.length < 30000 || src.slice(0, 5) !== "data:") return src;
+        let u = _limgCache.get(src);
+        if (u) return u;
+        try {
+          const comma = src.indexOf(",");
+          const meta = src.slice(5, comma);
+          const type = meta.replace(/;base64$/i, "") || "application/octet-stream";
+          let bytes;
+          if (/;base64$/i.test(meta)) {
+            const bin = atob(src.slice(comma + 1));
+            bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          } else bytes = new TextEncoder().encode(decodeURIComponent(src.slice(comma + 1)));
+          u = URL.createObjectURL(new Blob([bytes], { type }));
+        } catch (e) {
+          return src;
+        }
+        _limgCache.set(src, u);
+        // Keep it small: forget the oldest addresses that no image in use needs
+        if (_limgCache.size > 60) {
+          for (const [k, v] of _limgCache) {
+            if (_limgCache.size <= 50) break;
+            if (_LIMG_FIELDS.some((f) => S[f] === k)) continue;
+            _limgCache.delete(k);
+            try {
+              URL.revokeObjectURL(v);
+            } catch (e) {}
+          }
+        }
+        return u;
+      }
+      // Build something with the short addresses in place, then put the originals straight back
+      function _limgWith(fn) {
+        if (!window.__limgOn || typeof S === "undefined" || !S) return fn();
+        const saved = {};
+        let any = false;
+        for (const f of _LIMG_FIELDS) {
+          const v = S[f];
+          const u = _limgUrl(v);
+          if (u !== v) {
+            saved[f] = v;
+            S[f] = u;
+            any = true;
+          }
+        }
+        if (!any) return fn();
+        try {
+          return fn();
+        } finally {
+          for (const f in saved) if (S[f] === _limgCache.get(saved[f])) S[f] = saved[f];
+        }
+      }
+      // The layout list is created further down the page, so wrap it as soon as it exists (before the first redraw)
+      let _limgReady = false;
+      function _limgWrap() {
+        if (_limgReady) return true;
+        let list;
+        try {
+          list = templates;
+        } catch (e) {
+          return false; // not created yet
+        }
+        if (!Array.isArray(list)) return false;
+        for (let i = 0; i < list.length; i++) {
+          const t = list[i];
+          if (typeof t !== "function" || t.__limg) continue;
+          const w = function () {
+            const args = arguments,
+              self = this;
+            return _limgWith(() => t.apply(self, args));
+          };
+          w.__limg = true;
+          list[i] = w;
+        }
+        _limgReady = true;
+        return true;
+      }
+      if (!_limgWrap()) {
+        setTimeout(_limgWrap, 0);
+        document.addEventListener("DOMContentLoaded", _limgWrap);
+        if (typeof render === "function") {
+          const _limgR = render;
+          render = function () {
+            if (!_limgReady) _limgWrap();
+            return _limgR.apply(this, arguments);
+          };
+        }
+      }
+      if (typeof applyGifOverlay === "function" && !applyGifOverlay.__limg) {
+        const g = applyGifOverlay;
+        applyGifOverlay = function () {
+          const args = arguments,
+            self = this;
+          return _limgWith(() => g.apply(self, args));
+        };
+        applyGifOverlay.__limg = true;
+      }
+      // Saving: a big item (photo, logo, saved logos, fonts) is only written when it has actually changed.
+      // Any change from elsewhere in the tool (the Scheduler, another tab) clears what this page remembers.
+      (function _lsDedupe() {
+        try {
+          const P = Storage.prototype;
+          if (P.setItem.__dd) return;
+          const last = new Map(),
+            BIG = 20000;
+          const set0 = P.setItem,
+            get0 = P.getItem,
+            rem0 = P.removeItem,
+            clr0 = P.clear;
+          P.setItem = function (k, v) {
+            if (this === window.localStorage) {
+              const s = String(v);
+              if (s.length >= BIG) {
+                if (last.get(k) === s) return;
+                set0.call(this, k, s);
+                last.set(k, s);
+                return;
+              }
+              last.delete(k);
+            }
+            return set0.apply(this, arguments);
+          };
+          P.setItem.__dd = true;
+          P.getItem = function (k) {
+            const v = get0.call(this, k);
+            if (this === window.localStorage && v && v.length >= BIG) last.set(k, v);
+            return v;
+          };
+          P.removeItem = function (k) {
+            if (this === window.localStorage) last.delete(k);
+            return rem0.apply(this, arguments);
+          };
+          P.clear = function () {
+            if (this === window.localStorage) last.clear();
+            return clr0.apply(this, arguments);
+          };
+          window.addEventListener("storage", (e) => {
+            if (e.key) last.delete(e.key);
+            else last.clear();
+          });
+        } catch (e) {}
+      })();
+      // ══════════════════════════════════════════
+      // YOUR PLATFORM ICON (v101): add your own copy of Alignable's logo and it's used wherever Alignable appears,
+      // here and in the Scheduler. It's saved in this browser; "Use the default" puts the standard icon back.
+      // ══════════════════════════════════════════
+      const PICON_KEY = "pp_icon_alignable";
+      const _piconDefault = typeof PLAT_ICONS !== "undefined" ? PLAT_ICONS.alignable : "";
+      const _piconImg = (src, n) => `<img src="${src}" alt="" width="${n}" height="${n}" style="display:block;width:${n}px;height:${n}px;border-radius:22%;object-fit:cover">`;
+      function _piconSrc() {
+        try {
+          return localStorage.getItem(PICON_KEY) || "";
+        } catch (e) {
+          return "";
+        }
+      }
+      function _piconApply() {
+        const src = _piconSrc();
+        if (typeof PLAT_ICONS !== "undefined") PLAT_ICONS.alignable = src ? _piconImg(src, 18) : _piconDefault;
+        const pv = document.getElementById("picon-preview");
+        if (pv) pv.innerHTML = src ? _piconImg(src, 30) : `<span aria-hidden="true" style="font-size:24px;line-height:30px">🤝</span>`;
+        const rs = document.getElementById("picon-reset");
+        if (rs) rs.hidden = !src;
+      }
+      function piconPick() {
+        const i = document.getElementById("picon-file");
+        if (i) i.click();
+      }
+      function piconFile(file) {
+        if (!file || !/^image\//.test(file.type || "")) return;
+        const r = new FileReader();
+        r.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            // A small square copy is all an icon needs
+            const n = 96,
+              c = document.createElement("canvas");
+            c.width = n;
+            c.height = n;
+            const s = Math.min(img.width, img.height);
+            c.getContext("2d").drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, n, n);
+            try {
+              localStorage.setItem(PICON_KEY, c.toDataURL("image/png"));
+            } catch (e) {}
+            _piconApply();
+            if (typeof render === "function") render();
+            if (typeof _mpToast === "function") _mpToast("Your Alignable logo is in. It shows here and in the Scheduler.");
+          };
+          img.src = r.result;
+        };
+        r.readAsDataURL(file);
+      }
+      function piconReset() {
+        try {
+          localStorage.removeItem(PICON_KEY);
+        } catch (e) {}
+        _piconApply();
+        if (typeof render === "function") render();
+      }
+      function _piconUI() {
+        const side = document.getElementById("sidebar");
+        if (!side || document.getElementById("picon-sec")) return;
+        const d = document.createElement("div");
+        d.className = "sec";
+        d.id = "picon-sec";
+        d.innerHTML = `<div class="sec-label">Platform icons</div>
+          <div class="picon-row"><span id="picon-preview" class="picon-prev"></span>
+            <div><b>Alignable</b>
+              <div class="l2-hint" style="font-size:11px;line-height:1.45;margin:2px 0 6px">Add your copy of Alignable's logo and it shows wherever Alignable appears, here and in the Scheduler.</div>
+              <button type="button" class="picon-btn" onclick="piconPick()">Choose image</button>
+              <button type="button" class="picon-btn" id="picon-reset" onclick="piconReset()" hidden>Use the default</button>
+              <input type="file" id="picon-file" accept="image/*" hidden onchange="piconFile(this.files[0]); this.value='';" />
+            </div></div>`;
+        side.appendChild(d);
+        _piconApply();
+      }
+      _piconApply();
+      if (document.getElementById("sidebar")) _piconUI();
+      else document.addEventListener("DOMContentLoaded", _piconUI);
+      (function _piconStyles() {
+        const st = document.createElement("style");
+        st.textContent = `.picon-row { display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; }
+          .picon-prev { flex: none; width: 30px; height: 30px; display: grid; place-items: center; }
+          .picon-btn { padding: 5px 10px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: inherit; font: 600 11.5px 'DM Sans', sans-serif; cursor: pointer; margin-right: 4px; }
+          .picon-btn:hover { border-color: var(--hi, #f5a623); }
+          .picon-btn:focus-visible { outline: 2px solid var(--hi, #f5a623); outline-offset: 2px; }`;
+        document.head.appendChild(st);
+      })();
       // ══════════════════════════════════════════
       // COPY TO CLIPBOARD
       // ══════════════════════════════════════════
@@ -19490,6 +19708,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
           shopify: "Shopify - product-focused, benefit-driven, clear CTA to shop",
           tumblr: "Tumblr - creative, expressive, slightly informal with aesthetic flair",
           kofi: "Ko-Fi - warm, grateful, creator-to-supporter tone with soft CTA",
+          alignable: "Alignable - small-business networking feed: friendly, helpful and local; open with a real situation or tip and end with a question that invites replies; no phone numbers, emails, links, hashtags or sales offers (Alignable hides network posts with those)",
           patreon: "Patreon - exclusive, supporter-appreciation tone, highlight membership value",
         };
 
@@ -19672,7 +19891,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
         { id: "bluesky", name: "Bluesky", color: "#0085FF", ratio: "1.91:1" },
         { id: "shopify", name: "Shopify", color: "#96BF48", ratio: "1:1" },
         { id: "tumblr", name: "Tumblr", color: "#35465C", ratio: "2:3" },
-        { id: "kofi", name: "Ko-Fi", color: "#FF5E5B", ratio: "1.91:1" },
+        { id: "kofi", name: "Ko-Fi", color: "#FF5E5B", ratio: "1.91:1" }, { id: "alignable", name: "Alignable", color: "#391590", ratio: "8:5" },
         { id: "patreon", name: "Patreon", color: "#FF424D", ratio: "4:1" },
       ];
 
@@ -26247,8 +26466,8 @@ async function switchWorkspace(wsId) {
 
   // Re-initialize platform visibility/order from the workspace
   state.platformOrder   = (() => {
-    try { const s = localStorage.getItem(wsKey('postpilot_platform_order')); return s ? JSON.parse(s) : ['pinterest','google','linkedin','instagram','shopify','bluesky','tiktok','youtube','twitter','kofi','facebook','tumblr','patreon']; }
-    catch { return ['pinterest','google','linkedin','instagram','shopify','bluesky','tiktok','youtube','twitter','kofi','facebook','tumblr','patreon']; }
+    try { const s = localStorage.getItem(wsKey('postpilot_platform_order')); return s ? _ppAddAlignable(JSON.parse(s)) : ['pinterest','google','linkedin','alignable','instagram','shopify','bluesky','tiktok','youtube','twitter','kofi','facebook','tumblr','patreon']; }
+    catch { return ['pinterest','google','linkedin','alignable','instagram','shopify','bluesky','tiktok','youtube','twitter','kofi','facebook','tumblr','patreon']; }
   })();
   state.hiddenPlatforms = (() => {
     try { const s = localStorage.getItem(wsKey('postpilot_hidden_platforms')); return s ? new Set(JSON.parse(s)) : new Set(['twitter','kofi','facebook','tumblr','patreon']); }
@@ -26643,6 +26862,10 @@ const PLATFORMS = {
     id: 'kofi', name: 'Ko-Fi', color: '#FF5E5B',
     icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M23.881 8.948c-.773-4.085-4.859-4.591-4.859-4.591H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.918zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.884-2.059 3.015z"/></svg>`,
   },
+  alignable: {
+    id: 'alignable', name: 'Alignable', color: '#391590',
+    icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="7.5" r="3.5"/><circle cx="17" cy="8.5" r="2.8"/><path d="M1.5 20c0-3.6 2.9-6.3 6.5-6.3s6.5 2.7 6.5 6.3v.8h-13z"/><path d="M15.2 14.3c.6-.2 1.2-.3 1.8-.3 3 0 5.5 2.1 5.5 5.2v.8h-6.4v-.6c0-1.9-.3-3.6-.9-5.1z"/></svg>`,
+  },
   facebook: {
     id: 'facebook', name: 'Facebook', color: '#1877F2',
     icon: `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>`,
@@ -27022,6 +27245,7 @@ const DAILY_LIMITS = {
   // Extra platforms
   twitter:  17,
   kofi:      2,
+  alignable: 1,
   facebook:  2,
   tumblr:    5,
   patreon:   2,
@@ -27038,6 +27262,7 @@ const DAILY_LIMIT_INFO = {
   youtube:   { safe: '1–2',    max: 2,   note: 'YouTube maximum is 2 reels per day. 300 character limit per description.' },
   // Extra platforms
   twitter:   { safe: '3–5',    max: 17,  note: 'Twitter/X recommends 3–5 tweets/day for best engagement. API rate limits apply.' },
+  alignable: { safe: '1', max: 1, note: "Alignable doesn't publish a daily cap. Every network post lands in all your connections' feeds, and it hides repetitive or promotional posts, so 1 a day (a few a week is plenty) keeps you welcome." },
   kofi:      { safe: '1–2',    max: 2,   note: 'Ko-fi recommends 1–2 posts/day to keep your supporters engaged without overwhelming them.' },
   facebook:  { safe: '1–2',    max: 2,   note: 'Facebook recommends 1–2 posts/day. More can reduce organic reach due to the algorithm.' },
   tumblr:    { safe: '2–5',    max: 5,   note: 'Tumblr supports up to 250 posts/day but 2–5 is best for engagement.' },
@@ -27073,10 +27298,10 @@ let state = {
   chimeSoundName: '',
   notifiedPostIds: new Set(),    // track which posts we've already celebrated
   liveNotifications: [],         // [{id, postTitle, platformName, platformColor, ts}]
-  posts: { pinterest: [], instagram: [], google: [], linkedin: [], shopify: [], bluesky: [], tiktok: [], youtube: [], twitter: [], kofi: [], facebook: [], tumblr: [], patreon: [] },
-  platformOrder: (() => { try { const s = localStorage.getItem(wsKey('postpilot_platform_order')); return s ? JSON.parse(s) : ['pinterest','google','linkedin','instagram','shopify','bluesky','tiktok','youtube','twitter','kofi','facebook','tumblr','patreon']; } catch { return ['pinterest','google','linkedin','instagram','shopify','bluesky','tiktok','youtube','twitter','kofi','facebook','tumblr','patreon']; } })(),
+  posts: { pinterest: [], instagram: [], google: [], linkedin: [], shopify: [], bluesky: [], tiktok: [], youtube: [], twitter: [], kofi: [], alignable: [], facebook: [], tumblr: [], patreon: [] },
+  platformOrder: (() => { try { const s = localStorage.getItem(wsKey('postpilot_platform_order')); return s ? _ppAddAlignable(JSON.parse(s)) : ['pinterest','google','linkedin','alignable','instagram','shopify','bluesky','tiktok','youtube','twitter','kofi','facebook','tumblr','patreon']; } catch { return ['pinterest','google','linkedin','alignable','instagram','shopify','bluesky','tiktok','youtube','twitter','kofi','facebook','tumblr','patreon']; } })(),
   hiddenPlatforms: (() => { try { const s = localStorage.getItem(wsKey('postpilot_hidden_platforms')); return s ? new Set(JSON.parse(s)) : new Set(['twitter','kofi','facebook','tumblr','patreon']); } catch { return new Set(['twitter','kofi','facebook','tumblr','patreon']); } })(),
-  drafts: { pinterest: [], instagram: [], google: [], linkedin: [], shopify: [], bluesky: [], tiktok: [], youtube: [], twitter: [], kofi: [], facebook: [], tumblr: [], patreon: [] },
+  drafts: { pinterest: [], instagram: [], google: [], linkedin: [], shopify: [], bluesky: [], tiktok: [], youtube: [], twitter: [], kofi: [], alignable: [], facebook: [], tumblr: [], patreon: [] },
   showComposer: false,
   editingPostId: null,
   editingDraftId: null,   // draft currently open in the composer (so closing updates it instead of copying it)
@@ -27100,7 +27325,7 @@ let state = {
   linkedinPages: [],
   linkedinPagesStatus: 'idle',
   incomingQueue: [],
-  streaks: { pinterest: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, instagram: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, google: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, linkedin: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, shopify: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, bluesky: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, tiktok: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, youtube: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, twitter: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, kofi: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, facebook: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, tumblr: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, patreon: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null} },
+  streaks: { pinterest: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, instagram: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, google: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, linkedin: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, shopify: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, bluesky: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, tiktok: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, youtube: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, twitter: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, kofi: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, alignable: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, facebook: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, tumblr: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null}, patreon: {count:0,lastDate:'',lastMilestone:0,freezeTokens:0,trophies:0,frozenDates:[],tokenMilestonesHit:[],missedDayPending:null} },
   showIncomingModal: false,
   incomingSelection: { platforms: new Set(), format: 'png' },
   showManualUploadModal: false,
@@ -27568,7 +27793,7 @@ function STREAK_KEY() { return wsKey('postflow_streaks'); } // {platformId: {cou
 // Load/save drafts for a specific workspace without switching the active workspace.
 // Used by autoSaveItemsToDrafts to silently land incoming items in non-active accounts.
 function loadDraftsForWorkspace(wsId) {
-  const base = { pinterest: [], instagram: [], google: [], linkedin: [], shopify: [], bluesky: [], tiktok: [], youtube: [], twitter: [], kofi: [], facebook: [], tumblr: [], patreon: [] };
+  const base = { pinterest: [], instagram: [], google: [], linkedin: [], shopify: [], bluesky: [], tiktok: [], youtube: [], twitter: [], kofi: [], alignable: [], facebook: [], tumblr: [], patreon: [] };
   try {
     const raw = localStorage.getItem(wsId + '_' + _DRAFTS_STORAGE_KEY_BASE);
     if (raw) return { ...base, ...JSON.parse(raw) };
@@ -31860,6 +32085,7 @@ function renderComposerModal(platform) {
           ${state.activePlatform === 'twitter' ? renderTwitterFields(form, platform) : ''}
           ${state.activePlatform === 'facebook' ? renderFacebookFields(form, platform) : ''}
           ${state.activePlatform === 'kofi' ? renderKofiFields(form, platform) : ''}
+          ${state.activePlatform === 'alignable' ? renderAlignableFields(form, platform) : ''}
           ${state.activePlatform === 'tumblr' ? renderTumblrFields(form, platform) : ''}
           ${state.activePlatform === 'patreon' ? renderPatreonFields(form, platform) : ''}
 
@@ -33503,6 +33729,7 @@ function _pcFieldsFor(pid, src) {
   else if (pid === 'twitter') out.twitterText = cap;
   else if (pid === 'tumblr') out.tumblrText = cap;
   else if (pid === 'kofi') out.kofiText = cap;
+  else if (pid === 'alignable') out.alignableText = cap;
   else if (pid === 'patreon') out.patreonText = cap;
   if (alt) out.altText = alt;
   return out;
@@ -33514,10 +33741,10 @@ function _pcShowPlatform(pid) {
 // ── "Post ↗": copy the caption, save the image, open the platform ──
 const PP_OPEN_URLS = { instagram: 'https://www.instagram.com/', facebook: 'https://www.facebook.com/', linkedin: 'https://www.linkedin.com/feed/?shareActive=true',
   pinterest: 'https://www.pinterest.com/pin-creation-tool/', tiktok: 'https://www.tiktok.com/upload', youtube: 'https://studio.youtube.com/', google: 'https://business.google.com/',
-  twitter: 'https://x.com/compose/post', bluesky: 'https://bsky.app/', shopify: 'https://admin.shopify.com/', tumblr: 'https://www.tumblr.com/new', kofi: 'https://ko-fi.com/', patreon: 'https://www.patreon.com/' };
+  twitter: 'https://x.com/compose/post', bluesky: 'https://bsky.app/', shopify: 'https://admin.shopify.com/', tumblr: 'https://www.tumblr.com/new', alignable: 'https://www.alignable.com/', kofi: 'https://ko-fi.com/', patreon: 'https://www.patreon.com/' };
 const PP_LINK_FIELD = { instagram: 'igLink', pinterest: 'destinationUrl', google: 'ctaUrl', linkedin: 'liArticleUrl', bluesky: 'bskyUrl', shopify: 'shopifyUrl' };
 const PP_TEXT_FIELD = { pinterest: 'description', instagram: 'caption', google: 'content', linkedin: 'liText', shopify: 'shopifyText', bluesky: 'bskyText', tiktok: 'tiktokText',
-  youtube: 'ytText', facebook: 'fbText', twitter: 'twitterText', tumblr: 'tumblrText', kofi: 'kofiText', patreon: 'patreonText' };
+  youtube: 'ytText', facebook: 'fbText', twitter: 'twitterText', tumblr: 'tumblrText', kofi: 'kofiText', alignable: 'alignableText', patreon: 'patreonText' };
 function _ppPostText(post, pid) {
   let t = post[PP_TEXT_FIELD[pid]] || post.caption || post.content || post.description || '';
   if ((pid === 'instagram' || pid === 'pinterest') && post.hashtags && !/(^|\s)#\w/.test(t)) t += (t ? '\n\n' : '') + post.hashtags;
@@ -33961,7 +34188,7 @@ function _ppBatchPreview() {
   document.head.appendChild(st);
 })();
 // ── Default posting time per platform ──
-const PP_TIME_DEFAULTS = { pinterest: '20:00', instagram: '11:00', facebook: '09:00', linkedin: '08:00', google: '10:00', twitter: '12:00', bluesky: '12:00', tiktok: '19:00', youtube: '15:00', shopify: '10:00', tumblr: '19:00', kofi: '18:00', patreon: '18:00' };
+const PP_TIME_DEFAULTS = { pinterest: '20:00', instagram: '11:00', facebook: '09:00', linkedin: '08:00', alignable: '09:00', google: '10:00', twitter: '12:00', bluesky: '12:00', tiktok: '19:00', youtube: '15:00', shopify: '10:00', tumblr: '19:00', kofi: '18:00', patreon: '18:00' };
 function _ppTimesStore() { try { return JSON.parse(localStorage.getItem(wsKey('pp_default_times')) || '{}') || {}; } catch (e) { return {}; } }
 function ppDefaultTime(pid) { const t = _ppTimesStore()[pid]; return /^\d\d:\d\d$/.test(t || '') ? t : (PP_TIME_DEFAULTS[pid] || '09:00'); }
 function ppSetDefaultTime(pid, t) { if (!/^\d\d:\d\d$/.test(t || '')) return; const m = _ppTimesStore(); m[pid] = t; try { localStorage.setItem(wsKey('pp_default_times'), JSON.stringify(m)); } catch (e) {} }
@@ -34194,6 +34421,7 @@ const PP_BEST_DEFAULT = {
   shopify: [[2, '10:00'], [4, '10:00'], [6, '10:00']],
   tumblr: [[0, '19:00'], [1, '19:00'], [3, '19:00'], [5, '19:00']],
   kofi: [[0, '18:00'], [2, '18:00'], [5, '18:00']],
+  alignable: [[2, '09:00'], [3, '09:00'], [4, '09:00'], [2, '12:00'], [4, '12:00']],
   patreon: [[0, '18:00'], [2, '18:00'], [5, '18:00']],
 };
 const _PP_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -34431,7 +34659,7 @@ function _ppHolidayOf(text, nowMs) {
   for (const yy of [y - 1, y, y + 1]) { const [start, end] = h.win(yy); if (end >= today) return { id: h.id, name: h.name, start, end }; }
   return null;
 }
-function _ppAllText(p) { return [p.title, p.caption, p.content, p.description, p.liText, p.fbText, p.twitterText, p.bskyText, p.tiktokText, p.shopifyText, p.tumblrText, p.kofiText, p.patreonText, p.ytText, p.hashtags].filter(Boolean).join(' '); }
+function _ppAllText(p) { return [p.title, p.caption, p.content, p.description, p.liText, p.fbText, p.twitterText, p.bskyText, p.tiktokText, p.shopifyText, p.tumblrText, p.kofiText, p.alignableText, p.patreonText, p.ytText, p.hashtags].filter(Boolean).join(' '); }
 function _ppDraftText(d) {
   const f = d.formSnapshot || {};
   return [d.srcHeader, d.srcContent, d.srcPinTitle, d.notes, d.srcCaptions && Object.values(d.srcCaptions).join(' '), _ppAllText(f)].filter(Boolean).join(' ');
@@ -35427,7 +35655,7 @@ savePost = function (addToQueue) {
   return r;
 };
 // ── 📋 Copy beside every text field in the post editor: the whole field, in one click ──
-const PP_COPY_FIELDS = ['f-caption', 'f-content', 'f-description', 'f-title', 'f-hashtags', 'f-alttext', 'f-fb-text', 'f-li-text', 'f-twitter-text', 'f-bsky-text', 'f-tiktok-text', 'f-yt-text', 'f-shopify-text', 'f-tumblr-text', 'f-kofi-text', 'f-patreon-text', 'f-event-title', 'f-coupon', 'f-ofterms', 'f-tumblr-tags', 'f-location', 'f-board', 'f-desturl', 'f-ctaurl', 'f-fb-link', 'f-ig-link', 'f-li-url', 'f-bsky-url', 'f-shopify-url', 'f-kofi-link', 'f-redurl'];
+const PP_COPY_FIELDS = ['f-caption', 'f-content', 'f-description', 'f-title', 'f-hashtags', 'f-alttext', 'f-fb-text', 'f-li-text', 'f-twitter-text', 'f-bsky-text', 'f-tiktok-text', 'f-yt-text', 'f-shopify-text', 'f-tumblr-text', 'f-kofi-text', 'f-alignable-text', 'f-patreon-text', 'f-event-title', 'f-coupon', 'f-ofterms', 'f-tumblr-tags', 'f-location', 'f-board', 'f-desturl', 'f-ctaurl', 'f-fb-link', 'f-ig-link', 'f-li-url', 'f-bsky-url', 'f-shopify-url', 'f-kofi-link', 'f-redurl'];
 function _ppFieldLabel(el) {
   const byFor = el.id && document.querySelector(`label[for="${el.id}"]`);
   if (byFor) return byFor;
@@ -35914,7 +36142,7 @@ savePost = function (addToQueue) {
   document.head.appendChild(st);
 })();
 // ── Daily limits: each platform's spam-safe maximum (checked against platform guidance, Oct 2026) ──
-Object.assign(DAILY_LIMITS, { instagram: 3, pinterest: 10, google: 1, linkedin: 3, facebook: 2, tiktok: 4, youtube: 3, bluesky: 5, twitter: 17, tumblr: 5, kofi: 2, patreon: 2, shopify: 999 });
+Object.assign(DAILY_LIMITS, { instagram: 3, pinterest: 10, google: 1, linkedin: 3, facebook: 2, tiktok: 4, youtube: 3, bluesky: 5, twitter: 17, tumblr: 5, kofi: 2, alignable: 1, patreon: 2, shopify: 999 });
 Object.assign(DAILY_LIMIT_INFO.tiktok, { safe: '1–4', max: 4, note: 'TikTok has no official daily cap for posts you make yourself; 1–4 a day is the usual guidance. Scheduling tools are capped around 15 a day to stop spam.' });
 Object.assign(DAILY_LIMIT_INFO.youtube, { safe: '1–3', max: 3, note: "YouTube doesn't publish a daily upload limit (it varies by channel and blocks bursts as spam). Subscribers are notified about at most 3 uploads a day." });
 Object.assign(DAILY_LIMIT_INFO.bluesky, { safe: '1–5', max: 5, note: 'Bluesky has no daily post cap; its technical limits are far higher. Up to 5 a day keeps a brand account from looking spammy.' });
@@ -36317,6 +36545,105 @@ new MutationObserver(() => { if (_ppMissQ) return; _ppMissQ = requestAnimationFr
     .pp-mi-go:focus-visible, .pp-mi-ed:focus-visible, .pp-missed-note button:focus-visible, .pp-missed-undo:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }`;
   document.head.appendChild(st);
 })();
+// ── Saving: big items are only written when they have actually changed ──
+      (function _lsDedupe() {
+        try {
+          const P = Storage.prototype;
+          if (P.setItem.__dd) return;
+          const last = new Map(),
+            BIG = 20000;
+          const set0 = P.setItem,
+            get0 = P.getItem,
+            rem0 = P.removeItem,
+            clr0 = P.clear;
+          P.setItem = function (k, v) {
+            if (this === window.localStorage) {
+              const s = String(v);
+              if (s.length >= BIG) {
+                if (last.get(k) === s) return;
+                set0.call(this, k, s);
+                last.set(k, s);
+                return;
+              }
+              last.delete(k);
+            }
+            return set0.apply(this, arguments);
+          };
+          P.setItem.__dd = true;
+          P.getItem = function (k) {
+            const v = get0.call(this, k);
+            if (this === window.localStorage && v && v.length >= BIG) last.set(k, v);
+            return v;
+          };
+          P.removeItem = function (k) {
+            if (this === window.localStorage) last.delete(k);
+            return rem0.apply(this, arguments);
+          };
+          P.clear = function () {
+            if (this === window.localStorage) last.clear();
+            return clr0.apply(this, arguments);
+          };
+          window.addEventListener("storage", (e) => {
+            if (e.key) last.delete(e.key);
+            else last.clear();
+          });
+        } catch (e) {}
+      })();
+// ── Alignable ──
+// A saved platform order from before Alignable existed gets it right after LinkedIn
+function _ppAddAlignable(o) {
+  if (Array.isArray(o) && !o.includes('alignable')) { const i = o.indexOf('linkedin'); o.splice(i >= 0 ? i + 1 : o.length, 0, 'alignable'); }
+  return o;
+}
+// Make sure every brand's data has a place for Alignable
+function _ppEnsureAlignable() {
+  try {
+    ['posts', 'drafts'].forEach(k => { if (state[k] && !Array.isArray(state[k].alignable)) state[k].alignable = []; });
+    if (state.streaks && !state.streaks.alignable) state.streaks.alignable = { count: 0, lastDate: '', lastMilestone: 0, freezeTokens: 0, trophies: 0, frozenDates: [], tokenMilestonesHit: [], missedDayPending: null };
+    if (Array.isArray(state.platformOrder)) _ppAddAlignable(state.platformOrder);
+  } catch (e) {}
+}
+_ppEnsureAlignable();
+if (typeof switchWorkspace === 'function') switchWorkspace = (function (orig) { return function () { const r = orig.apply(this, arguments); _ppEnsureAlignable(); return r; }; })(switchWorkspace);
+// Alignable hides network posts with contact details or sales links
+function _ppAlignableWarn(t) {
+  t = String(t || ''); const w = [];
+  if (/https?:\/\/|www\./i.test(t)) w.push('a link');
+  if (/\b\d{3}[\s.\-)]*\d{3}[\s.\-]\d{4}\b/.test(t)) w.push('a phone number');
+  if (/[\w.+-]+@[\w-]+\.[\w.]+/.test(t)) w.push('an email');
+  return w.length ? `This post has ${w.join(' and ')}. Alignable hides network posts with contact details or sales links, so take ${w.length > 1 ? 'them' : 'it'} out.` : '';
+}
+function renderAlignableFields(form, platform) {
+  const t = form.alignableText || '', n = t.length, warn = _ppAlignableWarn(t);
+  return `
+    <div class="section-divider">Post Content</div>
+    <div class="form-group">
+      <label class="form-label">Alignable Post *</label>
+      <textarea id="f-alignable-text" placeholder="Start a discussion: share a real situation or a tip, then end with a question…"
+        oninput="updateFormField('alignableText',this.value)" style="min-height:120px">${escapeHtml(t)}</textarea>
+      <div class="char-count" id="cc-alignable" style="color:${n > 1000 ? '#ef4444' : 'var(--text-muted)'}">${n} / 1,000 recommended</div>
+      ${warn ? `<div class="pp-al-warn" role="note">⚠ ${warn}</div>` : ''}
+      <div class="pp-al-tip">Network posts reach all your Alignable connections. Keep it helpful and end with a question. Posts with phone numbers, emails, sales links or offers get hidden; offers belong on your business profile.</div>
+    </div>`;
+}
+(function _alStyles() {
+  const st = document.createElement('style');
+  st.textContent = `.pp-al-warn { margin-top: 6px; padding: 7px 10px; border-radius: 8px; border: 1px solid #f59e0b; background: rgba(245,158,11,.08); color: #fcd34d; font-size: 12px; line-height: 1.45; }
+    .pp-al-tip { margin-top: 6px; font-size: 11.5px; line-height: 1.5; color: var(--text-muted, #8b8fa8); }`;
+  document.head.appendChild(st);
+})();
+// ── Your Alignable logo (added in the Post Creator) ──
+let _ppAlIcon0 = null;
+function _ppIconApply() {
+  try {
+    if (!PLATFORMS.alignable) return;
+    if (_ppAlIcon0 === null) _ppAlIcon0 = PLATFORMS.alignable.icon;
+    const src = localStorage.getItem('pp_icon_alignable');
+    PLATFORMS.alignable.icon = src ? `<img src="${src}" alt="" width="20" height="20" style="display:block;width:20px;height:20px;border-radius:22%;object-fit:cover">` : _ppAlIcon0;
+  } catch (e) {}
+}
+_ppIconApply();
+window.addEventListener('storage', (e) => { if (e.key === 'pp_icon_alignable' || e.key === null) { _ppIconApply(); try { render(); } catch (err) {} } });
 function _draftTextFields(draft) {
   let header = draft.srcHeader, content = draft.srcContent;
   if (header == null && content == null && draft.fromBrandCreator && draft.notes && draft.notes.includes(' · ')) {
