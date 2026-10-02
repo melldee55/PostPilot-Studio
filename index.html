@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v103</span>
+              <span class="sb-version">v104</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -27245,7 +27245,7 @@ const DAILY_LIMITS = {
   // Extra platforms
   twitter:  17,
   kofi:      2,
-  alignable: 1,
+  alignable: 2,
   facebook:  2,
   tumblr:    5,
   patreon:   2,
@@ -27262,7 +27262,7 @@ const DAILY_LIMIT_INFO = {
   youtube:   { safe: '1–2',    max: 2,   note: 'YouTube maximum is 2 reels per day. 300 character limit per description.' },
   // Extra platforms
   twitter:   { safe: '3–5',    max: 17,  note: 'Twitter/X recommends 3–5 tweets/day for best engagement. API rate limits apply.' },
-  alignable: { safe: '1', max: 1, note: "Alignable doesn't publish a daily cap. Every network post lands in all your connections' feeds, and it hides repetitive or promotional posts, so 1 a day (a few a week is plenty) keeps you welcome." },
+  alignable: { safe: '1–2', max: 2, note: "Mondays, Wednesdays and Fridays only, up to 2 a day and 6 a week, so every Alignable group sees you on a steady rhythm without over-posting." },
   kofi:      { safe: '1–2',    max: 2,   note: 'Ko-fi recommends 1–2 posts/day to keep your supporters engaged without overwhelming them.' },
   facebook:  { safe: '1–2',    max: 2,   note: 'Facebook recommends 1–2 posts/day. More can reduce organic reach due to the algorithm.' },
   tumblr:    { safe: '2–5',    max: 5,   note: 'Tumblr supports up to 250 posts/day but 2–5 is best for engagement.' },
@@ -29976,7 +29976,7 @@ function calCellDrop(e, targetDate) {
   const existingOnDay = (state.posts[platId] || []).filter(
     p => p.scheduledDate === targetDate && String(p.id) !== String(postId)
   );
-  if (existingOnDay.length >= getDailyLimit(platId)) { // only a day at the platform's limit is full
+  if (existingOnDay.length >= getDailyLimit(platId) || _ppDayRule(platId, targetDate, postId)) { // a full day, or a day this platform doesn't post
     _ppDayFullDialog(platId, postId, targetDate, existingOnDay);
   } else {
     applyDragMove(postId, platId, targetDate);
@@ -34122,7 +34122,7 @@ function _ppOpenDaysInner(form) {
   if (!pl) return '';
   const busy = _ppBusyDays(pid, state.editingPostId);
   const days = [], cur = new Date(); cur.setHours(0, 0, 0, 0);
-  for (let g = 0; days.length < 6 && g < 400; g++) { const s = _ppDayStr(cur); if (!busy.get(s)) days.push(s); cur.setDate(cur.getDate() + 1); }
+  for (let g = 0; days.length < 6 && g < 400; g++) { const s = _ppDayStr(cur); if (!busy.get(s) && _ppDayOk(state.activePlatform, s)) days.push(s); cur.setDate(cur.getDate() + 1); }
   const sel = form && form.scheduledDate, n = sel ? busy.get(sel) || 0 : 0;
   return `<div class="od-row"><span class="od-label">Open days on ${escapeHtml(pl.name)}:</span>` +
     days.map(s => `<button type="button" class="od-chip${s === sel ? ' on' : ''}" onclick="ppPickOpenDay('${s}')" title="Nothing is scheduled on ${escapeHtml(pl.name)} this day">${_ppNiceDay(s)}</button>`).join('') + `</div>` +
@@ -34421,7 +34421,7 @@ const PP_BEST_DEFAULT = {
   shopify: [[2, '10:00'], [4, '10:00'], [6, '10:00']],
   tumblr: [[0, '19:00'], [1, '19:00'], [3, '19:00'], [5, '19:00']],
   kofi: [[0, '18:00'], [2, '18:00'], [5, '18:00']],
-  alignable: [[2, '09:00'], [3, '09:00'], [4, '09:00'], [2, '12:00'], [4, '12:00']],
+  alignable: [[1, '09:00'], [1, '12:00'], [3, '09:00'], [3, '12:00'], [5, '09:00'], [5, '12:00']],
   patreon: [[0, '18:00'], [2, '18:00'], [5, '18:00']],
 };
 const _PP_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -34949,7 +34949,7 @@ function _ppOpenDaysInner(form) {
   if (!pl) return '';
   const cap = ppDailyCap(pid), busy = _ppBusyDays(pid, state.editingPostId);
   const days = [], cur = new Date(); cur.setHours(0, 0, 0, 0);
-  for (let g = 0; days.length < 6 && g < 400; g++) { const s = _ppDayStr(cur); if ((busy.get(s) || 0) < cap && !_ppSkipDay(s)) days.push(s); cur.setDate(cur.getDate() + 1); }
+  for (let g = 0; days.length < 6 && g < 400; g++) { const s = _ppDayStr(cur); if ((busy.get(s) || 0) < cap && !_ppSkipDay(s) && _ppDayOk(pid, s)) days.push(s); cur.setDate(cur.getDate() + 1); }
   const sel = form && form.scheduledDate, n = sel ? busy.get(sel) || 0 : 0;
   return `<div class="od-row"><span class="od-label">Open days on ${escapeHtml(pl.name)}:</span>` +
     days.map(s => `<button type="button" class="od-chip${s === sel ? ' on' : ''}" onclick="ppPickOpenDay('${s}')" title="${cap > 1 ? (busy.get(s) || 0) + ' of ' + cap + ' posts used this day' : 'Nothing is scheduled on ' + escapeHtml(pl.name) + ' this day'}">${_ppNiceDay(s)}${cap > 1 ? ` <small class="od-cap">${busy.get(s) || 0}/${cap}</small>` : ''}</button>`).join('') + `</div>` +
@@ -36142,7 +36142,7 @@ savePost = function (addToQueue) {
   document.head.appendChild(st);
 })();
 // ── Daily limits: each platform's spam-safe maximum (checked against platform guidance, Oct 2026) ──
-Object.assign(DAILY_LIMITS, { instagram: 3, pinterest: 10, google: 1, linkedin: 3, facebook: 2, tiktok: 4, youtube: 3, bluesky: 5, twitter: 17, tumblr: 5, kofi: 2, alignable: 1, patreon: 2, shopify: 999 });
+Object.assign(DAILY_LIMITS, { instagram: 3, pinterest: 10, google: 1, linkedin: 3, facebook: 2, tiktok: 4, youtube: 3, bluesky: 5, twitter: 17, tumblr: 5, kofi: 2, alignable: 2, patreon: 2, shopify: 999 });
 Object.assign(DAILY_LIMIT_INFO.tiktok, { safe: '1–4', max: 4, note: 'TikTok has no official daily cap for posts you make yourself; 1–4 a day is the usual guidance. Scheduling tools are capped around 15 a day to stop spam.' });
 Object.assign(DAILY_LIMIT_INFO.youtube, { safe: '1–3', max: 3, note: "YouTube doesn't publish a daily upload limit (it varies by channel and blocks bursts as spam). Subscribers are notified about at most 3 uploads a day." });
 Object.assign(DAILY_LIMIT_INFO.bluesky, { safe: '1–5', max: 5, note: 'Bluesky has no daily post cap; its technical limits are far higher. Up to 5 a day keeps a brand account from looking spammy.' });
@@ -36157,20 +36157,20 @@ function _ppDayPosts(pid, date, exceptId) {
 function _ppDayFullDialog(pid, postId, date, onDay) {
   const old = document.getElementById('drag-conflict-modal');
   if (old) old.remove();
-  const pl = PLATFORMS[pid] || { name: pid }, lim = getDailyLimit(pid);
+  const pl = PLATFORMS[pid] || { name: pid }, lim = getDailyLimit(pid), _rule = _ppDayRule(pid, date, postId);
   const live = onDay.filter(p => p.publishStatus === 'published').length, sched = onDay.length - live;
   let next = null;
   for (let i = 1; i <= 90 && !next; i++) {
     const d = new Date(date + 'T12:00:00'); d.setDate(d.getDate() + i);
     const ds = _ppDayStr(d);
-    if (_ppDayPosts(pid, ds, postId).length < lim) next = ds;
+    if (_ppDayPosts(pid, ds, postId).length < lim && !_ppDayRule(pid, ds, postId)) next = ds;
   }
   const m = document.createElement('div');
   m.id = 'drag-conflict-modal';
   m.className = 'pp-full-overlay';
   m.innerHTML = `<div class="pp-full" role="alertdialog" aria-modal="true" aria-labelledby="pp-full-t" aria-describedby="pp-full-d">
-    <div class="pp-full-t" id="pp-full-t">🚫 ${escapeHtml(pl.name)} is full on ${_ppNiceDay(date)}</div>
-    <div class="pp-full-d" id="pp-full-d">${escapeHtml(pl.name)} allows ${lim} post${lim === 1 ? '' : 's'} a day to stay clear of spam filters, and ${_ppNiceDay(date)} already has ${onDay.length} (${[sched ? sched + ' scheduled' : '', live ? live + ' live' : ''].filter(Boolean).join(', ')}).</div>
+    <div class="pp-full-t" id="pp-full-t">🚫 ${_rule === 'day' ? `${escapeHtml(pl.name)} posts go out on ${_ppDayNames(pid)}` : _rule === 'week' ? `${escapeHtml(pl.name)} is full that week` : `${escapeHtml(pl.name)} is full on ${_ppNiceDay(date)}`}</div>
+    <div class="pp-full-d" id="pp-full-d">${_rule === 'day' ? `Your ${escapeHtml(pl.name)} schedule keeps posts to ${_ppDayNames(pid)}, so each group sees you on a steady rhythm.` : _rule === 'week' ? `${escapeHtml(pl.name)} takes up to ${PP_WEEK_CAP[pid]} posts a week, and the week of ${_ppNiceDay(date)} already has ${_ppWeekCount(pid, date, postId)}.` : `${escapeHtml(pl.name)} allows ${lim} post${lim === 1 ? '' : 's'} a day to stay clear of spam filters, and ${_ppNiceDay(date)} already has ${onDay.length} (${[sched ? sched + ' scheduled' : '', live ? live + ' live' : ''].filter(Boolean).join(', ')}).`}</div>
     <div class="pp-full-b">${next ? `<button type="button" class="pp-full-go" id="pp-full-next">Move to ${_ppNiceDay(next)} instead</button>` : ''}<button type="button" class="pp-full-ok" id="pp-full-ok">OK</button></div></div>`;
   document.body.appendChild(m);
   const close = () => m.remove();
@@ -36383,6 +36383,8 @@ function ppNextBestSlot(pid, postId, plan) {
   const others = (state.posts[pid] || []).filter(p => String(p.id) !== String(postId));
   const ok = (s) => {
     if (wkOff && [0, 6].includes(new Date(s.date + 'T12:00:00').getDay())) return false;
+    if (!_ppDayOk(pid, s.date)) return false;
+    if (PP_WEEK_CAP[pid]) { const wk = _ppWeekOf(s.date); if (others.filter(p => wk.includes(p.scheduledDate)).length + wk.reduce((t, d) => t + (plan.add[d] || 0), 0) >= PP_WEEK_CAP[pid]) return false; }
     if (others.filter(p => p.scheduledDate === s.date).length + (plan.add[s.date] || 0) >= lim) return false;
     return !others.some(p => p.scheduledDate === s.date && (p.scheduledTime || '') === s.time) && !plan.times.has(s.date + '|' + s.time);
   };
@@ -36644,6 +36646,171 @@ function _ppIconApply() {
 }
 _ppIconApply();
 window.addEventListener('storage', (e) => { if (e.key === 'pp_icon_alignable' || e.key === null) { _ppIconApply(); try { render(); } catch (err) {} } });
+// ── Posting days and weekly caps (Alignable: Mondays, Wednesdays and Fridays, up to 6 a week) ──
+const PP_POST_DAYS = { alignable: [1, 3, 5] };
+const PP_WEEK_CAP = { alignable: 6 };
+function _ppDayOk(pid, date) { const d = PP_POST_DAYS[pid]; return !d || d.includes(new Date(date + 'T12:00:00').getDay()); }
+function _ppWeekOf(date) {
+  const d = new Date(date + 'T12:00:00'), m = new Date(d); m.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  const out = []; for (let i = 0; i < 7; i++) { const x = new Date(m); x.setDate(m.getDate() + i); out.push(_ppDayStr(x)); } return out;
+}
+function _ppWeekCount(pid, date, exceptId) { const wk = new Set(_ppWeekOf(date)); return (state.posts[pid] || []).filter(p => wk.has(p.scheduledDate) && String(p.id) !== String(exceptId)).length; }
+function _ppDayRule(pid, date, exceptId) {
+  if (!date) return '';
+  if (!_ppDayOk(pid, date)) return 'day';
+  if (PP_WEEK_CAP[pid] && _ppWeekCount(pid, date, exceptId) >= PP_WEEK_CAP[pid]) return 'week';
+  return '';
+}
+function _ppDayNames(pid) { const n = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays']; return (PP_POST_DAYS[pid] || []).map(i => n[i]).join(', ').replace(/, ([^,]*)$/, ' and $1'); }
+// Anything placed on a day the platform doesn't post (or over its weekly cap) moves to its next good slot
+function _ppAlNormalize() {
+  let moved = 0; const now = Date.now();
+  Object.keys(PP_POST_DAYS).forEach(pid => {
+    const list = (state.posts[pid] || []).filter(p => p.scheduledDate).sort((a, b) => _ppT(b.scheduledDate, b.scheduledTime || '00:00') - _ppT(a.scheduledDate, a.scheduledTime || '00:00'));
+    list.forEach(p => {
+      if (p.publishStatus === 'published' || p.manualUpload || _ppLiveUrl(p)) return;
+      if (_ppT(p.scheduledDate, p.scheduledTime || '00:00') < now) return;
+      if (!_ppDayRule(pid, p.scheduledDate, p.id)) return;
+      const s = ppNextBestSlot(pid, p.id);
+      if (s) { p.scheduledDate = s.date; p.scheduledTime = s.time; moved++; }
+    });
+  });
+  if (moved) setTimeout(() => { try { showToast(`Moved ${moved} Alignable post${moved === 1 ? '' : 's'} onto Mondays, Wednesdays and Fridays (6 a week at most).`, 'info'); } catch (e) {} }, 0);
+  return moved;
+}
+if (typeof savePosts === 'function') savePosts = (function (orig) { return function () { try { _ppAlNormalize(); } catch (e) {} return orig.apply(this, arguments); }; })(savePosts);
+if (typeof renderDateLimitWarning === 'function') renderDateLimitWarning = (function (orig) { return function (date, pid, eid) {
+  const r = _ppDayRule(pid, date, eid), name = (PLATFORMS[pid] || {}).name || pid;
+  if (r === 'day') return `<div class="pp-al-warn" role="note">⚠ ${escapeHtml(name)} posts go out on ${_ppDayNames(pid)}. Pick one of those days.</div>`;
+  if (r === 'week') return `<div class="pp-al-warn" role="note">⚠ ${escapeHtml(name)} already has ${PP_WEEK_CAP[pid]} posts that week. Pick another week.</div>`;
+  return orig.apply(this, arguments);
+}; })(renderDateLimitWarning);
+
+// ── The Alignable group rotation: 14 groups over a 3-week cycle, Mon/Wed/Fri, 9 AM and noon ──
+const AL_TYPES = ['Expertise', 'Peer question', 'Local topic', 'Win', 'Advice', 'Referral'];
+const AL_TIMES = ['09:00', '12:00'];
+// slot: [week of the cycle, weekday (1 Mon, 3 Wed, 5 Fri), first or second post of the day]
+const AL_GROUPS = [
+  { id: 'wedding', name: 'Wedding planners', slot: [1, 1, 0], type: 'Expertise', idea: "Do you require certificates of insurance from every vendor at a venue? Share what's saved you from headaches." },
+  { id: 'advisors', name: 'Financial advisors', slot: [1, 1, 1], type: 'Peer question', idea: 'What protection planning gap do you see most often with clients?', note: 'Your strongest potential referral partners: they already talk with clients about protecting their families. Comment thoughtfully on their posts too.' },
+  { id: 'dogwalkers', name: 'Dog walkers', slot: [1, 3, 0], type: 'Peer question', idea: "What's your plan if a dog slips its leash or gets hurt on a walk?" },
+  { id: 'construction', name: 'Construction artisans', slot: [1, 5, 0], type: 'Expertise', idea: "Hiring subs for a big job? Quick rundown on licenses and workers' comp in California." },
+  { id: 'restaurants', name: 'Restaurant owners', slot: [1, 5, 1], type: 'Local topic', idea: 'How are Inland Empire restaurants handling Santa Ana wind power shutoffs this fall?' },
+  { id: 'sidehustles', name: 'Side hustles', slot: [2, 1, 0], type: 'Expertise', idea: "Running a business from home? Most homeowners policies don't cover business gear or clients." },
+  { id: 'bbo', name: 'Black business owners', slot: [2, 1, 1], type: 'Win', idea: 'Share a recent win, big or small, and the one resource that helped you get there.', note: 'Responds best to community-building posts like wins, resources and referrals, which is why it starts with a Win.' },
+  { id: 'mechanics', name: 'Auto mechanics', slot: [2, 3, 0], type: 'Peer question', idea: 'How do you protect customer cars left on your lot overnight?' },
+  { id: 'investors', name: 'Real estate investors', slot: [2, 5, 0], type: 'Expertise', idea: "Renting out a property? Why a homeowners policy usually isn't the right fit for a rental." },
+  { id: 'petsitters', name: 'Pet sitters', slot: [2, 5, 1], type: 'Advice', idea: 'How do you handle client keys and home access? Looking for best practices.' },
+  { id: 'online', name: 'Online shop owners', slot: [3, 1, 0], type: 'Peer question', idea: 'What steps have you taken to protect customer payment data?' },
+  { id: 'coffee', name: 'Coffee shop owners', slot: [3, 1, 1], type: 'Win', idea: 'What was your biggest day this fall? Celebrate it here.' },
+  { id: 'artists', name: 'Artists', slot: [3, 3, 0], type: 'Advice', idea: 'How do you protect your work in transit and at markets or shows?' },
+  { id: 'foodtrucks', name: 'Food truck owners', slot: [3, 5, 0], type: 'Local topic', idea: 'Which Inland Empire events are worth booking this season, and what do organizers require from you?' },
+];
+const AL_NETWORK_IDEA = "Your one network update this week: share the image post with a helpful takeaway and a soft invitation to connect. Alignable hides network posts with sales links or contact details, so keep links and offers on your business profile.";
+function alRotStart() { try { return (JSON.parse(localStorage.getItem(wsKey('pp_al_rotation')) || 'null') || {}).start || ''; } catch (e) { return ''; } }
+function _alMondayOf(ds) { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return _ppDayStr(d); }
+function _alNextMonday() { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7)); return _ppDayStr(d); }
+function alCycleOf(ds) { const st = alRotStart(); if (!st) return null; const w = Math.floor((new Date(ds + 'T12:00:00') - new Date(st + 'T12:00:00')) / (7 * 864e5)); if (w < 0) return null; return { cycle: Math.floor(w / 3) + 1, week: (w % 3) + 1 }; }
+function alTypeFor(g, cycle) { return AL_TYPES[(AL_TYPES.indexOf(g.type) + cycle - 1) % AL_TYPES.length]; }
+function alSeason(ds) { return ({ 10: 'Halloween events', 11: 'holiday hiring and Black Friday', 12: 'year-end planning', 1: 'new California laws taking effect' })[+ds.slice(5, 7)] || "what's happening locally this month"; }
+function alPlan(cycle) {
+  const st = alRotStart(); if (!st) return [];
+  const base = new Date(st + 'T12:00:00'), at = (wk, wd) => { const d = new Date(base); d.setDate(base.getDate() + (cycle - 1) * 21 + (wk - 1) * 7 + (wd - 1)); return _ppDayStr(d); };
+  const out = AL_GROUPS.map(g => { const date = at(g.slot[0], g.slot[1]), type = alTypeFor(g, cycle);
+    return { key: `c${cycle}:${g.id}`, kind: 'group', group: g, week: g.slot[0], date, time: AL_TIMES[g.slot[2]], type,
+      idea: cycle === 1 ? g.idea : `Write a fresh ${type.toLowerCase()} post for ${g.name.toLowerCase()}. A timely angle: ${alSeason(date)}.` }; });
+  for (let wk = 1; wk <= 3; wk++) out.push({ key: `c${cycle}:net${wk}`, kind: 'network', week: wk, date: at(wk, 3), time: AL_TIMES[1], type: 'Network update', idea: AL_NETWORK_IDEA });
+  return out.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+}
+function alPlaced(key) { return (state.posts.alignable || []).find(p => p.alSlot === key) || null; }
+function alPlaceCycle(cycle) {
+  const now = Date.now(); let n = 0, id = Date.now();
+  alPlan(cycle).forEach(s => {
+    if (alPlaced(s.key) || _ppT(s.date, s.time) <= now) return;
+    state.posts.alignable = state.posts.alignable || [];
+    state.posts.alignable.push({ ...defaultForm('alignable'), id: id++, platform: 'alignable', title: `${s.group ? s.group.name : 'Network update'} · ${s.type}`,
+      alignableText: s.idea, alSlot: s.key, alGroup: s.group ? s.group.name : 'Network update', alType: s.type, scheduledDate: s.date, scheduledTime: s.time, publishStatus: 'scheduled' });
+    n++;
+  });
+  savePosts(state.posts); render(); _alRender();
+  try { showToast(n ? `Put ${n} Alignable post${n === 1 ? '' : 's'} on the calendar for cycle ${cycle}. Each one starts with its conversation starter; make it your own before posting.` : `Cycle ${cycle} is already on the calendar.`, 'success'); } catch (e) {}
+}
+let _alView = 0;
+function alOpenRotation() { const c = alCycleOf(_ppDayStr(new Date())); _alView = c ? c.cycle : 1; _alRender(true); }
+function alCloseRotation() { const m = document.getElementById('pp-al-rot'); if (m) m.remove(); }
+function alStart(ds) { const mon = _alMondayOf(ds || _alNextMonday()); localStorage.setItem(wsKey('pp_al_rotation'), JSON.stringify({ start: mon })); _alView = 1; _alRender(); }
+function alViewCycle(c) { _alView = Math.max(1, c); _alRender(); }
+function _alRender(open) {
+  let m = document.getElementById('pp-al-rot');
+  if (!m && !open) return;
+  if (!m) { m = document.createElement('div'); m.id = 'pp-al-rot'; m.className = 'pp-full-overlay';
+    m.addEventListener('click', (e) => { if (e.target === m) alCloseRotation(); });
+    m.addEventListener('keydown', (e) => { if (e.key === 'Escape') alCloseRotation(); }); document.body.appendChild(m); }
+  const st = alRotStart(), today = _ppDayStr(new Date()), now = Date.now();
+  let body;
+  if (!st) {
+    const nm = _alNextMonday();
+    body = `<div class="pp-full-d">Your 14 Alignable groups rotate over a <b>3-week cycle</b>: Mondays, Wednesdays and Fridays at 9 AM and noon, at most 6 posts a week, with one network update each Wednesday. Every group gets one post per cycle, on the same day each time, and its post type moves along each cycle.</div>
+      <div class="pp-full-b" style="justify-content:flex-start;align-items:center"><button type="button" class="pp-full-go" onclick="alStart('${nm}')">Start on ${_ppNiceDay(nm)}</button>
+      <label style="font-size:12px;color:#8b8fa8">or another Monday: <input type="date" id="pp-al-start" value="${nm}" style="margin-left:4px"/></label>
+      <button type="button" class="pp-full-ok" onclick="alStart(document.getElementById('pp-al-start').value)">Start then</button></div>`;
+  } else {
+    const plan = alPlan(_alView), cur = alCycleOf(today);
+    const todo = plan.filter(s => !alPlaced(s.key) && _ppT(s.date, s.time) > now).length;
+    const rows = [1, 2, 3].map(wk => `<div class="pp-mi-h">Week ${wk}</div>` + plan.filter(s => s.week === wk).map(s => {
+      const placed = alPlaced(s.key), past = _ppT(s.date, s.time) <= now;
+      const status = placed ? '<span class="pp-al-st on">On the calendar</span>' : past ? '<span class="pp-al-st">Past</span>' : '<span class="pp-al-st todo">Not yet</span>';
+      return `<div class="pp-mi" style="border-left-color:${s.kind === 'network' ? '#f5a623' : '#391590'}">
+        <div class="pp-mi-t"><b>${_ppSlotLabel({ date: s.date, time: s.time })}</b> · ${s.group ? escapeHtml(s.group.name) : 'Network update'} · <span class="pp-al-type">${escapeHtml(s.type)}</span> ${status}</div>
+        <div class="pp-mi-x">${escapeHtml(s.idea)}</div>${s.group && s.group.note ? `<div class="pp-al-note">★ ${escapeHtml(s.group.note)}</div>` : ''}</div>`; }).join('')).join('');
+    body = `<div class="pp-full-d">Cycle ${_alView}${cur && cur.cycle === _alView ? ` · you're in week ${cur.week} of 3` : ''}. Mondays, Wednesdays and Fridays, up to 6 a week. Post types move along each cycle: ${AL_TYPES.join(' → ')}.</div>
+      ${rows}
+      <div class="pp-full-b">${_alView > 1 ? `<button type="button" class="pp-full-ok" onclick="alViewCycle(${_alView - 1})">‹ Cycle ${_alView - 1}</button>` : ''}<button type="button" class="pp-full-ok" onclick="alViewCycle(${_alView + 1})">Cycle ${_alView + 1} ›</button>
+        ${todo ? `<button type="button" class="pp-full-go" id="pp-al-place" onclick="alPlaceCycle(${_alView})">📅 Put cycle ${_alView} on the calendar (${todo})</button>` : ''}<button type="button" class="pp-full-ok" onclick="alCloseRotation()">Close</button></div>`;
+  }
+  m.innerHTML = `<div class="pp-full pp-missed pp-al-rot" role="dialog" aria-modal="true" aria-labelledby="pp-al-rot-t"><div class="pp-full-t" id="pp-al-rot-t" style="color:#c4b5fd">🔁 Alignable group rotation</div>${body}</div>`;
+  if (open) setTimeout(() => { const b = m.querySelector('#pp-al-place, .pp-full-go, .pp-full-ok'); if (b) b.focus(); }, 30);
+}
+// The editor's save checks the posting days and weekly cap first, whichever way the date was set
+if (typeof savePost === 'function') savePost = (function (orig) { return function () {
+  try {
+    const pid = state.activePlatform, dEl = document.getElementById('f-date');
+    const date = (dEl && dEl.value) || (state.form && state.form.scheduledDate);
+    const rule = state.showComposer ? _ppDayRule(pid, date, state.editingPostId) : '';
+    if (rule === 'day') { showToast(`${PLATFORMS[pid].name} posts go out on ${_ppDayNames(pid)}. Pick one of those days.`, 'error'); return; }
+    if (rule === 'week') { showToast(`${PLATFORMS[pid].name} already has ${PP_WEEK_CAP[pid]} posts that week. Pick another week.`, 'error'); return; }
+  } catch (e) {}
+  return orig.apply(this, arguments);
+}; })(savePost);
+// The sidebar button (when Alignable is one of your platforms)
+function _alSideButton() {
+  const card = document.querySelector('.cu-card');
+  if (!card || card.querySelector('.pp-al-rot-btn') || !_ppVisible().some(p => p.id === 'alignable')) return;
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'cu-btn pp-al-rot-btn'; b.textContent = '🔁 Alignable rotation'; b.onclick = alOpenRotation;
+  const wk = card.querySelector('.sux-dd, .cu-wk'); if (wk) card.insertBefore(b, wk); else card.appendChild(b);
+}
+let _alQ = 0;
+new MutationObserver(() => { if (_alQ) return; _alQ = requestAnimationFrame(() => { _alQ = 0; try { _alSideButton(); } catch (e) {} }); }).observe(document.documentElement, { childList: true, subtree: true });
+// In the post editor: which group and type a rotation post is for, and a warning when the wording repeats another Alignable post
+if (typeof renderAlignableFields === 'function') renderAlignableFields = (function (orig) { return function (form, platform) {
+  let html = orig.apply(this, arguments);
+  const t = (form.alignableText || '').trim();
+  const dup = t.length > 20 ? (state.posts.alignable || []).find(p => String(p.id) !== String(state.editingPostId) && (p.alignableText || '').trim() === t) : null;
+  const info = form.alGroup ? `<div class="pp-al-group">🔁 ${escapeHtml(form.alGroup)} · ${escapeHtml(form.alType || '')}</div>` : '';
+  const dupW = dup ? `<div class="pp-al-warn" role="note">⚠ Same wording as your ${escapeHtml(dup.alGroup || 'Alignable')} post on ${_ppNiceDay(dup.scheduledDate)}. Write each group's post fresh so Alignable doesn't flag it as a duplicate.</div>` : '';
+  return html.replace('<div class="section-divider">Post Content</div>', '<div class="section-divider">Post Content</div>' + info + dupW);
+}; })(renderAlignableFields);
+(function _alRotStyles() {
+  const st = document.createElement('style');
+  st.textContent = `.pp-al-rot { max-width: 640px; }
+    .pp-al-type { color: #c4b5fd; font-weight: 700; }
+    .pp-al-st { margin-left: 6px; padding: 1px 7px; border-radius: 99px; font-size: 10.5px; font-weight: 700; background: #2a2e3d; color: #8b8fa8; }
+    .pp-al-st.on { background: rgba(52,211,153,.14); color: #34d399; }
+    .pp-al-st.todo { background: rgba(245,166,35,.14); color: #f5a623; }
+    .pp-al-note { margin-top: 5px; font-size: 11.5px; color: #c4b5fd; line-height: 1.45; }
+    .pp-al-group { margin: 0 0 10px; padding: 7px 10px; border-radius: 8px; background: rgba(57,21,144,.25); border: 1px solid #391590; color: #ddd6fe; font-size: 12.5px; font-weight: 700; }`;
+  document.head.appendChild(st);
+})();
 function _draftTextFields(draft) {
   let header = draft.srcHeader, content = draft.srcContent;
   if (header == null && content == null && draft.fromBrandCreator && draft.notes && draft.notes.includes(' · ')) {
@@ -37048,6 +37215,9 @@ function savePost(addToQueue = false) {
       showToast(`Daily limit reached! Max ${dailyLimit} post${dailyLimit !== 1 ? 's' : ''}/day on ${PLATFORMS[state.activePlatform].name}.`, 'error');
       return;
     }
+    const _rule = _ppDayRule(state.activePlatform, form.scheduledDate, isNew ? null : state.editingPostId);
+    if (_rule === 'day') { showToast(`${PLATFORMS[state.activePlatform].name} posts go out on ${_ppDayNames(state.activePlatform)}. Pick one of those days.`, 'error'); return; }
+    if (_rule === 'week') { showToast(`${PLATFORMS[state.activePlatform].name} already has ${PP_WEEK_CAP[state.activePlatform]} posts that week. Pick another week.`, 'error'); return; }
   }
 
   let updated;
