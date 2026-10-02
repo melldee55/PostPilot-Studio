@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v95</span>
+              <span class="sb-version">v97</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -14781,6 +14781,171 @@ Post:
           .ux-selbar button:hover { border-color: var(--hi, #f5a623); }
           .ux-classic { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; }
           .ux-tabs button:focus-visible, .ux-new:focus-visible, .ux-coming:focus-visible, .ux-selbar button:focus-visible, .ux-filter:focus-visible { outline: 2px solid var(--hi, #f5a623); outline-offset: 2px; }`;
+        document.head.appendChild(st);
+      })();
+      // ── Batch (v96): each pin shows its photo and headline; the rest is behind "⋯ More". One platform menu,
+      // colors folded, and one Schedule button with the other ways to send beside it ──
+      const _uxPinOpen = new Set();
+      function uxPinMore(i) {
+        if (_uxPinOpen.has(i)) _uxPinOpen.delete(i);
+        else _uxPinOpen.add(i);
+        _uxBatchApply();
+      }
+      function uxBatchMenu(open) {
+        const m = document.getElementById("ux-pb-menu"),
+          b = document.getElementById("ux-pb-more");
+        if (!m || !b) return;
+        const show = open === undefined ? m.hidden : open;
+        if (show) {
+          // Offer only what the batch can do right now (the same rules as the buttons themselves)
+          m.querySelectorAll("button[data-for]").forEach((x) => {
+            const orig = document.getElementById(x.dataset.for);
+            // Only the Batch's own rules count (the tidy layout hides the original buttons itself)
+            const gone = !orig || orig.hidden || !!orig.closest("[hidden]");
+            x.hidden = !!gone;
+            x.disabled = !!(orig && orig.disabled);
+            if (orig && x.dataset.for === "pb-send") x.textContent = orig.textContent.trim();
+          });
+        }
+        m.hidden = !show;
+        b.setAttribute("aria-expanded", show ? "true" : "false");
+      }
+      function uxBatchDo(id) {
+        uxBatchMenu(false);
+        const b = document.getElementById(id);
+        if (b && !b.disabled) b.click();
+      }
+      function _uxBatchApply() {
+        if (_uxClassic()) return;
+        const ov = document.getElementById("pb-overlay");
+        if (!ov) return;
+        ov.classList.add("ux-pb");
+        // Pins
+        document.querySelectorAll("#pb-grid .pb-slot").forEach((slot, i) => {
+          const idx = slot.dataset.i != null ? +slot.dataset.i : i;
+          slot.classList.toggle("ux-open", _uxPinOpen.has(idx));
+          const top = slot.querySelector(".pb-top");
+          let mb = top && top.querySelector(".ux-pin-more");
+          if (top && !mb) {
+            mb = document.createElement("button");
+            mb.type = "button";
+            mb.className = "ux-pin-more";
+            mb.onclick = (e) => {
+              e.stopPropagation();
+              uxPinMore(idx);
+            };
+            top.appendChild(mb);
+          }
+          if (mb) {
+            const open = _uxPinOpen.has(idx);
+            mb.textContent = open ? "Less ▴" : "⋯ More";
+            mb.setAttribute("aria-expanded", open ? "true" : "false");
+            mb.setAttribute("aria-label", `${open ? "Hide" : "Show"} photo, layout, colors, pin title and more for pin ${idx + 1}`);
+          }
+        });
+        // Platform menu
+        const plats = ov.querySelector(".pb-plats");
+        if (plats) {
+          let sel = document.getElementById("ux-pb-plat");
+          const chips = [...plats.querySelectorAll("button")].filter((b) => (b.textContent || "").trim());
+          if (!sel) {
+            sel = document.createElement("select");
+            sel.id = "ux-pb-plat";
+            sel.className = "ux-filter ux-pb-plat";
+            sel.setAttribute("aria-label", "Platform for this batch");
+            sel.onchange = () => {
+              const b = [...plats.querySelectorAll("button")].find((x) => x.textContent.trim() === sel.value);
+              if (b) b.click();
+            };
+            plats.parentNode.insertBefore(sel, plats);
+          }
+          const cur = chips.find((b) => b.classList.contains("on") || b.classList.contains("active") || b.getAttribute("aria-pressed") === "true");
+          const opts = chips.map((b) => `<option ${b === cur ? "selected" : ""}>${escHtml(b.textContent.trim())}</option>`).join("");
+          if (sel.innerHTML !== opts) sel.innerHTML = opts;
+        }
+        // Colors fold
+        const col = document.getElementById("pb-colors");
+        if (col && !document.getElementById("ux-pb-colors")) {
+          const t = document.createElement("button");
+          t.type = "button";
+          t.id = "ux-pb-colors";
+          t.className = "ux-pb-colors";
+          t.setAttribute("aria-expanded", "false");
+          t.textContent = "🎨 Colors ▾";
+          t.onclick = () => {
+            const open = !col.classList.contains("ux-open");
+            col.classList.toggle("ux-open", open);
+            t.setAttribute("aria-expanded", open ? "true" : "false");
+            t.textContent = open ? "🎨 Colors ▴" : "🎨 Colors ▾";
+          };
+          col.parentNode.insertBefore(t, col);
+          const sel = document.getElementById("ux-pb-plat");
+          if (sel) sel.after(t);
+        }
+        // One Schedule button with the other ways beside it (hidden whenever Schedule itself is)
+        const sch = document.getElementById("pb-sched");
+        const split0 = document.querySelector(".ux-pb-split");
+        if (split0 && sch) split0.hidden = !!sch.hidden;
+        if (sch && !document.getElementById("ux-pb-more")) {
+          const w = document.createElement("span");
+          w.className = "ux-pb-split";
+          w.innerHTML = `<button type="button" id="ux-pb-more" class="pb-act ux-pb-more" aria-haspopup="true" aria-expanded="false" aria-label="More ways to send this batch" onclick="uxBatchMenu()">▾</button>
+            <div id="ux-pb-menu" class="ux-pb-menu" role="menu" hidden>
+              <button type="button" role="menuitem" data-for="pb-sched" onclick="uxBatchDo('pb-sched')">📅 On best days</button>
+              <button type="button" role="menuitem" data-for="pb-today" onclick="uxBatchDo('pb-today')">⚡ Today</button>
+              <button type="button" role="menuitem" data-for="pb-send" onclick="uxBatchDo('pb-send')">🗂 Send to Drafts</button>
+            </div>`;
+          sch.after(w);
+          document.addEventListener("click", (e) => {
+            if (!w.contains(e.target)) uxBatchMenu(false);
+          });
+          w.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") {
+              uxBatchMenu(false);
+              document.getElementById("ux-pb-more").focus();
+            }
+          });
+        }
+      }
+      if (typeof pbOpen === "function") {
+        const _uxPbOpen = pbOpen;
+        pbOpen = function () {
+          const r = _uxPbOpen.apply(this, arguments);
+          try {
+            _uxBatchApply();
+            const g = document.getElementById("pb-grid");
+            if (g && !g.dataset.uxObs && !_uxClassic()) {
+              g.dataset.uxObs = "1";
+              new MutationObserver(() => _uxBatchApply()).observe(g, { childList: true, subtree: false });
+              const plats = document.querySelector("#pb-overlay .pb-plats");
+              if (plats) new MutationObserver(() => _uxBatchApply()).observe(plats, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "aria-pressed"] });
+            }
+          } catch (e) {}
+          return r;
+        };
+      }
+      (function _uxBatchStyles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          body.ux .ux-pb .pb-slot:not(.ux-open) > .pb-photo, body.ux .ux-pb .pb-slot:not(.ux-open) > .pb-meta, body.ux .ux-pb .pb-slot:not(.ux-open) > .pb-acts,
+          body.ux .ux-pb .pb-slot:not(.ux-open) > input.pb-in ~ input.pb-in { display: none !important; }
+          .ux-pin-more { margin-left: auto; padding: 3px 8px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: 700 11px 'DM Sans', sans-serif; cursor: pointer; }
+          .ux-pin-more:hover { color: var(--text, #fff); border-color: var(--hi, #f5a623); }
+          body.ux .ux-pb .pb-top { display: flex; align-items: center; gap: 6px; }
+          body.ux .ux-pb .pb-plats { display: none !important; }
+          body.ux .ux-pb #pb-colors:not(.ux-open) { display: none !important; }
+          body.ux .ux-pb .ux-pb-plat { display: inline-block; width: auto !important; margin: 0 8px 10px 18px; }
+          .ux-pb-split[hidden] { display: none !important; }
+          .ux-pb-colors { display: inline-block; width: auto !important; margin: 0 0 10px; padding: 7px 11px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: inherit; font: 700 12px 'DM Sans', sans-serif; cursor: pointer; }
+          body.ux .ux-pb #pb-send, body.ux .ux-pb #pb-today { display: none !important; }
+          .ux-pb-split { position: relative; display: inline-flex; }
+          .ux-pb-more { padding-left: 10px !important; padding-right: 10px !important; margin-left: -4px; }
+          .ux-pb-menu { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 60; display: flex; flex-direction: column; min-width: 190px; padding: 6px; border-radius: 10px; background: #1c1f2b; border: 1px solid var(--border); box-shadow: 0 12px 30px rgba(0,0,0,.5); }
+          .ux-pb-menu[hidden], .ux-pb-menu button[hidden] { display: none; }
+          .ux-pb-menu button { text-align: left; padding: 9px 10px; border: none; border-radius: 7px; background: transparent; color: inherit; font: 600 12.5px 'DM Sans', sans-serif; cursor: pointer; }
+          .ux-pb-menu button:hover:not(:disabled), .ux-pb-menu button:focus-visible { background: rgba(245,166,35,.14); outline: none; }
+          .ux-pb-menu button:disabled { opacity: .45; cursor: not-allowed; }
+          .ux-pin-more:focus-visible, .ux-pb-colors:focus-visible, .ux-pb-more:focus-visible { outline: 2px solid var(--hi, #f5a623); outline-offset: 2px; }`;
         document.head.appendChild(st);
       })();
       // ══════════════════════════════════════════
@@ -35765,6 +35930,347 @@ getPostsForDate = (function (orig) { return function (date, pid) {
     .pp-full-go { padding: 8px 14px; border-radius: 8px; border: none; background: #f5a623; color: #111; font-weight: 800; cursor: pointer; }
     .pp-full-ok { padding: 8px 16px; border-radius: 8px; border: 1px solid #323648; background: #1e2230; color: #e8eaf0; cursor: pointer; }
     .pp-full-go:focus-visible, .pp-full-ok:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }`;
+  document.head.appendChild(st);
+})();
+// ── Tidy Scheduler ──
+const _suxOn = () => { try { return localStorage.getItem('pp_ux_classic') !== '1'; } catch (e) { return true; } };
+let _suxHolOpen = false, _suxMoreOpen = false, _suxAttOpen = false;
+function suxToggle(id) {
+  const m = document.getElementById(id); if (!m) return;
+  const open = m.hidden;
+  document.querySelectorAll('.sux-dd-menu').forEach(x => { x.hidden = true; const b = x.previousElementSibling; if (b) b.setAttribute('aria-expanded', 'false'); });
+  m.hidden = !open;
+  const b = m.previousElementSibling; if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) setTimeout(() => { const f = m.querySelector('button'); if (f) f.focus(); }, 20);
+}
+// What needs you: gaps coming up, days over a platform's limit, and posts past their time that aren't live
+function _suxAttention() {
+  const today = _ppDayStr(new Date()), items = [];
+  const now = new Date(), hm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  let missed = 0;
+  const over = {};
+  _ppVisible().forEach(pl => {
+    const counts = {};
+    (state.posts[pl.id] || []).forEach(p => {
+      if (!p.scheduledDate) return;
+      if (p.scheduledDate >= today) counts[p.scheduledDate] = (counts[p.scheduledDate] || 0) + 1;
+      if (p.publishStatus !== 'published' && !p.manualUpload && (p.scheduledDate < today || (p.scheduledDate === today && (p.scheduledTime || '23:59') < hm))) missed++;
+    });
+    const lim = getDailyLimit(pl.id);
+    Object.keys(counts).forEach(d => { if (counts[d] > lim) (over[d] = over[d] || []).push(`${pl.name} ${counts[d]}/${lim}`); });
+  });
+  Object.keys(over).sort().slice(0, 6).forEach(d => items.push(`<button type="button" class="sux-att-i" onclick="ppOpenDayPick('${d}')">🚦 <b>${_ppNiceDay(d)}</b>: ${escapeHtml(over[d].join(', '))} <span>Pick what stays ›</span></button>`));
+
+  return items;
+}
+function suxAttToggle() { _suxAttOpen = !_suxAttOpen; _suxApply(); }
+function suxHolToggle() { _suxHolOpen = !_suxHolOpen; _suxApply(); }
+function suxMoreToggle() { _suxMoreOpen = !_suxMoreOpen; _suxApply(); }
+const SUX_MORE_FIELD = /^f-(liveurl|tz|desturl|ctaurl|alttext|alt|location|firstcomment|first-comment|link|url|[a-z]+-(link|url))$/;
+const _suxNorm = (s) => (s || '').toLowerCase().replace(/nat'?l\b/g, 'national').replace(/int'?l\b/g, 'international').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+function _suxApply() {
+  if (!_suxOn()) return;
+  document.body.classList.add('sux');
+  // Sidebar tools: Today, ✨ Auto-schedule ▾, ⚙ Rules ▾, and ⚠ Needs attention
+  const card = document.querySelector('.cu-card');
+  if (card && !card.dataset.sux) {
+    card.dataset.sux = '1';
+    const btns = [...card.querySelectorAll('button.cu-btn')];
+    const find = (re) => btns.find(b => re.test(b.textContent || ''));
+    const today = find(/Today/);
+    const auto = [find(/Plan my week/), find(/Best fit/), find(/Redistribute/), find(/Timely ideas/)].filter(Boolean);
+    const rules = [find(/Best times/), card.querySelector('.cu-wk')].filter(Boolean);
+    const mk = (id, label, kids) => {
+      const w = document.createElement('div'); w.className = 'sux-dd';
+      w.innerHTML = `<button type="button" class="cu-btn sux-dd-btn" aria-haspopup="true" aria-expanded="false" onclick="suxToggle('${id}')">${label} <span aria-hidden="true">▾</span></button><div class="sux-dd-menu" id="${id}" hidden></div>`;
+      const m = w.querySelector('.sux-dd-menu'); kids.forEach(k => m.appendChild(k)); return w;
+    };
+    const after = today || card.firstChild;
+    const wr = mk('sux-rules', '⚙ Rules', rules), wa = mk('sux-auto', '✨ Auto-schedule', auto);
+    if (after && after.after) { after.after(wr); after.after(wa); } else { card.prepend(wr); card.prepend(wa); }
+  }
+  if (card) {
+    // ⚠ Needs attention: gaps, days over a limit, posts past their time (kept current on every redraw)
+    const extra = _suxAttention();
+    const gaps = [...card.querySelectorAll('.cu-gaps')].find(g => !g.closest('.sux-att'));
+    const missEl = [...card.querySelectorAll('.cu-missed')].find(g => !g.closest('.sux-att'));
+    let att = card.querySelector('.sux-att');
+    const gapN = gaps ? gaps.querySelectorAll('.cu-gap').length : att ? att.querySelectorAll('.cu-gap').length : 0;
+    const missN = (missEl || (att && att.querySelector('.cu-missed'))) ? 1 : 0;
+    const n = gapN + extra.length + missN;
+    if (!att && n) {
+      att = document.createElement('div'); att.className = 'sux-att';
+      att.innerHTML = `<button type="button" class="sux-att-btn" onclick="suxAttToggle()"></button><div class="sux-att-list"><div class="sux-att-extra"></div></div>`;
+      card.appendChild(att);
+    }
+    if (att) {
+      if (gaps) att.querySelector('.sux-att-list').appendChild(gaps);
+      if (missEl) att.querySelector('.sux-att-list').prepend(missEl);
+      att.hidden = !n;
+      const lbl = `⚠ Needs attention <b>${n}</b> <span aria-hidden="true">${_suxAttOpen ? '▴' : '▾'}</span>`;
+      const btn = att.querySelector('.sux-att-btn');
+      if (btn.innerHTML !== lbl) btn.innerHTML = lbl;
+      btn.setAttribute('aria-expanded', _suxAttOpen ? 'true' : 'false');
+      const list = att.querySelector('.sux-att-list');
+      if (list.hidden === _suxAttOpen) list.hidden = !_suxAttOpen;
+      const ex = att.querySelector('.sux-att-extra'), html = extra.join('');
+      if (ex.innerHTML !== html) ex.innerHTML = html;
+    }
+  }
+  // The brand box: one line with a small logo
+  const brand = [...document.querySelectorAll('.sidebar-header > div')].find(d => /cursor:\s*pointer/.test(d.getAttribute('style') || '') && /flex-direction:\s*column/.test(d.getAttribute('style') || ''));
+  if (brand && !brand.classList.contains('sux-brand')) brand.classList.add('sux-brand');
+  // Holidays: repeats on a calendar day go, and the strip under the calendar folds into "📅 Coming up"
+  const cells = new Set([...document.querySelectorAll('.cal-holiday-chip')].map(c => c.parentElement));
+  cells.forEach(cell => { const seen = new Set(); [...cell.querySelectorAll(':scope > .cal-holiday-chip')].forEach(c => { const k = _suxNorm(c.textContent); if (seen.has(k)) c.remove(); else seen.add(k); }); });
+  const hh = document.querySelector('.cal-hol-bar-hdr');
+  if (hh) {
+    const bar = hh.parentElement;
+    bar.classList.add('sux-hol'); bar.classList.toggle('sux-open', _suxHolOpen);
+    const cardsEl = bar.querySelector('.cal-hol-cards');
+    const n = cardsEl ? cardsEl.children.length : Math.max(0, bar.children.length - 1);
+    const label = `📅 Coming up <b>${n}</b> <span aria-hidden="true">${_suxHolOpen ? '▴' : '▾'}</span>`;
+    if (hh.innerHTML !== label) hh.innerHTML = label;
+    hh.setAttribute('role', 'button'); hh.tabIndex = 0; hh.setAttribute('aria-expanded', _suxHolOpen ? 'true' : 'false');
+    if (!hh.dataset.sux) { hh.dataset.sux = '1'; hh.addEventListener('click', suxHolToggle); hh.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); suxHolToggle(); } }); }
+  }
+  // The post editor: essentials first, the rest under "More options"
+  const body = document.querySelector('.modal-body');
+  if (body && state.showComposer) {
+    const more = [...body.querySelectorAll('input[id^="f-"], textarea[id^="f-"], select[id^="f-"]')].filter(f => SUX_MORE_FIELD.test(f.id)).map(f => f.closest('.form-group')).filter(Boolean);
+    more.forEach(g => { g.classList.add('sux-more-f'); g.classList.toggle('sux-show', _suxMoreOpen); });
+    let tg = body.querySelector('.sux-more-btn');
+    if (more.length) {
+      if (!tg) { tg = document.createElement('button'); tg.type = 'button'; tg.className = 'sux-more-btn'; tg.onclick = suxMoreToggle; body.appendChild(tg); }
+      const lbl = `${_suxMoreOpen ? 'Fewer options ▴' : `More options (${more.length}) ▾`}`;
+      if (tg.textContent !== lbl) tg.textContent = lbl;
+      tg.setAttribute('aria-expanded', _suxMoreOpen ? 'true' : 'false');
+    } else if (tg) tg.remove();
+  }
+}
+// Re-apply after the Scheduler redraws (it only changes what isn't tidy yet, so it settles at once)
+let _suxQ = 0;
+new MutationObserver(() => { if (_suxQ) return; _suxQ = requestAnimationFrame(() => { _suxQ = 0; try { _suxApply(); } catch (e) {} }); }).observe(document.documentElement, { childList: true, subtree: true });
+document.addEventListener('click', (e) => { if (!e.target.closest || !e.target.closest('.sux-dd')) document.querySelectorAll('.sux-dd-menu').forEach(x => { if (!x.hidden) { x.hidden = true; const b = x.previousElementSibling; if (b) b.setAttribute('aria-expanded', 'false'); } }); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.querySelectorAll('.sux-dd-menu').forEach(x => { x.hidden = true; }); });
+// Clicking an empty spot in a calendar day picks that day (what the Viewing Day picker did); posts, chips and buttons inside keep their own clicks
+document.addEventListener('click', (e) => {
+  if (!_suxOn() || !e.target.closest) return;
+  const cell = e.target.closest('[ondrop^="calCellDrop"]');
+  if (!cell) return;
+  const hit = e.target.closest('button, a, input, select, textarea, label, .cal-holiday-chip, [draggable="true"], [onclick]');
+  if (hit && cell.contains(hit) && hit !== cell) return;
+  const m = (cell.getAttribute('ondrop') || '').match(/'(\d{4})-(\d{2})-(\d{2})'/);
+  if (m && typeof updateSidebarDate === 'function') updateSidebarDate(+m[1], +m[2], +m[3]);
+});
+(function _suxStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .sux-dd { position: relative; }
+    .sux-dd-btn { width: 100%; }
+    .sux-dd-menu { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 70; display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 10px; background: #1c1f2b; border: 1px solid var(--border-light, #323648); box-shadow: 0 12px 30px rgba(0,0,0,.55); }
+    .sux-dd-menu[hidden] { display: none; }
+    .sux-dd-menu .cu-btn { width: 100%; }
+    .sux-att { margin-top: 6px; }
+    .sux-att-btn { width: 100%; text-align: left; padding: 8px 10px; border-radius: 9px; border: 1px solid #f59e0b; background: rgba(245,158,11,.08); color: #fcd34d; font: 700 12px 'DM Sans', sans-serif; cursor: pointer; }
+    .sux-att-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+    .sux-att-list[hidden] { display: none; }
+    .sux-att-i { text-align: left; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border-light, #323648); background: transparent; color: inherit; font: 500 11.5px 'DM Sans', sans-serif; line-height: 1.4; cursor: pointer; }
+    .sux-att-i span { color: #f5a623; font-weight: 700; }
+    body.sux .sidebar-date-section { display: none !important; }
+    body.sux .sux-brand { flex-direction: row !important; justify-content: flex-start !important; gap: 10px; padding: 6px 10px !important; min-height: 0 !important; }
+    body.sux .sux-brand > :first-child { width: 36px !important; height: 36px !important; min-width: 36px; min-height: 0 !important; aspect-ratio: auto !important; font-size: 18px !important; border-radius: 8px !important; overflow: hidden; }
+    body.sux .sux-brand > :first-child img { width: 100% !important; height: 100% !important; object-fit: contain; }
+    body.sux .sux-brand > :last-child { margin: 0 !important; }
+    body.sux .sux-hol:not(.sux-open) > :not(.cal-hol-bar-hdr) { display: none !important; }
+    body.sux .cal-hol-bar-hdr[role="button"] { cursor: pointer; }
+    body.sux .sux-more-f:not(.sux-show) { display: none !important; }
+    .sux-more-btn { margin-top: 6px; padding: 7px 12px; border-radius: 8px; border: 1px dashed var(--border-light, #323648); background: transparent; color: var(--text-muted, #8b8fa8); font: 700 12px 'DM Sans', sans-serif; cursor: pointer; }
+    .sux-dd-btn:focus-visible, .sux-att-btn:focus-visible, .sux-att-i:focus-visible, .sux-more-btn:focus-visible, .cal-hol-bar-hdr[role="button"]:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }`;
+  document.head.appendChild(st);
+})();
+// ── Missed posts: their time passed (an hour's grace) and they have no live link ──
+const PP_MISSED_GRACE = 60 * 60 * 1000, PP_MISSED_DAYS = 30;
+function _ppIsMissed(p, now) {
+  if (!p || !p.scheduledDate || _ppLiveUrl(p)) return false;
+  if (!(_ppT(p.scheduledDate, p.scheduledTime || '00:00') <= now - PP_MISSED_GRACE)) return false;
+  const lb = new Date(now); lb.setDate(lb.getDate() - PP_MISSED_DAYS);
+  return p.scheduledDate >= _ppDayStr(lb);
+}
+// Every missed post, oldest first; "posted" ones were marked posted (or uploaded by hand) but have no live link
+function ppMissed() {
+  const now = Date.now(), out = [];
+  _ppVisible().forEach(pl => (state.posts[pl.id] || []).forEach(p => { if (_ppIsMissed(p, now)) out.push({ pid: pl.id, p, posted: p.publishStatus === 'published' || !!p.manualUpload }); }));
+  return out.sort((a, b) => _ppT(a.p.scheduledDate, a.p.scheduledTime) - _ppT(b.p.scheduledDate, b.p.scheduledTime));
+}
+// The next best day and time for a post: the platform's best times, on a day with room under its daily limit,
+// never a time another post already has, weekends skipped if the brand keeps them clear, and at least an hour away
+function ppNextBestSlot(pid, postId, plan) {
+  plan = plan || { add: {}, times: new Set() };
+  const from = Date.now() + PP_MISSED_GRACE, lim = getDailyLimit(pid), wkOff = ppWeekendsOff();
+  const others = (state.posts[pid] || []).filter(p => String(p.id) !== String(postId));
+  const ok = (s) => {
+    if (wkOff && [0, 6].includes(new Date(s.date + 'T12:00:00').getDay())) return false;
+    if (others.filter(p => p.scheduledDate === s.date).length + (plan.add[s.date] || 0) >= lim) return false;
+    return !others.some(p => p.scheduledDate === s.date && (p.scheduledTime || '') === s.time) && !plan.times.has(s.date + '|' + s.time);
+  };
+  let s = ppSlotsFrom(pid, from, 120).find(ok);
+  for (let i = 0; i < 120 && !s; i++) {   // no best time with room: the next day with room, at the platform's usual time
+    const d = new Date(from); d.setDate(d.getDate() + i);
+    const c = { date: _ppDayStr(d), time: ppDefaultTime(pid) }; c.t = _ppT(c.date, c.time);
+    if (c.t > from && ok(c)) s = c;
+  }
+  return s || null;
+}
+// Plan several at once, so they don't land on the same slot
+function _ppPlanMissed(list) {
+  const plans = {};
+  return list.map(m => {
+    const plan = plans[m.pid] = plans[m.pid] || { add: {}, times: new Set() };
+    const slot = ppNextBestSlot(m.pid, m.p.id, plan);
+    if (slot) { plan.add[slot.date] = (plan.add[slot.date] || 0) + 1; plan.times.add(slot.date + '|' + slot.time); }
+    return { ...m, slot };
+  });
+}
+let _ppMissedUndo = null;
+function _ppMoveTo(pid, id, slot, undo) {
+  const p = (state.posts[pid] || []).find(x => String(x.id) === String(id));
+  if (!p || !slot) return false;
+  undo.push({ pid, id: p.id, date: p.scheduledDate, time: p.scheduledTime, status: p.publishStatus, from: p.rescheduledFrom });
+  p.rescheduledFrom = { date: p.scheduledDate, time: p.scheduledTime };
+  p.scheduledDate = slot.date; p.scheduledTime = slot.time; p.publishStatus = 'scheduled';
+  try { state.notifiedPostIds.delete(String(p.id)); saveNotifiedIds(); } catch (e) {}   // so you're reminded at the new time
+  return true;
+}
+function _ppMissedDone(undo, what) {
+  if (!undo.length) return;
+  savePosts(state.posts);
+  _ppMissedUndo = undo;
+  render();
+  if (document.getElementById('pp-missed')) _ppMissedRender();
+  _ppMissedToast(`${what} <button type="button" class="pp-missed-undo" onclick="ppUndoMissed()">↩ Undo</button>`);
+}
+function ppMoveMissedOne(pid, id) {
+  const m = ppMissed().find(x => x.pid === pid && String(x.p.id) === String(id));
+  if (!m) return;
+  const slot = ppNextBestSlot(pid, id), undo = [];
+  if (!_ppMoveTo(pid, id, slot, undo)) { _ppMissedToast(`No open time on ${escapeHtml((PLATFORMS[pid] || {}).name || pid)} in the next few months.`); return; }
+  // In the post editor, the open form follows (so Save keeps the new time)
+  if (state.showComposer && String(state.editingPostId) === String(id) && state.form) { state.form.scheduledDate = slot.date; state.form.scheduledTime = slot.time; state.form.publishStatus = 'scheduled'; }
+  _ppMissedDone(undo, `Moved to <b>${_ppSlotLabel(slot)}</b> on ${escapeHtml(PLATFORMS[pid].name)}.`);
+}
+function ppMoveMissedAll() {
+  const plan = _ppPlanMissed(ppMissed().filter(m => !m.posted)), undo = [];
+  plan.forEach(m => _ppMoveTo(m.pid, m.p.id, m.slot, undo));
+  _ppMissedDone(undo, `Moved ${undo.length} missed post${undo.length === 1 ? '' : 's'} to their next best times.`);
+}
+function ppUndoMissed() {
+  const u = _ppMissedUndo; if (!u) return;
+  u.forEach(x => {
+    const p = (state.posts[x.pid] || []).find(y => String(y.id) === String(x.id)); if (!p) return;
+    p.scheduledDate = x.date; p.scheduledTime = x.time; p.publishStatus = x.status;
+    if (x.from) p.rescheduledFrom = x.from; else delete p.rescheduledFrom;
+    if (state.showComposer && String(state.editingPostId) === String(x.id) && state.form) { state.form.scheduledDate = x.date; state.form.scheduledTime = x.time; state.form.publishStatus = x.status; }
+  });
+  _ppMissedUndo = null;
+  savePosts(state.posts); render();
+  if (document.getElementById('pp-missed')) _ppMissedRender();
+  _ppMissedToast('Put back where they were.');
+}
+function _ppMissedToast(html) {
+  let t = document.getElementById('pp-missed-toast');
+  if (!t) { t = document.createElement('div'); t.id = 'pp-missed-toast'; t.className = 'pp-missed-toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+  t.innerHTML = html; t.hidden = false;
+  clearTimeout(t._h); t._h = setTimeout(() => { t.hidden = true; }, 9000);
+}
+function ppMissedEdit(pid, id) {
+  ppCloseMissed();
+  try { if (typeof _suxMoreOpen !== 'undefined') _suxMoreOpen = true; } catch (e) {}
+  switchPlatform(pid); openComposer(String(id));
+}
+// ── The Missed posts dialog ──
+function ppOpenMissed() { _ppMissedRender(); }
+function ppCloseMissed() { const m = document.getElementById('pp-missed'); if (m) m.remove(); }
+function _ppMissedRender() {
+  const all = _ppPlanMissed(ppMissed());
+  let m = document.getElementById('pp-missed');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'pp-missed'; m.className = 'pp-full-overlay';
+    m.addEventListener('click', (e) => { if (e.target === m) ppCloseMissed(); });
+    m.addEventListener('keydown', (e) => { if (e.key === 'Escape') ppCloseMissed(); });
+    document.body.appendChild(m);
+  }
+  const row = (x) => {
+    const pl = PLATFORMS[x.pid], txt = ((typeof getPostSummary === 'function' ? getPostSummary(x.p) : '') || x.p.title || x.p.caption || '').slice(0, 70);
+    return `<div class="pp-mi" style="border-left-color:${pl.color}">
+      <div class="pp-mi-t"><b style="color:${pl.color}">${escapeHtml(pl.name)}</b> · was ${_ppSlotLabel({ date: x.p.scheduledDate, time: x.p.scheduledTime || '00:00' })}${x.slot ? ` <span class="pp-mi-to">→ ${_ppSlotLabel(x.slot)}</span>` : ' <span class="pp-mi-to">no open time found</span>'}</div>
+      <div class="pp-mi-x">${escapeHtml(txt) || '<i>No text yet</i>'}</div>
+      <div class="pp-mi-b">${x.slot ? `<button type="button" class="pp-mi-go" onclick="ppMoveMissedOne('${x.pid}','${x.p.id}')">↻ Move to ${_ppSlotLabel(x.slot)}</button>` : ''}<button type="button" class="pp-mi-ed" onclick="ppMissedEdit('${x.pid}','${x.p.id}')">${x.posted ? '🔗 Add its live link' : '✎ Open'}</button></div></div>`;
+  };
+  const notPosted = all.filter(x => !x.posted), posted = all.filter(x => x.posted);
+  m.innerHTML = `<div class="pp-full pp-missed" role="dialog" aria-modal="true" aria-labelledby="pp-missed-t">
+    <div class="pp-full-t" id="pp-missed-t" style="color:#fcd34d">⏰ Missed posts</div>
+    ${all.length ? `<div class="pp-full-d">These posts' times have passed and they don't have a live link yet. Move them to their next best day and time to give yourself time to post them.</div>` : `<div class="pp-full-d">Nothing missed. Every post that's due either went up or has its live link. 🎉</div>`}
+    ${notPosted.length ? `<div class="pp-mi-h">Not posted (${notPosted.length})</div>${notPosted.map(row).join('')}` : ''}
+    ${posted.length ? `<div class="pp-mi-h">Marked posted, but no live link (${posted.length})</div><div class="pp-mi-n">If it didn't go up, move it. If it did, add its live link so it shows as Live.</div>${posted.map(row).join('')}` : ''}
+    <div class="pp-full-b">${notPosted.filter(x => x.slot).length > 1 ? `<button type="button" class="pp-full-go" id="pp-missed-all" onclick="ppMoveMissedAll()">↻ Move all ${notPosted.filter(x => x.slot).length} not posted</button>` : ''}<button type="button" class="pp-full-ok" onclick="ppCloseMissed()">Close</button></div></div>`;
+  setTimeout(() => { const b = m.querySelector('#pp-missed-all, .pp-mi-go, .pp-full-ok'); if (b && !m.contains(document.activeElement)) b.focus(); }, 30);
+}
+// ── Where you see it: the sidebar, the Today list, and the post editor ──
+function _ppMissedApply() {
+  const miss = ppMissed(), n = miss.length;
+  const card = document.querySelector('.cu-card');
+  if (card) {
+    let el = card.querySelector('.cu-missed');
+    if (n) {
+      if (!el) { el = document.createElement('div'); el.className = 'cu-missed'; card.appendChild(el); }
+      const html = `<button type="button" class="cu-gap sux-att-i pp-missed-btn" onclick="ppOpenMissed()">⏰ <b>${n} missed post${n === 1 ? '' : 's'}</b> (no live link) <span>Reschedule ›</span></button>`;
+      if (el.innerHTML !== html) el.innerHTML = html;
+    } else if (el) el.remove();
+  }
+  const td = document.getElementById('td-title');
+  if (td) {
+    const head = td.closest('.modal-header');
+    let bar = document.getElementById('pp-td-missed');
+    if (n && head) {
+      const html = `⏰ <b>${n} post${n === 1 ? '' : 's'}</b> missed ${n === 1 ? 'its' : 'their'} time and ${n === 1 ? "doesn't" : "don't"} have a live link. <button type="button" onclick="ppOpenMissed()">↻ Reschedule</button>`;
+      if (!bar) { bar = document.createElement('div'); bar.id = 'pp-td-missed'; bar.className = 'pp-missed-note'; bar.setAttribute('role', 'note'); head.after(bar); }
+      if (bar.innerHTML !== html) bar.innerHTML = html;
+    } else if (bar) bar.remove();
+  }
+  const body = document.querySelector('.modal-body');
+  let note = document.getElementById('pp-ed-missed');
+  const cur = state.showComposer && state.editingPostId != null ? miss.find(x => x.pid === state.activePlatform && String(x.p.id) === String(state.editingPostId)) : null;
+  if (cur && body) {
+    const slot = ppNextBestSlot(cur.pid, cur.p.id);
+    const html = `⏰ This post's time (${_ppSlotLabel({ date: cur.p.scheduledDate, time: cur.p.scheduledTime || '00:00' })}) has passed and it has no live link. ${slot ? `<button type="button" onclick="ppMoveMissedOne('${cur.pid}','${cur.p.id}')">↻ Move to ${_ppSlotLabel(slot)}</button>` : ''} <span>Already posted? Add its Live Post URL${document.body.classList.contains('sux') ? ' (under More options)' : ''}.</span>`;
+    if (!note) { note = document.createElement('div'); note.id = 'pp-ed-missed'; note.className = 'pp-missed-note'; note.setAttribute('role', 'note'); body.prepend(note); }
+    if (note.innerHTML !== html) note.innerHTML = html;
+  } else if (note) note.remove();
+}
+let _ppMissQ = 0;
+new MutationObserver(() => { if (_ppMissQ) return; _ppMissQ = requestAnimationFrame(() => { _ppMissQ = 0; try { _ppMissedApply(); } catch (e) {} }); }).observe(document.documentElement, { childList: true, subtree: true });
+(function _missedStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .pp-missed { max-width: 560px; max-height: 86vh; overflow-y: auto; border-color: #f59e0b; }
+    .pp-mi-h { margin: 12px 0 6px; font: 800 11px 'DM Sans', sans-serif; letter-spacing: .06em; text-transform: uppercase; color: #8b8fa8; }
+    .pp-mi-n { font-size: 12px; color: #8b8fa8; margin: -2px 0 8px; }
+    .pp-mi { border: 1px solid #2e3248; border-left: 4px solid; border-radius: 9px; padding: 9px 11px; margin-bottom: 7px; background: #141823; }
+    .pp-mi-t { font-size: 12.5px; color: #c3c7d6; }
+    .pp-mi-to { color: #34d399; font-weight: 700; }
+    .pp-mi-x { font-size: 12px; color: #8b8fa8; margin: 3px 0 7px; }
+    .pp-mi-b { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pp-mi-go { padding: 6px 11px; border-radius: 7px; border: none; background: #f5a623; color: #111; font-weight: 800; font-size: 12px; cursor: pointer; }
+    .pp-mi-ed { padding: 6px 11px; border-radius: 7px; border: 1px solid #323648; background: transparent; color: #e8eaf0; font-size: 12px; cursor: pointer; }
+    .pp-missed-note { margin: 0 0 12px; padding: 9px 12px; border-radius: 9px; border: 1px solid #f59e0b; background: rgba(245,158,11,.08); color: #fcd34d; font-size: 12.5px; line-height: 1.5; }
+    .pp-missed-note button { margin: 0 6px; padding: 4px 10px; border-radius: 7px; border: none; background: #f5a623; color: #111; font-weight: 800; font-size: 12px; cursor: pointer; }
+    .pp-missed-note span { color: #c3c7d6; }
+    .pp-missed-btn span { color: #f5a623; font-weight: 700; }
+    .pp-missed-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 9500; padding: 10px 14px; border-radius: 10px; background: #1c1f2b; border: 1px solid #f5a623; color: #e8eaf0; font: 500 13px 'DM Sans', sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+    .pp-missed-toast[hidden] { display: none; }
+    .pp-missed-undo { margin-left: 8px; padding: 4px 10px; border-radius: 7px; border: 1px solid #f5a623; background: transparent; color: #f5a623; font-weight: 700; cursor: pointer; }
+    .pp-mi-go:focus-visible, .pp-mi-ed:focus-visible, .pp-missed-note button:focus-visible, .pp-missed-undo:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }`;
   document.head.appendChild(st);
 })();
 function _draftTextFields(draft) {
