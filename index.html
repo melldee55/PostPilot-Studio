@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v104</span>
+              <span class="sb-version">v105</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -36238,7 +36238,7 @@ function _suxAttention() {
 function suxAttToggle() { _suxAttOpen = !_suxAttOpen; _suxApply(); }
 function suxHolToggle() { _suxHolOpen = !_suxHolOpen; _suxApply(); }
 function suxMoreToggle() { _suxMoreOpen = !_suxMoreOpen; _suxApply(); }
-const SUX_MORE_FIELD = /^f-(liveurl|tz|desturl|ctaurl|alttext|alt|location|firstcomment|first-comment|link|url|[a-z]+-(link|url))$/;
+const SUX_MORE_FIELD = /^f-(liveurl|tz|alttext|alt|location|firstcomment|first-comment)$/; // blog links stay up front
 const _suxNorm = (s) => (s || '').toLowerCase().replace(/nat'?l\b/g, 'national').replace(/int'?l\b/g, 'international').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 function _suxApply() {
   if (!_suxOn()) return;
@@ -36809,6 +36809,36 @@ if (typeof renderAlignableFields === 'function') renderAlignableFields = (functi
     .pp-al-st.todo { background: rgba(245,166,35,.14); color: #f5a623; }
     .pp-al-note { margin-top: 5px; font-size: 11.5px; color: #c4b5fd; line-height: 1.45; }
     .pp-al-group { margin: 0 0 10px; padding: 7px 10px; border-radius: 8px; background: rgba(57,21,144,.25); border: 1px solid #391590; color: #ddd6fe; font-size: 12.5px; font-weight: 700; }`;
+  document.head.appendChild(st);
+})();
+// ── Click into a field in the post editor and its text is copied (first click only, so typing isn't disturbed) ──
+const PP_NO_COPY = /^f-(date|hour|min|tz|image)/;
+function _ppFieldCopyable(el) {
+  if (!el || !el.id || !/^f-/.test(el.id) || PP_NO_COPY.test(el.id)) return false;
+  if (el.tagName === 'TEXTAREA') return true;
+  return el.tagName === 'INPUT' && /^(text|url|search|email|)$/i.test(el.getAttribute('type') || '');
+}
+function _ppCopiedNote(el) {
+  let b = document.getElementById('pp-copied');
+  if (!b) { b = document.createElement('div'); b.id = 'pp-copied'; b.className = 'pp-copied'; b.setAttribute('role', 'status'); b.setAttribute('aria-live', 'polite'); document.body.appendChild(b); }
+  const r = el.getBoundingClientRect();
+  b.textContent = '📋 Copied';
+  b.style.left = Math.max(8, Math.round(r.right - 92)) + 'px';
+  b.style.top = Math.max(8, Math.round(r.top - 28)) + 'px';
+  b.hidden = false; clearTimeout(b._t); b._t = setTimeout(() => { b.hidden = true; }, 1400);
+}
+document.addEventListener('pointerdown', (e) => {
+  const el = e.target;
+  if (!state.showComposer || !_ppFieldCopyable(el) || !el.closest('.modal-body')) return;
+  if (document.activeElement === el) return; // already in the field: let them edit
+  const v = el.value || '';
+  if (!v.trim()) return;
+  Promise.resolve(_ppCopy(v)).then(ok => { if (ok !== false) _ppCopiedNote(el); }).catch(() => {});
+}, true);
+(function _ppCopiedStyles() {
+  const st = document.createElement('style');
+  st.textContent = `.pp-copied { position: fixed; z-index: 10050; padding: 4px 10px; border-radius: 7px; background: #16a34a; color: #fff; font: 700 12px 'DM Sans', sans-serif; box-shadow: 0 6px 18px rgba(0,0,0,.35); pointer-events: none; }
+    .pp-copied[hidden] { display: none; }`;
   document.head.appendChild(st);
 })();
 function _draftTextFields(draft) {
