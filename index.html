@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v107</span>
+              <span class="sb-version">v108</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -36163,7 +36163,7 @@ function _ppDayFullDialog(pid, postId, date, onDay) {
   for (let i = 1; i <= 90 && !next; i++) {
     const d = new Date(date + 'T12:00:00'); d.setDate(d.getDate() + i);
     const ds = _ppDayStr(d);
-    if (_ppDayPosts(pid, ds, postId).length < lim && !_ppDayRule(pid, ds, postId)) next = ds;
+    if (_ppDayPosts(pid, ds, postId).length < lim && !_ppDayRule(pid, ds, postId) && !_ppSkipDay(ds)) next = ds; // never a weekend you keep clear
   }
   const m = document.createElement('div');
   m.id = 'drag-conflict-modal';
@@ -37041,6 +37041,206 @@ new MutationObserver(() => { if (_ppQdQ) return; _ppQdQ = requestAnimationFrame(
     .pp-hdr-del { margin-left: auto; margin-right: 8px; padding: 6px 12px; border-radius: 8px; border: 1px solid #7f1d1d; background: rgba(239,68,68,.1); color: #fca5a5; font: 700 12px 'DM Sans', sans-serif; cursor: pointer; }
     .pp-hdr-del:hover { background: rgba(239,68,68,.2); }
     .pp-hdr-del:focus-visible { outline: 2px solid #fca5a5; outline-offset: 2px; }`;
+  document.head.appendChild(st);
+})();
+// ── Batch scheduling: skip days already at the platform's limit, kept-clear weekends, and days it doesn't post ──
+_ppBatchPlan = (function (orig) { return function (pid, n, startDate, spacing, time) {
+  if (!startDate || spacing === 'best' || spacing === 'open') return orig.apply(this, arguments);
+  const occ = _ppOcc(pid), lim = getDailyLimit(pid), add = {};
+  const ok = (s) => !_ppSkipDay(s) && _ppDayOk(pid, s) && ((occ.get(s) || { n: 0 }).n + (add[s] || 0) < lim);
+  const out = [], cur = new Date(startDate + 'T00:00:00'), step = { daily: 1, every2: 2, weekly: 7 }[spacing] || 1;
+  for (let i = 0; i < n; i++) {
+    for (let g = 0; g < 120 && !ok(_ppDayStr(cur)); g++) cur.setDate(cur.getDate() + 1);
+    const s = _ppDayStr(cur); out.push(s); add[s] = (add[s] || 0) + 1;
+    if (spacing === 'mwf') { do { cur.setDate(cur.getDate() + 1); } while (![1, 3, 5].includes(cur.getDay())); }
+    else cur.setDate(cur.getDate() + step);
+  }
+  return out;
+}; })(_ppBatchPlan);
+
+// ── Calendar views: Month, Week and Day, like Google Calendar ──
+const PPC_ROW = { week: 44, day: 56 }; // pixels per hour
+let _ppCalFocusDate = null, _ppCalScrollKey = '', _ppCalScrollTop = 0;
+function ppCalView() { try { const v = localStorage.getItem('pp_cal_view'); return ['month', 'week', 'day'].includes(v) ? v : 'month'; } catch (e) { return 'month'; } }
+function _ppCalFocus() { return _ppCalFocusDate || _ppDayStr(new Date()); }
+function ppSetCalView(v) {
+  if (v === ppCalView()) return;
+  if (v === 'month') { const f = new Date(_ppCalFocus() + 'T12:00:00'); state.calendarYear = f.getFullYear(); state.calendarMonth = f.getMonth(); }
+  else if (ppCalView() === 'month') { const t = new Date(); if (state.calendarYear !== t.getFullYear() || state.calendarMonth !== t.getMonth()) _ppCalFocusDate = _ppDayStr(new Date(state.calendarYear, state.calendarMonth, 1, 12)); }
+  try { localStorage.setItem('pp_cal_view', v); } catch (e) {}
+  _ppCalScrollKey = ''; render();
+}
+function ppCalZoom(dir) { const o = ['month', 'week', 'day']; ppSetCalView(o[Math.max(0, Math.min(2, o.indexOf(ppCalView()) + dir))]); }
+function ppCalStep(n) { const d = new Date(_ppCalFocus() + 'T12:00:00'); d.setDate(d.getDate() + n * (ppCalView() === 'day' ? 1 : 7)); _ppCalFocusDate = _ppDayStr(d); render(); }
+function ppCalToday() { _ppCalFocusDate = null; _ppCalScrollKey = ''; render(); }
+function ppCalOpenDay(ds) { _ppCalFocusDate = ds; ppSetCalView('day'); }
+function _ppCalDays(v) {
+  const f = new Date(_ppCalFocus() + 'T12:00:00'); if (v === 'day') return [_ppDayStr(f)];
+  const s = new Date(f); s.setDate(f.getDate() - f.getDay());
+  return Array.from({ length: 7 }, (_, i) => { const d = new Date(s); d.setDate(s.getDate() + i); return _ppDayStr(d); });
+}
+function _ppCalTitle(v) {
+  const days = _ppCalDays(v), a = new Date(days[0] + 'T12:00:00'), b = new Date(days[days.length - 1] + 'T12:00:00');
+  if (v === 'day') return a.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const mo = (d) => d.toLocaleDateString('en-US', { month: 'short' });
+  return a.getMonth() === b.getMonth() ? `${mo(a)} ${a.getDate()} – ${b.getDate()}, ${b.getFullYear()}` : `${mo(a)} ${a.getDate()} – ${mo(b)} ${b.getDate()}, ${b.getFullYear()}`;
+}
+function _ppCalPosts(ds) {
+  const out = [], only = _ppCalOnly();
+  Object.values(PLATFORMS).forEach(pl => { if (only && pl.id !== only) return; (state.posts[pl.id] || []).forEach(p => { if (p.scheduledDate === ds) out.push({ p, pl }); }); });
+  return out.sort((x, y) => (x.p.scheduledTime || '00:00').localeCompare(y.p.scheduledTime || '00:00'));
+}
+const _ppcMin = (t) => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : 0; };
+const _ppcHm = (mins) => String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0');
+const _ppcAmPm = (t) => { const m = _ppcMin(t), h = Math.floor(m / 60), mm = m % 60; return (h % 12 || 12) + (mm ? ':' + String(mm).padStart(2, '0') : '') + (h < 12 ? 'am' : 'pm'); };
+// Posts at overlapping times sit side by side
+function _ppCalLanes(items) {
+  const DUR = 45; let lanes = [], cluster = [], end = -1;
+  const flush = () => { const n = cluster.reduce((m, c) => Math.max(m, c.lane + 1), 1); cluster.forEach(c => { c.of = n; }); cluster = []; lanes = []; end = -1; };
+  items.forEach(it => {
+    const s = _ppcMin(it.p.scheduledTime); if (s >= end) flush();
+    let lane = lanes.findIndex(e => e <= s); if (lane < 0) { lane = lanes.length; lanes.push(0); }
+    lanes[lane] = s + DUR; it.lane = lane; it.start = s; cluster.push(it); end = Math.max(end, s + DUR);
+  });
+  flush(); return items;
+}
+function _ppCalTimeGrid(v) {
+  const days = _ppCalDays(v), H = PPC_ROW[v], today = _ppDayStr(new Date()), now = new Date();
+  const head = days.map(ds => { const d = new Date(ds + 'T12:00:00');
+    return `<div class="ppc-dh${ds === today ? ' today' : ''}"${v === 'week' ? ` role="button" tabindex="0" onclick="ppCalOpenDay('${ds}')" title="Open this day"` : ''}><span>${d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}</span><b>${d.getDate()}</b></div>`; }).join('');
+  const allday = days.map(ds => `<div class="ppc-ad">${(getHolidaysForDate(ds) || []).map(h => `<div class="cal-holiday-chip cat-${h.cat}" title="${escapeHtml(h.label)}">${escapeHtml(h.label)}</div>`).join('')}</div>`).join('');
+  const hours = Array.from({ length: 24 }, (_, h) => `<div class="ppc-hr" style="height:${H}px"><span>${h === 0 ? '' : (h % 12 || 12) + (h < 12 ? ' AM' : ' PM')}</span></div>`).join('');
+  const cols = days.map(ds => {
+    const blocks = _ppCalLanes(_ppCalPosts(ds).map(x => ({ ...x }))).map(it => {
+      const p = it.p, pl = it.pl, w = 100 / it.of, live = p.publishStatus === 'published';
+      const title = escapeHtml(String(p.title || p.alignableText || p.caption || p.description || 'Post').replace(/\s+/g, ' ').slice(0, v === 'day' ? 160 : 70));
+      return `<div class="ppc-ev${live ? ' live' : ''}" draggable="true" data-post-id="${p.id}" data-plat-id="${pl.id}" data-src-date="${ds}" ondragstart="ppCalDragStart(event)" onclick="calChipClick(event,'${p.id}','${pl.id}')"
+        style="top:${it.start / 60 * H}px;height:${Math.max(26, Math.round(H * 0.8))}px;left:calc(${it.lane * w}% + 2px);width:calc(${w}% - 4px);border-left-color:${pl.color};background:${pl.color}2e" title="${escapeHtml(pl.name)} · ${_ppcAmPm(p.scheduledTime)}${live ? ' · live' : ''}">
+        <span class="ppc-ev-t" style="color:${pl.color}">${pl.icon.replace('width="20" height="20"', 'width="10" height="10"')} ${_ppcAmPm(p.scheduledTime)}${v === 'day' ? ' · ' + escapeHtml(pl.name) : ''}</span><span class="ppc-ev-x">${live ? '✓ ' : ''}${title}</span>
+        <button type="button" class="pp-chip-del ppc-del" title="Delete this post (you can undo)" aria-label="Delete this post" onclick="event.stopPropagation();ppQuickDelete('${pl.id}','${p.id}')">✕</button></div>`; }).join('');
+    const nowLine = ds === today ? `<div class="ppc-now" style="top:${(now.getHours() * 60 + now.getMinutes()) / 60 * H}px"></div>` : '';
+    return `<div class="ppc-col${ds === today ? ' today' : ''}${_ppSkipDay(ds) ? ' off' : ''}" data-date="${ds}" ondragover="event.preventDefault()" ondrop="ppCalDropAt(event,'${ds}')" onclick="ppCalSlotClick(event,'${ds}')" style="height:${24 * H}px">${blocks}${nowLine}</div>`;
+  }).join('');
+  return `<div class="ppc ${v}" style="--ppc-days:${days.length};--h:${H}px">
+    <div class="ppc-head"><div class="ppc-gut"></div>${head}</div>
+    <div class="ppc-head ppc-adrow"><div class="ppc-gut ppc-adl">all day</div>${allday}</div>
+    <div class="ppc-scroll" id="ppc-scroll"><div class="ppc-body"><div class="ppc-gut">${hours}</div>${cols}</div></div></div>`;
+}
+function ppCalOpenPost(pid, id) { state.activePlatform = pid; openComposer(String(id)); } // stays on the calendar
+// Clicking a post on the calendar opens it over the calendar; closing it brings you back to the calendar.
+// (Everything else a click does stays the same; only the jump to the post list is skipped.)
+if (typeof calChipClick === 'function') calChipClick = (function (orig) { return function () {
+  if (state.activeView !== 'calendar') return orig.apply(this, arguments);
+  const sv = switchView, sp = switchPlatform;
+  switchView = function (v) { if (v === 'scheduled') return; return sv.apply(this, arguments); };
+  switchPlatform = function (id) { state.activePlatform = id; };
+  try { return orig.apply(this, arguments); } finally { switchView = sv; switchPlatform = sp; }
+}; })(calChipClick);
+// A click on an empty slot starts a post at that time
+function ppCalSlotClick(e, ds) {
+  if (e.target !== e.currentTarget) return;
+  const H = PPC_ROW[ppCalView()] || 44, mins = Math.max(0, Math.min(23 * 60 + 45, Math.round(e.offsetY / H * 4) * 15));
+  if (_ppCalOnly()) state.activePlatform = _ppCalOnly(); // pick the platform without leaving the calendar
+  openComposer();
+  if (state.form) { state.form.scheduledDate = ds; state.form.scheduledTime = _ppcHm(mins); render(); }
+}
+function ppCalDragStart(e) {
+  const el = e.currentTarget;
+  e.dataTransfer.setData('text/plain', JSON.stringify({ postId: el.dataset.postId, platId: el.dataset.platId, srcDate: el.dataset.srcDate }));
+  e.dataTransfer.effectAllowed = 'move';
+}
+// Drop on a day and time: the day move follows every rule (limits, posting days); then the time is set
+function ppCalDropAt(e, ds) {
+  e.preventDefault();
+  let d; try { d = JSON.parse(e.dataTransfer.getData('text/plain')); } catch (x) { return; }
+  if (!d || !d.postId || !d.platId) return;
+  const H = PPC_ROW[ppCalView()] || 44, y = e.clientY - e.currentTarget.getBoundingClientRect().top;
+  const hm = _ppcHm(Math.max(0, Math.min(23 * 60 + 45, Math.round(y / H * 4) * 15)));
+  if (d.srcDate !== ds) calCellDrop(e, ds);
+  const list = state.posts[d.platId] || [], p = list.find(x => String(x.id) === String(d.postId));
+  if (p && p.scheduledDate === ds && p.scheduledTime !== hm) {
+    state.posts = { ...state.posts, [d.platId]: list.map(x => x === p ? { ...x, scheduledTime: hm } : x) };
+    savePosts(state.posts); render();
+  }
+}
+// After each redraw: the view switcher in the header, and the Week or Day grid in place of the month
+function _ppCalViewApply() {
+  const wrap = document.getElementById('cal-wrap'), nav = document.getElementById('cal-nav');
+  const btns = nav && nav.querySelector('.cal-nav-btns'); if (!wrap || !btns) return;
+  const v = ppCalView();
+  if (!nav.querySelector('.ppc-switch')) btns.insertAdjacentHTML('beforebegin', `<div class="ppc-switch" role="group" aria-label="Calendar view"><button type="button" class="ppc-z" onclick="ppCalZoom(-1)" title="Zoom out (toward Month)" aria-label="Zoom out">−</button>${['day', 'week', 'month'].map(x => `<button type="button" data-v="${x}" onclick="ppSetCalView('${x}')">${x[0].toUpperCase() + x.slice(1)}</button>`).join('')}<button type="button" class="ppc-z" onclick="ppCalZoom(1)" title="Zoom in (toward Day)" aria-label="Zoom in">+</button></div>`);
+  nav.querySelectorAll('.ppc-switch button[data-v]').forEach(b => { const on = b.dataset.v === v; if (b.classList.contains('on') !== on) b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+  if (wrap.classList.contains('ppc-mode') !== (v !== 'month')) wrap.classList.toggle('ppc-mode', v !== 'month');
+  if (v === 'month') return;
+  const h2 = nav.querySelector('h2'), title = _ppCalTitle(v) + (_ppCalOnly() ? ' · ' + PLATFORMS[_ppCalOnly()].name + ' only' : '');
+  if (h2 && h2.textContent !== title) h2.textContent = title;
+  if (!btns.dataset.ppc) {
+    btns.dataset.ppc = '1';
+    const t = btns.querySelector('.cal-today-btn'), nb = btns.querySelectorAll('.cal-nav-btn');
+    if (t) t.setAttribute('onclick', 'ppCalToday()');
+    if (nb[0]) { nb[0].setAttribute('onclick', 'ppCalStep(-1)'); nb[0].title = v === 'day' ? 'Previous day' : 'Previous week'; }
+    if (nb[1]) { nb[1].setAttribute('onclick', 'ppCalStep(1)'); nb[1].title = v === 'day' ? 'Next day' : 'Next week'; }
+  }
+  const gw = document.getElementById('cal-grid-wrap'); if (!gw) return;
+  const key = v + '|' + _ppCalFocus() + '|' + (_ppCalOnly() || '') + '|' + _ppCalDays(v).map(ds => _ppCalPosts(ds).map(x => x.p.id + '@' + x.p.scheduledTime + x.p.publishStatus).join()).join('/');
+  let g = gw.querySelector('.ppc-grid');
+  if (g && g.dataset.key === key) return;
+  if (!g) { g = document.createElement('div'); g.className = 'ppc-grid'; gw.appendChild(g); }
+  g.innerHTML = _ppCalTimeGrid(v); g.dataset.key = key;
+  const sc = g.querySelector('#ppc-scroll'), sk = v + '|' + _ppCalFocus();
+  if (sc) { sc.scrollTop = _ppCalScrollKey === sk ? _ppCalScrollTop : 7 * PPC_ROW[v] - 12; _ppCalScrollKey = sk; _ppCalScrollTop = sc.scrollTop; sc.addEventListener('scroll', () => { _ppCalScrollTop = sc.scrollTop; }); }
+}
+let _ppCalQ = 0;
+new MutationObserver(() => { if (_ppCalQ) return; _ppCalQ = requestAnimationFrame(() => { _ppCalQ = 0; try { _ppCalViewApply(); } catch (e) {} }); }).observe(document.documentElement, { childList: true, subtree: true });
+// Google Calendar keys: D, W, M for the view, + and - to zoom, T for today
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey || !document.getElementById('cal-wrap') || state.showComposer) return;
+  const t = e.target; if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+  const k = e.key.toLowerCase();
+  if (k === 'd') ppSetCalView('day'); else if (k === 'w') ppSetCalView('week'); else if (k === 'm') ppSetCalView('month');
+  else if (k === '+' || k === '=') ppCalZoom(1); else if (k === '-') ppCalZoom(-1);
+  else if (k === 't' && ppCalView() !== 'month') ppCalToday(); else return;
+  e.preventDefault();
+});
+(function _ppCalStyles() {
+  const st = document.createElement('style');
+  st.textContent = `#cal-wrap.ppc-mode #cal-dow-row, #cal-wrap.ppc-mode #cal-cells { display: none !important; }
+    .ppc-switch { display: inline-flex; align-items: center; border: 1px solid var(--border-light, #323648); border-radius: 9px; overflow: hidden; }
+    .ppc-switch button { padding: 6px 12px; border: none; background: transparent; color: var(--text-muted, #8b8fa8); font: 700 12px 'DM Sans', sans-serif; cursor: pointer; }
+    .ppc-switch button:hover { color: var(--text, #e8eaf0); }
+    .ppc-switch button.on { background: #1a73e8; color: #fff; }
+    .ppc-switch .ppc-z { font-size: 15px; padding: 3px 10px; }
+    .ppc-switch button:focus-visible { outline: 2px solid #8ab4f8; outline-offset: -2px; }
+    .ppc { border: 1px solid var(--border, #2a2e3d); border-radius: 12px; overflow: hidden; background: var(--bg-card, #12141c); }
+    .ppc-head, .ppc-body { display: grid; grid-template-columns: 56px repeat(var(--ppc-days), minmax(0, 1fr)); }
+    .ppc-head { border-bottom: 1px solid var(--border, #2a2e3d); }
+    .ppc-dh { text-align: center; padding: 8px 0 6px; }
+    .ppc.week .ppc-dh { cursor: pointer; }
+    .ppc-dh span { display: block; font: 700 10.5px 'DM Sans', sans-serif; letter-spacing: .06em; color: var(--text-muted, #8b8fa8); }
+    .ppc-dh b { display: inline-grid; place-items: center; width: 36px; height: 36px; margin-top: 2px; border-radius: 50%; font: 500 20px 'DM Sans', sans-serif; color: var(--text, #e8eaf0); }
+    .ppc.week .ppc-dh:hover b { background: rgba(255,255,255,.08); }
+    .ppc-dh.today span { color: #8ab4f8; }
+    .ppc-dh.today b, .ppc.week .ppc-dh.today:hover b { background: #1a73e8; color: #fff; }
+    .ppc-dh:focus-visible { outline: 2px solid #8ab4f8; outline-offset: -2px; }
+    .ppc-adrow { min-height: 26px; }
+    .ppc-ad { display: flex; flex-direction: column; gap: 2px; padding: 3px; border-left: 1px solid var(--border, #2a2e3d); min-width: 0; }
+    .ppc-ad .cal-holiday-chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ppc-adl { display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; font-size: 10px; color: var(--text-muted, #8b8fa8); }
+    .ppc-scroll { max-height: 64vh; overflow-y: auto; }
+    .ppc-hr { position: relative; }
+    .ppc-hr span { position: absolute; top: -7px; right: 8px; font-size: 10px; color: var(--text-muted, #8b8fa8); white-space: nowrap; }
+    .ppc-col { position: relative; border-left: 1px solid var(--border, #2a2e3d); background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--h) - 1px), var(--border, #2a2e3d) calc(var(--h) - 1px), var(--border, #2a2e3d) var(--h)); cursor: cell; }
+    .ppc-col.off { background-color: rgba(255,255,255,.025); }
+    .ppc-ev { position: absolute; box-sizing: border-box; padding: 3px 6px; border-left: 3px solid; border-radius: 6px; overflow: hidden; cursor: pointer; font: 600 11px/1.3 'DM Sans', sans-serif; color: var(--text, #e8eaf0); }
+    .ppc-ev:hover { z-index: 3; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+    .ppc-ev.live { opacity: .8; }
+    .ppc-ev-t { display: flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 800; }
+    .ppc-ev-x { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ppc.day .ppc-ev-x { white-space: normal; }
+    .ppc-ev .ppc-del { top: 12px; }
+    .ppc-ev:hover .pp-chip-del { opacity: 1; }
+    .ppc-now { position: absolute; left: 0; right: 0; height: 2px; background: #ea4335; z-index: 4; pointer-events: none; }
+    .ppc-now::before { content: ''; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: #ea4335; }`;
   document.head.appendChild(st);
 })();
 function _draftTextFields(draft) {
