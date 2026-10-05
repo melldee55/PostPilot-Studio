@@ -3347,7 +3347,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v105</span>
+              <span class="sb-version">v107</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -32123,7 +32123,7 @@ function renderComposerModal(platform) {
                     <button onclick="confirmDeleteFromComposer()" style="padding:6px 12px;border-radius:var(--radius-sm);border:none;background:#ef4444;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Yes, delete</button>
                     <button onclick="state.deleteConfirmInComposer=false;render()" style="padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-light);background:var(--bg-elevated);color:var(--text-secondary);font-size:12px;cursor:pointer;font-family:inherit">Keep it</button>
                   </span>`
-                : `<button onclick="state.deleteConfirmInComposer=true;render()" style="padding:6px 12px;border-radius:var(--radius-sm);border:1px solid #7f1d1d;background:rgba(239,68,68,0.08);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s" onmouseenter="this.style.background='rgba(239,68,68,0.18)'" onmouseleave="this.style.background='rgba(239,68,68,0.08)'">🗑 Delete Post</button>`
+                : `<button onclick="ppComposerDelete()" style="padding:6px 12px;border-radius:var(--radius-sm);border:1px solid #7f1d1d;background:rgba(239,68,68,0.08);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s" onmouseenter="this.style.background='rgba(239,68,68,0.18)'" onmouseleave="this.style.background='rgba(239,68,68,0.08)'">🗑 Delete Post</button>`
               }` : ''}
           </div>
           <div style="display:flex;gap:10px;align-items:center">
@@ -36265,10 +36265,10 @@ function _suxApply() {
     // ⚠ Needs attention: gaps, days over a limit, posts past their time (kept current on every redraw)
     const extra = _suxAttention();
     const gaps = [...card.querySelectorAll('.cu-gaps')].find(g => !g.closest('.sux-att'));
-    const missEl = [...card.querySelectorAll('.cu-missed')].find(g => !g.closest('.sux-att'));
+    const missEls = [...card.querySelectorAll('.cu-missed, .cu-dups')].filter(g => !g.closest('.sux-att'));
     let att = card.querySelector('.sux-att');
     const gapN = gaps ? gaps.querySelectorAll('.cu-gap').length : att ? att.querySelectorAll('.cu-gap').length : 0;
-    const missN = (missEl || (att && att.querySelector('.cu-missed'))) ? 1 : 0;
+    const missN = card.querySelectorAll('.cu-missed, .cu-dups').length;
     const n = gapN + extra.length + missN;
     if (!att && n) {
       att = document.createElement('div'); att.className = 'sux-att';
@@ -36277,7 +36277,7 @@ function _suxApply() {
     }
     if (att) {
       if (gaps) att.querySelector('.sux-att-list').appendChild(gaps);
-      if (missEl) att.querySelector('.sux-att-list').prepend(missEl);
+      missEls.reverse().forEach(el => att.querySelector('.sux-att-list').prepend(el));
       att.hidden = !n;
       const lbl = `⚠ Needs attention <b>${n}</b> <span aria-hidden="true">${_suxAttOpen ? '▴' : '▾'}</span>`;
       const btn = att.querySelector('.sux-att-btn');
@@ -36839,6 +36839,208 @@ document.addEventListener('pointerdown', (e) => {
   const st = document.createElement('style');
   st.textContent = `.pp-copied { position: fixed; z-index: 10050; padding: 4px 10px; border-radius: 7px; background: #16a34a; color: #fff; font: 700 12px 'DM Sans', sans-serif; box-shadow: 0 6px 18px rgba(0,0,0,.35); pointer-events: none; }
     .pp-copied[hidden] { display: none; }`;
+  document.head.appendChild(st);
+})();
+// ── Duplicate sweep: the same post on a platform more than once, word for word ──
+const _ppNormText = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+function _ppDupKey(kind, item) {
+  if (kind === 'post') return _ppNormText(_ppAllText(item));
+  const snap = _ppNormText(_ppAllText(item.formSnapshot || {}));
+  return snap || _ppNormText(_ppDraftText(item));
+}
+function _ppIsPosted(p) { return p.publishStatus === 'published' || !!p.manualUpload || !!_ppLiveUrl(p); }
+// How well a copy fits the schedule; the best fit is the copy that stays
+function _ppFit(pid, kind, p) {
+  if (kind === 'draft') return { score: 0, why: 'a draft, not scheduled' };
+  if (_ppIsPosted(p)) return { score: 1000, why: 'already posted (always kept)' };
+  if (!p.scheduledDate) return { score: 5, why: 'no date' };
+  let score = 100; const why = [];
+  const wd = new Date(p.scheduledDate + 'T12:00:00').getDay(), tm = p.scheduledTime || '';
+  if (_ppT(p.scheduledDate, tm || '00:00') < Date.now()) { score -= 60; why.push('its time has passed'); }
+  const best = ppBestSlots(pid);
+  if (best.some(([d, t]) => d === wd && t === tm)) { score += 40; why.push('a best day and time'); }
+  else if (best.some(([d]) => d === wd)) { score += 15; why.push('a best day, but not a best time'); }
+  else why.push('not one of the best days');
+  if (typeof _ppDayOk === 'function' && !_ppDayOk(pid, p.scheduledDate)) { score -= 50; why.push(`not a ${PLATFORMS[pid].name} posting day`); }
+  if ((state.posts[pid] || []).filter(x => x.scheduledDate === p.scheduledDate).length > getDailyLimit(pid)) { score -= 25; why.push('its day is over the limit'); }
+  if (ppWeekendsOff() && (wd === 0 || wd === 6)) { score -= 20; why.push('a weekend you keep clear'); }
+  return { score, why: why.join(', ') };
+}
+const _ppDupId = (x) => x.kind + ':' + x.item.id;
+const _ppAge = (x) => Number(x.item.uploadedAt) || Number(x.item.id) || 0;
+function ppFindDupes() {
+  const groups = [];
+  const pids = new Set([...Object.keys(state.posts || {}), ...Object.keys(state.drafts || {})]);
+  pids.forEach(pid => {
+    if (!PLATFORMS[pid]) return;
+    const by = new Map();
+    [['post', state.posts[pid] || []], ['draft', state.drafts[pid] || []]].forEach(([kind, list]) => list.forEach(item => {
+      const key = _ppDupKey(kind, item);
+      if (key.length < 12) return; // too little text to call it a duplicate
+      if (!by.has(key)) by.set(key, []);
+      by.get(key).push({ pid, kind, item, ...(_ppFit(pid, kind, item)) });
+    }));
+    by.forEach((items, key) => {
+      if (items.length < 2) return;
+      items.sort((a, b) => b.score - a.score || _ppAge(a) - _ppAge(b)); // best fit first; on a tie, the original
+      if (items.slice(1).some(x => !(x.kind === 'post' && _ppIsPosted(x.item)))) groups.push({ key: pid + '|' + key, pid, items, keep: items[0] });
+    });
+  });
+  return groups;
+}
+let _ppDupUndo = null, _ppDupChoice = {};
+function _ppDupLabel(x) {
+  if (x.kind === 'draft') return 'Draft';
+  return x.item.scheduledDate ? _ppSlotLabel({ date: x.item.scheduledDate, time: x.item.scheduledTime || '00:00' }) : 'No date';
+}
+function ppRemoveDupes() {
+  const removed = [];
+  ppFindDupes().forEach(g => {
+    const keep = _ppDupChoice[g.key] || _ppDupId(g.keep);
+    g.items.forEach(x => {
+      if (_ppDupId(x) === keep || (x.kind === 'post' && _ppIsPosted(x.item))) return;
+      const list = x.kind === 'post' ? state.posts[x.pid] : state.drafts[x.pid];
+      const i = list.indexOf(x.item); if (i < 0) return;
+      list.splice(i, 1); removed.push({ pid: x.pid, kind: x.kind, index: i, item: x.item });
+    });
+  });
+  if (!removed.length) return 0;
+  savePosts(state.posts); saveDrafts(state.drafts);
+  _ppDupUndo = removed; _ppDupChoice = {};
+  render(); if (document.getElementById('pp-dups')) _ppDupRender();
+  _ppMissedToast(`Removed ${removed.length} duplicate${removed.length === 1 ? '' : 's'}. <button type="button" class="pp-missed-undo" onclick="ppUndoDupes()">↩ Undo</button>`);
+  return removed.length;
+}
+function ppUndoDupes() {
+  const u = _ppDupUndo; if (!u) return;
+  u.slice().reverse().forEach(r => { const list = r.kind === 'post' ? (state.posts[r.pid] = state.posts[r.pid] || []) : (state.drafts[r.pid] = state.drafts[r.pid] || []); list.splice(Math.min(r.index, list.length), 0, r.item); });
+  _ppDupUndo = null; savePosts(state.posts); saveDrafts(state.drafts); render();
+  if (document.getElementById('pp-dups')) _ppDupRender();
+  _ppMissedToast('Put them back.');
+}
+function ppDupPick(key, id) { _ppDupChoice[key] = id; _ppDupRender(); }
+function ppOpenDupes() { _ppDupChoice = {}; _ppDupRender(true); }
+function ppCloseDupes() { const m = document.getElementById('pp-dups'); if (m) m.remove(); }
+function _ppDupRender(open) {
+  let m = document.getElementById('pp-dups');
+  if (!m && !open) return;
+  if (!m) { m = document.createElement('div'); m.id = 'pp-dups'; m.className = 'pp-full-overlay';
+    m.addEventListener('click', (e) => { if (e.target === m) ppCloseDupes(); });
+    m.addEventListener('keydown', (e) => { if (e.key === 'Escape') ppCloseDupes(); }); document.body.appendChild(m); }
+  const groups = ppFindDupes(); let n = 0;
+  const html = groups.map(g => {
+    const pl = PLATFORMS[g.pid], keep = _ppDupChoice[g.key] || _ppDupId(g.keep);
+    const txt = ((g.keep.kind === 'post' ? (g.keep.item.title || g.keep.item.caption || g.keep.item.description) : (g.keep.item.srcHeader || g.keep.item.notes)) || _ppDupKey(g.keep.kind, g.keep.item)).slice(0, 70);
+    const rows = g.items.map(x => {
+      const posted = x.kind === 'post' && _ppIsPosted(x.item), id = _ppDupId(x), stays = id === keep || posted;
+      if (!stays) n++;
+      return `<label class="pp-dup-row${stays ? ' keep' : ''}"><input type="radio" name="dup-${escapeHtml(g.key).slice(0, 60)}" ${id === keep ? 'checked' : ''} ${posted ? 'disabled' : ''} onchange="ppDupPick(${JSON.stringify(g.key).replace(/"/g, '&quot;')}, '${id}')"/>
+        <span><b>${stays ? 'Stays' : 'Removed'}</b> · ${_ppDupLabel(x)} · ${escapeHtml(x.why)}</span></label>`;
+    }).join('');
+    return `<div class="pp-mi" style="border-left-color:${pl.color}"><div class="pp-mi-t"><b style="color:${pl.color}">${escapeHtml(pl.name)}</b> · "${escapeHtml(txt)}" · ${g.items.length} copies</div>${rows}</div>`;
+  }).join('');
+  m.innerHTML = `<div class="pp-full pp-missed" role="dialog" aria-modal="true" aria-labelledby="pp-dups-t">
+    <div class="pp-full-t" id="pp-dups-t" style="color:#fcd34d">🧹 Duplicate posts</div>
+    ${groups.length ? `<div class="pp-full-d">These posts are on the same platform more than once, word for word. The copy that best fits your schedule stays (best day and time, a posting day, room under the daily limit). Posted copies always stay. Pick a different copy to keep if you like.</div>${html}` : `<div class="pp-full-d">No duplicates. Every post on each platform is one of a kind. 🎉</div>`}
+    <div class="pp-full-b">${n ? `<button type="button" class="pp-full-go" id="pp-dups-go" onclick="ppRemoveDupes()">🧹 Remove ${n} duplicate${n === 1 ? '' : 's'}</button>` : ''}<button type="button" class="pp-full-ok" onclick="ppCloseDupes()">Close</button></div></div>`;
+  if (open) setTimeout(() => { const b = m.querySelector('#pp-dups-go, .pp-full-ok'); if (b) b.focus(); }, 30);
+}
+// Where you see it: a sidebar button, and a line in Needs attention when there are duplicates
+function _ppDupApply() {
+  const card = document.querySelector('.cu-card'); if (!card) return;
+  const menu = document.getElementById('sux-auto');
+  if (!document.querySelector('.pp-dup-btn')) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'cu-btn pp-dup-btn'; b.textContent = '🧹 Sweep duplicates'; b.onclick = ppOpenDupes;
+    (menu || card).appendChild(b);
+  }
+  const groups = ppFindDupes(), n = groups.reduce((t, g) => t + g.items.filter(x => _ppDupId(x) !== _ppDupId(g.keep) && !(x.kind === 'post' && _ppIsPosted(x.item))).length, 0);
+  let el = card.querySelector('.cu-dups');
+  if (n) {
+    if (!el) { el = document.createElement('div'); el.className = 'cu-dups'; card.appendChild(el); }
+    const html = `<button type="button" class="cu-gap sux-att-i pp-missed-btn" onclick="ppOpenDupes()">🧹 <b>${n} duplicate post${n === 1 ? '' : 's'}</b> (sent twice) <span>Review ›</span></button>`;
+    if (el.innerHTML !== html) el.innerHTML = html;
+  } else if (el) el.remove();
+}
+let _ppDupQ = 0;
+new MutationObserver(() => { if (_ppDupQ) return; _ppDupQ = requestAnimationFrame(() => { _ppDupQ = 0; try { _ppDupApply(); } catch (e) {} }); }).observe(document.documentElement, { childList: true, subtree: true });
+(function _ppDupStyles() {
+  const st = document.createElement('style');
+  st.textContent = `.pp-dup-row { display: flex; gap: 8px; align-items: flex-start; padding: 5px 2px; font-size: 12.5px; color: #c3c7d6; cursor: pointer; }
+    .pp-dup-row.keep b { color: #34d399; } .pp-dup-row:not(.keep) b { color: #f87171; }
+    .pp-dup-row input { margin-top: 2px; accent-color: #f5a623; }`;
+  document.head.appendChild(st);
+})();
+// ── Delete in one click, with Undo ──
+let _ppDelUndo = null;
+// The post's saved images go only once it can no longer be undone
+function _ppDelPurge(rec) {
+  if (!rec || rec.purged) return;
+  rec.purged = true; clearTimeout(rec.timer); rec.timer = null;
+  try { const p = rec.post; if (p.imageId) imgDelete(p.imageId); if (p.imageOriginalId && p.imageOriginalId !== p.imageId) imgDelete(p.imageOriginalId); } catch (e) {}
+}
+function ppQuickDelete(pid, id) {
+  const list = state.posts[pid] || [];
+  const i = list.findIndex(p => String(p.id) === String(id));
+  if (i < 0) return false;
+  const post = list[i];
+  if (_ppDelUndo) _ppDelPurge(_ppDelUndo); // the previous delete is now final
+  state.posts = { ...state.posts, [pid]: list.filter((_, k) => k !== i) };
+  savePosts(state.posts);
+  const rec = { pid, index: i, post, purged: false };
+  rec.timer = setTimeout(() => { _ppDelPurge(rec); if (_ppDelUndo === rec) _ppDelUndo = null; }, 15000);
+  _ppDelUndo = rec;
+  render();
+  const name = String(post.title || post.alignableText || post.caption || post.description || '').replace(/\s+/g, ' ').trim();
+  _ppMissedToast(`Deleted ${name ? `"${escapeHtml(name.slice(0, 40))}${name.length > 40 ? '…' : ''}"` : 'the post'}. <button type="button" class="pp-missed-undo" onclick="ppUndoDelete()">↩ Undo</button>`);
+  return true;
+}
+function ppUndoDelete() {
+  const rec = _ppDelUndo;
+  if (!rec || rec.purged) return;
+  clearTimeout(rec.timer); rec.timer = null; _ppDelUndo = null;
+  const list = (state.posts[rec.pid] || []).slice();
+  list.splice(Math.min(rec.index, list.length), 0, rec.post);
+  state.posts = { ...state.posts, [rec.pid]: list };
+  savePosts(state.posts); render();
+  _ppMissedToast('Put it back.');
+}
+window.addEventListener('pagehide', () => { if (_ppDelUndo) _ppDelPurge(_ppDelUndo); });
+function ppComposerDelete() {
+  const pid = state.activePlatform, id = state.editingPostId;
+  closeComposer();
+  if (id) ppQuickDelete(pid, id);
+}
+// Post cards: Delete works straight away (no confirmation box), with Undo
+confirmDelete = function (postId) { ppQuickDelete(state.activePlatform, postId); };
+// A ✕ on each calendar post, and 🗑 Delete at the top of the post editor
+function _ppQuickDelUI() {
+  document.querySelectorAll('.cal-post-chip[data-post-id]:not([data-qdel])').forEach(ch => {
+    ch.dataset.qdel = '1';
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'pp-chip-del'; b.textContent = '✕'; b.title = 'Delete this post (you can undo)'; b.setAttribute('aria-label', 'Delete this post'); b.draggable = false;
+    b.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); ppQuickDelete(ch.dataset.platId, ch.dataset.postId); });
+    b.addEventListener('mousedown', (e) => e.stopPropagation());
+    ch.appendChild(b);
+  });
+  const h = document.querySelector('#composer-modal .modal-header');
+  if (h && state.showComposer && state.editingPostId && !h.querySelector('.pp-hdr-del')) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'pp-hdr-del'; b.textContent = '🗑 Delete'; b.title = 'Delete this post (you can undo)'; b.onclick = ppComposerDelete;
+    const close = h.querySelector('.close-btn'); if (close) h.insertBefore(b, close); else h.appendChild(b);
+  }
+}
+let _ppQdQ = 0;
+new MutationObserver(() => { if (_ppQdQ) return; _ppQdQ = requestAnimationFrame(() => { _ppQdQ = 0; try { _ppQuickDelUI(); } catch (e) {} }); }).observe(document.documentElement, { childList: true, subtree: true });
+(function _ppQdStyles() {
+  const st = document.createElement('style');
+  st.textContent = `.cal-post-chip { position: relative; }
+    .pp-chip-del { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; padding: 0; border: none; border-radius: 50%; background: #ef4444; color: #fff; font: 700 10px/16px 'DM Sans', sans-serif; text-align: center; cursor: pointer; opacity: 0; transition: opacity .12s; z-index: 2; }
+    .cal-post-chip:hover .pp-chip-del, .pp-chip-del:focus-visible { opacity: 1; }
+    .pp-chip-del:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+    @media (hover: none) { .pp-chip-del { opacity: .9; } }
+    .pp-hdr-del { margin-left: auto; margin-right: 8px; padding: 6px 12px; border-radius: 8px; border: 1px solid #7f1d1d; background: rgba(239,68,68,.1); color: #fca5a5; font: 700 12px 'DM Sans', sans-serif; cursor: pointer; }
+    .pp-hdr-del:hover { background: rgba(239,68,68,.2); }
+    .pp-hdr-del:focus-visible { outline: 2px solid #fca5a5; outline-offset: 2px; }`;
   document.head.appendChild(st);
 })();
 function _draftTextFields(draft) {
