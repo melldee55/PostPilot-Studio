@@ -12936,18 +12936,21 @@ Post:
         document.head.appendChild(st);
       })();
       // ══════════════════════════════════════════
-      // FROM YOUR BLOG (v108): batches made from your Shopify blog articles
-      // Reads every published article on your Shopify store (all of its blogs) from the store's public
-      // sitemap and blog feeds, no keys needed. Pick up to 10 articles and the platforms: each platform's
+      // FROM YOUR BLOG (v109): batches made from each brand's blog
+      // Each brand (Brand 1, 2, 3) has its own website. Shopify stores are read through Shopify's Storefront API
+      // (made for other sites to read, no key needed for blogs); WordPress sites through their built-in posts API;
+      // anything else through its sitemap or RSS feed. Pick up to 10 articles and the platforms: each platform's
       // batch fills with one post per article (image headline, a caption written for that platform, the
       // article link, alt text) and the article's featured photo.
       // ══════════════════════════════════════════
-      const BF_SITE_KEY = "bpc_blog_site";
+      const BF_SITE_KEY = "bpc_blog_site"; // v108's single address (Brand 1)
+      const BF_BRAND_KEY = "bpc_blog_site:"; // + ws_a / ws_b / ws_c → { site, token }
       const BF_USED_KEY = "bpc_blog_used_v1";
       const BF_PLATS_KEY = "bpc_blog_plats";
       const BF_PHOTO_KEY = "bpc_blog_photos";
       const BF_DEFAULT_SITE = "youngdouglasinsurance.com";
-      const _bf = { items: null, site: "", at: 0, loading: null, busy: false, sel: [], blog: "all", q: "", hideUsed: false, plats: null, err: "", route: {} };
+      const BF_API = ["2026-10", "2025-07"];
+      const _bf = { items: null, site: "", at: 0, loading: null, busy: false, sel: [], blog: "all", q: "", hideUsed: false, plats: null, err: "", route: {}, cache: {}, how: "" };
 
       const _bfLS = (k, d) => {
         try {
@@ -12969,17 +12972,42 @@ Post:
           .replace(/\/.*$/, "")
           .toLowerCase();
       }
-      const _bfSite = () => _bfNormSite(_bfLS(BF_SITE_KEY, "")) || BF_DEFAULT_SITE;
+      // ── Each brand's website ──
+      const _bfBrandIdx = () => (typeof _pfActiveAccount === "number" ? _pfActiveAccount : 0);
+      const _bfWs = (i) => ["ws_a", "ws_b", "ws_c"][i == null ? _bfBrandIdx() : i] || "ws_a";
+      function _bfBrandNames() {
+        try {
+          if (typeof loadPfAccounts === "function" && (!_pfAccounts || !_pfAccounts.length)) loadPfAccounts();
+        } catch (e) {}
+        return [0, 1, 2].map((i) => (typeof _pfAccounts !== "undefined" && _pfAccounts[i] && _pfAccounts[i].name) || "Brand " + (i + 1));
+      }
+      function _bfCfg(i) {
+        const ws = _bfWs(i);
+        const c = _bfLS(BF_BRAND_KEY + ws, null);
+        if (c && typeof c === "object") return { site: _bfNormSite(c.site), token: String(c.token || "").trim() };
+        // Brand 1 starts with the agency's site (or the address saved before brands had their own)
+        if (ws === "ws_a") return { site: _bfNormSite(_bfLS(BF_SITE_KEY, "")) || BF_DEFAULT_SITE, token: "" };
+        return { site: "", token: "" };
+      }
+      function _bfSaveCfg(cfg, i) {
+        _bfSet(BF_BRAND_KEY + _bfWs(i), { site: _bfNormSite(cfg.site), token: String(cfg.token || "").trim() });
+      }
+      const _bfSite = () => _bfCfg().site;
 
-      // ── Reaching the store: straight from the browser, or through a public relay when the store doesn't allow that ──
-      const BF_ROUTES = [(u) => u, (u) => "https://corsproxy.io/?url=" + encodeURIComponent(u), (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u)];
+      // ── Reaching a site that doesn't let other websites read it: straight from the browser first, then public relays ──
+      const BF_ROUTES = [
+        (u) => u,
+        (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+        (u) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u),
+        (u) => "https://corsproxy.io/?url=" + encodeURIComponent(u),
+      ];
       async function _bfGet(url, kind, ok) {
         const memo = _bf.route[kind];
         const order = memo != null ? [memo].concat(BF_ROUTES.map((_, i) => i).filter((i) => i !== memo)) : BF_ROUTES.map((_, i) => i);
         let last = null;
         for (const r of order) {
           const ctl = typeof AbortController === "function" ? new AbortController() : null;
-          const timer = setTimeout(() => ctl && ctl.abort(), 20000);
+          const timer = setTimeout(() => ctl && ctl.abort(), 12000);
           try {
             const res = await fetch(BF_ROUTES[r](url), ctl ? { signal: ctl.signal } : {});
             if (!res.ok) {
@@ -13061,8 +13089,147 @@ Post:
           .trim();
       }
 
-      // ── Loading every article: the sitemap lists them all (with each one's featured image), each blog's feed adds the summaries ──
-      async function _bfFetchAll(site) {
+      // ── Reading a brand's articles ──
+      // Why a site couldn't be read, in plain words
+      function _bfWhy(e) {
+        const w = e && e.why;
+        if (w === "blocked") return "the site didn't let the browser read it";
+        if (w === "denied") return "Shopify asked for a Storefront token";
+        if (w === "missing") return "not found";
+        const m = String((e && e.message) || "");
+        if (/failed to fetch|networkerror|load failed|abort/i.test(m)) return "couldn't connect";
+        if (!m || /^(sitemap|unexpected reply)$/i.test(m)) return "not found";
+        return m;
+      }
+      async function _bfFetchJson(url, opts) {
+        const ctl = typeof AbortController === "function" ? new AbortController() : null;
+        const timer = setTimeout(() => ctl && ctl.abort(), 15000);
+        let res;
+        try {
+          res = await fetch(url, Object.assign({}, opts || {}, ctl ? { signal: ctl.signal } : {}));
+        } catch (e) {
+          throw Object.assign(new Error("blocked"), { why: "blocked" });
+        } finally {
+          clearTimeout(timer);
+        }
+        if (res.status === 401 || res.status === 403 || res.status === 430) throw Object.assign(new Error("HTTP " + res.status), { why: "denied" });
+        if (!res.ok) throw Object.assign(new Error("HTTP " + res.status), { why: "missing" });
+        try {
+          return JSON.parse(await res.text());
+        } catch (e) {
+          throw Object.assign(new Error("not JSON"), { why: "missing" });
+        }
+      }
+      // Article text from Shopify or WordPress: drop the "Current as of" line, the disclosure, sources and editor notes
+      function _bfClean(t) {
+        return String(t || "")
+          .replace(/\s+/g, " ")
+          .replace(/^\s*current as of:?\s+[A-Za-z]+\.?\s+(?:\d{1,2},?\s+)?\d{4}\.?\s*/i, "")
+          .replace(/\s*\b(?:DISCLOSURE|Sources:|Works Cited)\b[\s\S]*$/, "")
+          .replace(/\[(?:fact check needed|illustrative quote)[^\]]*\]/gi, "")
+          .trim()
+          .slice(0, 1500);
+      }
+      const _bfTxt = (html) => {
+        try {
+          return (new DOMParser().parseFromString(String(html || ""), "text/html").body.textContent || "").replace(/\s+/g, " ").trim();
+        } catch (e) {
+          return String(html || "");
+        }
+      };
+      // The site's own address, or its *.myshopify.com address, with and without www.
+      function _bfHosts(site) {
+        if (/\.myshopify\.com$/i.test(site)) return [site];
+        const bare = site.replace(/^www\./i, "");
+        return [...new Set([site, site === bare ? "www." + bare : bare])];
+      }
+
+      // 1. Shopify: the Storefront API is made for other websites to read, and blogs need no key
+      const BF_SHOP_Q = `query PostPilotBlog($cursor: String) { articles(first: 50, after: $cursor, sortKey: PUBLISHED_AT, reverse: true) { pageInfo { hasNextPage endCursor } nodes { title handle publishedAt onlineStoreUrl excerpt content(truncateAt: 1600) tags image { url altText } blog { handle title } seo { description } } } }`;
+      async function _bfShopify(site, token) {
+        let last = null;
+        for (const host of _bfHosts(site)) {
+          for (const v of BF_API) {
+            try {
+              const nodes = [];
+              let cursor = null;
+              for (let page = 0; page < 8; page++) {
+                const headers = { "Content-Type": "application/json", Accept: "application/json" };
+                if (token) headers["X-Shopify-Storefront-Access-Token"] = token;
+                const j = await _bfFetchJson(`https://${host}/api/${v}/graphql.json`, { method: "POST", headers, body: JSON.stringify({ query: BF_SHOP_Q, variables: { cursor } }) });
+                const con = j && j.data && j.data.articles;
+                if (!con) {
+                  const msg = (j && j.errors && j.errors[0] && (j.errors[0].message || "")) || "no articles";
+                  throw Object.assign(new Error(msg), { why: /access|denied|token|unauthori[sz]ed/i.test(msg) ? "denied" : "missing" });
+                }
+                nodes.push(...(con.nodes || []));
+                if (!con.pageInfo || !con.pageInfo.hasNextPage) break;
+                cursor = con.pageInfo.endCursor;
+              }
+              return nodes.map((n) => {
+                const bh = (n.blog && n.blog.handle) || "blog";
+                const url = n.onlineStoreUrl || `https://${/\.myshopify\.com$/i.test(site) ? host : site}/blogs/${bh}/${n.handle}`;
+                const ex = _bfClean(n.excerpt || "");
+                return {
+                  url,
+                  path: _bfPath(url),
+                  blog: bh,
+                  blogName: (n.blog && n.blog.title) || _bfBlogName(bh),
+                  slug: n.handle,
+                  title: n.title || "",
+                  image: (n.image && n.image.url) || "",
+                  summary: ex.length >= 60 ? ex : _bfClean(n.content) || ex || _bfClean(n.seo && n.seo.description),
+                  published: n.publishedAt || "",
+                  updated: "",
+                };
+              });
+            } catch (e) {
+              last = e;
+              if (e.why === "blocked" || e.why === "denied") break; // the same answer for every version at this address
+            }
+          }
+          if (last && last.why === "denied") break;
+        }
+        throw last || new Error("no answer");
+      }
+
+      // 2. WordPress: its posts API lets other websites read published posts
+      async function _bfWordPress(site) {
+        const out = [];
+        for (let page = 1; page <= 3; page++) {
+          let arr;
+          try {
+            arr = await _bfFetchJson(`https://${site}/wp-json/wp/v2/posts?per_page=100&page=${page}&_embed=wp:featuredmedia,wp:term`);
+          } catch (e) {
+            if (page > 1) break;
+            throw e;
+          }
+          if (!Array.isArray(arr)) throw Object.assign(new Error("not WordPress"), { why: "missing" });
+          arr.forEach((p) => {
+            const emb = p._embedded || {};
+            const cat = ((emb["wp:term"] || [])[0] || [])[0] || {};
+            const media = (emb["wp:featuredmedia"] || [])[0] || {};
+            const link = p.link || "";
+            out.push({
+              url: link,
+              path: _bfPath(link),
+              blog: cat.slug || "blog",
+              blogName: cat.name ? _bfTxt(cat.name) : "Blog",
+              slug: p.slug || "",
+              title: _bfTxt(p.title && p.title.rendered),
+              image: media.source_url || "",
+              summary: _bfClean(_bfPlain(p.excerpt && p.excerpt.rendered)) || _bfClean(_bfPlain(p.content && p.content.rendered, true)),
+              published: p.date_gmt ? p.date_gmt + "Z" : p.date || "",
+              updated: "",
+            });
+          });
+          if (arr.length < 100) break;
+        }
+        return out;
+      }
+
+      // 3. The site's public sitemap and blog feeds (straight, or through a public relay)
+      async function _bfSitemap(site) {
         const base = "https://" + site;
         const sitemaps = [];
         try {
@@ -13132,41 +13299,162 @@ Post:
           }
         };
         await Promise.all([worker(), worker(), worker(), worker()]);
-        const items = [...byPath.values()].map((a) => {
-          a.title = (a.title || a.imageTitle || _bfTitleCase(a.slug)).replace(/\s+/g, " ").trim();
-          a.blogName = _bfBlogName(a.blog);
-          a.when = Date.parse(a.published || a.updated || "") || 0;
-          return a;
-        });
-        items.sort((x, y) => y.when - x.when);
-        return items;
+        return [...byPath.values()];
+      }
+      // 4. Any other blog's RSS or Atom feed
+      async function _bfRss(site) {
+        const base = "https://" + site;
+        const paths = ["/feed", "/rss.xml", "/feed.xml", "/atom.xml", "/blog-feed.xml", "/blog?format=rss", "/blog/rss.xml", "/index.xml"];
+        let last = null;
+        for (const p of paths) {
+          let d = null;
+          try {
+            d = _bfXml(await _bfGet(base + p, "xml", _bfIsXml(/^(rss|feed|rdf)$/i)));
+          } catch (e) {
+            last = e;
+            continue;
+          }
+          if (!d) continue;
+          const root = d.documentElement;
+          const ch = _bfKids(root, "channel")[0] || root;
+          const feedTitle = _bfKid(ch, "title") || "Blog";
+          const entries = _bfKids(ch, "item").concat(_bfKids(root, "item"), _bfKids(root, "entry"));
+          const out = entries.map((en) => {
+            const links = _bfKids(en, "link");
+            const al = links.find((l) => (l.getAttribute("rel") || "alternate") === "alternate");
+            const url = (al && al.getAttribute("href")) || _bfKid(en, "link") || "";
+            const html = _bfKid(en, "encoded") || _bfKid(en, "content") || _bfKid(en, "description") || _bfKid(en, "summary");
+            const media = _bfKids(en, "content").find((c) => c.getAttribute("url")) || _bfKids(en, "thumbnail")[0] || _bfKids(en, "enclosure").find((c) => /^image\//.test(c.getAttribute("type") || ""));
+            const img = (media && media.getAttribute("url")) || ((/<img[^>]+src=["']([^"']+)/i.exec(html) || [])[1] || "");
+            const cat = _bfKid(en, "category");
+            return {
+              url,
+              path: _bfPath(url),
+              blog: cat ? cat.toLowerCase().replace(/[^a-z0-9]+/g, "-") : "blog",
+              blogName: cat || feedTitle,
+              slug: _bfPath(url).split("/").pop() || "",
+              title: _bfTxt(_bfKid(en, "title")),
+              image: img,
+              summary: _bfClean(_bfPlain(_bfKid(en, "summary") || _bfKid(en, "description"))) || _bfClean(_bfPlain(html, true)),
+              published: _bfKid(en, "pubDate") || _bfKid(en, "published") || _bfKid(en, "date") || "",
+              updated: _bfKid(en, "updated"),
+            };
+          });
+          if (out.length) return out;
+        }
+        throw last || Object.assign(new Error("no feed"), { why: "missing" });
+      }
+
+      // Tidy every source's articles the same way: a title, a blog name, newest first, no repeats
+      function _bfFinish(items) {
+        const seen = new Set();
+        return items
+          .filter((a) => a && a.url && !seen.has(a.path) && seen.add(a.path))
+          .map((a) => {
+            a.title = (a.title || a.imageTitle || _bfTitleCase(a.slug)).replace(/\s+/g, " ").trim();
+            a.blogName = a.blogName || _bfBlogName(a.blog);
+            a.summary = a.summary || "";
+            a.when = Date.parse(a.published || a.updated || "") || 0;
+            return a;
+          })
+          .sort((x, y) => y.when - x.when);
+      }
+      async function _bfFetchAll(cfg) {
+        const site = cfg.site;
+        const notes = [];
+        let shopWhy = "";
+        try {
+          const it = await _bfShopify(site, cfg.token);
+          _bf.how = "Shopify";
+          return _bfFinish(it);
+        } catch (e) {
+          shopWhy = (e && e.why) || "";
+          notes.push("Shopify: " + _bfWhy(e));
+        }
+        try {
+          const it = await _bfWordPress(site);
+          if (it.length) {
+            _bf.how = "WordPress";
+            return _bfFinish(it);
+          }
+          notes.push("WordPress: no posts");
+        } catch (e) {
+          notes.push("WordPress: " + _bfWhy(e));
+        }
+        try {
+          const it = await _bfSitemap(site);
+          if (it.length) {
+            _bf.how = "sitemap";
+            return _bfFinish(it);
+          }
+          notes.push("Sitemap: no blog articles");
+        } catch (e) {
+          notes.push("Sitemap: " + _bfWhy(e));
+        }
+        try {
+          const it = await _bfRss(site);
+          _bf.how = "feed";
+          return _bfFinish(it);
+        } catch (e) {
+          notes.push("Feed: " + _bfWhy(e));
+        }
+        throw Object.assign(new Error("none"), { notes, shopWhy });
       }
       function bfLoad(force) {
-        const site = _bfSite();
+        const cfg = _bfCfg();
+        const site = cfg.site;
         if (_bf.loading && !force) return _bf.loading;
-        if (!force && _bf.items && _bf.site === site && Date.now() - _bf.at < 30 * 60e3) return Promise.resolve(_bf.items);
+        if (!site) {
+          _bf.items = null;
+          _bf.site = "";
+          _bf.err = `Type <b>${escHtml(_bfBrandNames()[_bfBrandIdx()])}</b>'s website above (for example <i>yourbrand.com</i>), then press <b>Load</b>.`;
+          _bfRender();
+          return Promise.resolve([]);
+        }
+        const c = _bf.cache[site];
+        if (!force && c && Date.now() - c.at < 30 * 60e3) {
+          _bf.items = c.items;
+          _bf.site = site;
+          _bf.how = c.how;
+          _bf.err = c.items.length ? "" : `No published articles were found on ${escHtml(site)}.`;
+          _bfRender();
+          return Promise.resolve(c.items);
+        }
         _bf.err = "";
+        _bf.items = null;
+        _bf.site = site;
+        _bf.wantToken = false;
         _bfRender();
-        _bf.loading = _bfFetchAll(site)
+        const job = (_bf.loading = _bfFetchAll(cfg)
           .then((items) => {
+            if (_bfCfg().site !== site) return items; // the brand changed while this was loading
+            _bf.cache[site] = { items, at: Date.now(), how: _bf.how };
             _bf.items = items;
-            _bf.site = site;
-            _bf.at = Date.now();
             const have = new Set(items.map((a) => a.path));
             _bf.sel = _bf.sel.filter((p) => have.has(p));
             if (_bf.blog !== "all" && !items.some((a) => a.blog === _bf.blog)) _bf.blog = "all";
-            if (!items.length) _bf.err = `No published articles were found on ${site}.`;
+            if (!items.length) _bf.err = `No published articles were found on ${escHtml(site)}.`;
             return items;
           })
-          .catch(() => {
-            _bf.err = `Couldn't reach ${escHtml(site)} right now. Check your internet connection and try <b>⟳ Refresh</b> in a minute.`;
-            return _bf.items || [];
+          .catch((e) => {
+            if (_bfCfg().site !== site) return [];
+            const shopify = !/\.myshopify\.com$/i.test(site);
+            let msg = `Couldn't read the blog on <b>${escHtml(site)}</b>.`;
+            _bf.wantToken = !!(e && e.shopWhy === "denied");
+            if (_bf.wantToken)
+              msg += ` Your Shopify store wants a Storefront token: in Shopify, add the free <b>Headless</b> sales channel, create a storefront, copy its <b>public access token</b> and paste it under <b>Shopify token</b> above.`;
+            else if (shopify)
+              msg += ` If it's a Shopify store, type its Shopify address instead (it ends in <b>.myshopify.com</b>; Shopify shows it under <b>Settings → Domains</b>), then press <b>Load</b>.`;
+            msg += `<span class="bf-why">${escHtml(((e && e.notes) || [String(e && e.message)]).join(" · "))}</span>`;
+            _bf.err = msg;
+            _bf.items = null;
+            return [];
           })
           .finally(() => {
-            _bf.loading = null;
+            if (_bf.loading === job) _bf.loading = null;
             _bfRender();
-          });
-        return _bf.loading;
+          }));
+        return job;
       }
 
       // ── Writing the posts: one post per article, worded for each platform ──
@@ -13390,19 +13678,23 @@ Post:
 
       // ── Remembering which articles you've already turned into posts ──
       const _bfUsed = () => _bfLS(BF_USED_KEY, {}) || {};
+      // Remembered per website, so two brands' articles never mix (v108 kept the agency's by path alone)
+      const _bfUK = (path) => (_bf.site || "") + path;
+      const _bfUsedOf = (u, path) => u[_bfUK(path)] || (_bf.site === BF_DEFAULT_SITE ? u[path] : null);
       function _bfMarkUsed(paths, pids) {
         const u = _bfUsed();
         const day = new Date().toISOString().slice(0, 10);
         paths.forEach((p) => {
-          u[p] = Object.assign({}, u[p] || {});
-          pids.forEach((pid) => (u[p][pid] = day));
+          const k = _bfUK(p);
+          u[k] = Object.assign({}, _bfUsedOf(u, p) || {});
+          pids.forEach((pid) => (u[k][pid] = day));
         });
         const keys = Object.keys(u);
         if (keys.length > 500) keys.slice(0, keys.length - 500).forEach((k) => delete u[k]);
         _bfSet(BF_USED_KEY, u);
       }
       function _bfUsedText(path) {
-        const u = _bfUsed()[path];
+        const u = _bfUsedOf(_bfUsed(), path);
         if (!u) return "";
         const pids = PB_ORDER.filter((p) => u[p]);
         if (!pids.length) return "";
@@ -13437,6 +13729,14 @@ Post:
             <div class="us-head"><div><div class="us-title" id="bf-title">📝 Batches from your blog</div>
               <div class="mix-sub">Pick up to 10 articles and the platforms. Each platform gets a batch with one post per article: a caption written for that platform, the article link and its photo.</div></div>
               <button type="button" class="us-x" aria-label="Close" title="Close" onclick="bfClose()">✕</button></div>
+            <div class="bf-brand">
+              <div class="bf-brands" id="bf-brands" role="group" aria-label="Which brand's blog"></div>
+              <form class="bf-siteform" onsubmit="event.preventDefault(); bfSetSite(document.getElementById('bf-site').value)">
+                <label for="bf-site">Website</label><input id="bf-site" placeholder="yourbrand.com" autocomplete="off" spellcheck="false" /><button type="submit" class="us-more">Load</button>
+              </form>
+              <details class="bf-tok" id="bf-tok"><summary>Shopify token</summary><input id="bf-token" placeholder="Only if the tool asks for one" aria-label="Shopify Storefront public access token" autocomplete="off" spellcheck="false" onchange="bfSetToken(this.value)" /></details>
+              <span class="bf-how" id="bf-how"></span>
+            </div>
             <div class="bf-bar">
               <input type="search" id="bf-q" placeholder="Search your articles" aria-label="Search your articles" autocomplete="off" />
               <button type="button" class="us-more" onclick="bfQuick('latest')" title="The 10 newest articles (in the blog you're viewing)">🆕 Latest 10</button>
@@ -13450,8 +13750,7 @@ Post:
               <div class="bf-row"><span class="bf-lab" id="bf-plats-lab">Make batches for</span><div class="bf-plats" id="bf-plats" role="group" aria-labelledby="bf-plats-lab"></div></div>
               <div class="bf-row"><span class="bf-lab">Photos</span>
                 <label class="bf-chk"><input type="radio" name="bf-photo" value="featured" onchange="bfPhotoMode(this.value)" /> Each article's featured image</label>
-                <label class="bf-chk"><input type="radio" name="bf-photo" value="unsplash" onchange="bfPhotoMode(this.value)" /> New Unsplash photos</label>
-                <details class="bf-site"><summary>Store address</summary><input id="bf-site" aria-label="Your Shopify store's web address" placeholder="${BF_DEFAULT_SITE}" onchange="bfSetSite(this.value)" /></details></div>
+                <label class="bf-chk"><input type="radio" name="bf-photo" value="unsplash" onchange="bfPhotoMode(this.value)" /> New Unsplash photos</label></div>
             </div>
             <div class="us-foot"><span class="us-status" id="bf-status" role="status" aria-live="polite"></span>
               <button type="button" class="us-more" onclick="bfClearSel()">Clear picks</button>
@@ -13488,7 +13787,7 @@ Post:
         return (_bf.items || []).filter(
           (a) =>
             (ignoreBlog || _bf.blog === "all" || a.blog === _bf.blog) &&
-            (!used || !used[a.path] || _bf.sel.includes(a.path)) &&
+            (!used || !_bfUsedOf(used, a.path) || _bf.sel.includes(a.path)) &&
             (!_bf.q || (a.title + " " + a.summary + " " + a.blogName).toLowerCase().includes(_bf.q)),
         );
       }
@@ -13497,11 +13796,15 @@ Post:
         if (!box) return;
         const items = _bf.items || [];
         if (!items.length) return (box.innerHTML = "");
-        const counts = {};
-        items.forEach((a) => (counts[a.blog] = (counts[a.blog] || 0) + 1));
-        const blogs = Object.keys(counts).sort((x, y) => _bfBlogName(x).localeCompare(_bfBlogName(y)));
-        const chip = (id, label, n) => `<button type="button" class="bf-blog${_bf.blog === id ? " on" : ""}" aria-pressed="${_bf.blog === id}" onclick="bfBlog('${id}')">${escHtml(label)} <span>${n}</span></button>`;
-        box.innerHTML = chip("all", "All blogs", items.length) + blogs.map((b) => chip(b, _bfBlogName(b), counts[b])).join("");
+        const counts = {},
+          names = {};
+        items.forEach((a) => {
+          counts[a.blog] = (counts[a.blog] || 0) + 1;
+          names[a.blog] = names[a.blog] || a.blogName || _bfBlogName(a.blog);
+        });
+        const blogs = Object.keys(counts).sort((x, y) => names[x].localeCompare(names[y]));
+        const chip = (id, label, n) => `<button type="button" class="bf-blog${_bf.blog === id ? " on" : ""}" aria-pressed="${_bf.blog === id}" onclick="bfBlog('${escHtml(id).replace(/'/g, "&#39;")}')">${escHtml(label)} <span>${n}</span></button>`;
+        box.innerHTML = chip("all", "All blogs", items.length) + blogs.map((b) => chip(b, names[b], counts[b])).join("");
       }
       function _bfRenderList() {
         const box = document.getElementById("bf-list");
@@ -13521,7 +13824,7 @@ Post:
             const k = _bf.sel.indexOf(a.path);
             const on = k >= 0;
             const date = a.when ? new Date(a.when).toLocaleDateString("en-US", { month: "short", day: "numeric", year: new Date(a.when).getFullYear() === new Date().getFullYear() ? undefined : "numeric" }) : "";
-            const used = usedAll[a.path] ? _bfUsedText(a.path) : "";
+            const used = _bfUsedOf(usedAll, a.path) ? _bfUsedText(a.path) : "";
             return `<label class="bf-item${on ? " on" : ""}${used ? " used" : ""}">
                 <input type="checkbox" class="bf-cb" value="${escHtml(a.path)}"${on ? " checked" : ""} aria-label="${escHtml(a.title)}" />
                 <span class="bf-no" aria-hidden="true">${on ? k + 1 : ""}</span>
@@ -13555,15 +13858,33 @@ Post:
         go.textContent = !n || !pids.length ? "Make batches" : `${full.length ? "Replace & make" : "Make"} ${pids.length} batch${pids.length === 1 ? "" : "es"}`;
         const names = (xs) => xs.map((p) => _pbName(p)).join(", ");
         let msg;
-        if (!_bf.items) msg = _bf.err || "";
-        else if (!n) msg = `${_bf.items.length} articles on your blog. Pick up to 10 (the order you pick is the post order).`;
+        if (!_bf.items) msg = "";
+        else if (!n) msg = `${_bf.items.length} article${_bf.items.length === 1 ? "" : "s"} on ${escHtml(_bf.site)}. Pick up to 10 (the order you pick is the post order).`;
         else if (!pids.length) msg = `${n} of 10 articles picked. Now pick the platforms.`;
         else msg = `${n} of 10 articles picked → ${n} post${n === 1 ? "" : "s"} each for ${names(pids)}.`;
         if (n && full.length) msg += ` <span class="bf-warn">Replaces what's in your ${names(full)} batch${full.length === 1 ? "" : "es"} now.</span>`;
         st.innerHTML = msg;
       }
+      function _bfRenderBrand() {
+        const box = document.getElementById("bf-brands");
+        if (!box) return;
+        const cur = _bfBrandIdx();
+        box.innerHTML = _bfBrandNames()
+          .map((nm, i) => `<button type="button" class="bf-blog bf-br${i === cur ? " on" : ""}" aria-pressed="${i === cur}" onclick="bfBrand(${i})" title="${escHtml(_bfCfg(i).site || "No website yet")}">${escHtml(nm)}</button>`)
+          .join("");
+        const cfg = _bfCfg();
+        const site = document.getElementById("bf-site");
+        if (site && document.activeElement !== site) site.value = cfg.site;
+        const tok = document.getElementById("bf-token");
+        if (tok && document.activeElement !== tok) tok.value = cfg.token;
+        const det = document.getElementById("bf-tok");
+        if (det && (_bf.wantToken || cfg.token)) det.open = true;
+        const how = document.getElementById("bf-how");
+        if (how) how.textContent = _bf.items && _bf.how ? `Read from ${_bf.how}` : "";
+      }
       function _bfRender() {
         if (!document.getElementById("bf-overlay")) return;
+        _bfRenderBrand();
         _bfRenderBlogs();
         _bfRenderList();
         _bfRenderPlats();
@@ -13584,11 +13905,14 @@ Post:
         ov.style.display = "flex";
         const mode = _bfLS(BF_PHOTO_KEY, "featured") === "unsplash" ? "unsplash" : "featured";
         ov.querySelectorAll('input[name="bf-photo"]').forEach((r) => (r.checked = r.value === mode));
-        const site = document.getElementById("bf-site");
-        if (site) site.value = _bfSite();
         document.getElementById("bf-hide").checked = _bf.hideUsed;
+        if (_bf.site !== _bfSite()) {
+          _bf.items = null;
+          _bf.sel = [];
+          _bf.blog = "all";
+        }
         _bfRender();
-        setTimeout(() => document.getElementById("bf-q").focus(), 30);
+        setTimeout(() => document.getElementById(_bfSite() ? "bf-q" : "bf-site").focus(), 30);
         await bfLoad(false);
       }
       function bfClose() {
@@ -13625,7 +13949,7 @@ Post:
         _bfRender();
         const blogs = new Set(_bf.sel.map((p) => (_bf.items.find((a) => a.path === p) || {}).blog)).size;
         const st = document.getElementById("bf-status");
-        if (kind === "each" && st && _bf.sel.length < PB_N) st.innerHTML += ` <span class="bf-warn">Your store has ${blogs} blog${blogs === 1 ? "" : "s"} with articles to pick from, so that's ${blogs}.</span>`;
+        if (kind === "each" && st && _bf.sel.length < PB_N) st.innerHTML += ` <span class="bf-warn">This site has ${blogs} blog${blogs === 1 ? "" : "s"} with articles to pick from, so that's ${blogs}.</span>`;
       }
       function bfClearSel() {
         if (_bf.busy) return;
@@ -13659,14 +13983,42 @@ Post:
       function bfPhotoMode(v) {
         _bfSet(BF_PHOTO_KEY, v === "unsplash" ? "unsplash" : "featured");
       }
+      // Each brand's website (a full link like https://site.com/blogs works too: only the address part is kept)
       function bfSetSite(v) {
-        const s = _bfNormSite(v);
-        _bfSet(BF_SITE_KEY, s && s !== BF_DEFAULT_SITE ? s : "");
-        const el = document.getElementById("bf-site");
-        if (el) el.value = _bfSite();
+        if (_bf.busy) return;
+        const cfg = _bfCfg();
+        cfg.site = _bfNormSite(v);
+        _bfSaveCfg(cfg);
         _bf.items = null;
         _bf.sel = [];
+        _bf.blog = "all";
+        delete _bf.cache[cfg.site];
+        const el = document.getElementById("bf-site");
+        if (el) el.value = cfg.site;
         bfLoad(true);
+      }
+      function bfSetToken(v) {
+        if (_bf.busy) return;
+        const cfg = _bfCfg();
+        cfg.token = String(v || "").trim();
+        _bfSaveCfg(cfg);
+        delete _bf.cache[cfg.site];
+        bfLoad(true);
+      }
+      // Switching brand here switches the whole tool to that brand (its colors, logos and Scheduler), like the brand buttons do
+      function bfBrand(i) {
+        if (_bf.busy || i === _bfBrandIdx()) return;
+        if (typeof selectBrandSyncWorkspace === "function") selectBrandSyncWorkspace(i);
+        else _pfActiveAccount = i;
+        _bf.items = null;
+        _bf.sel = [];
+        _bf.blog = "all";
+        _bf.q = "";
+        const q = document.getElementById("bf-q");
+        if (q) q.value = "";
+        _bfRender();
+        bfLoad(false);
+        if (typeof _pbRenderAll === "function") _pbRenderAll();
       }
       async function bfMake() {
         if (_bf.busy || _pb.busy || !_bf.items) return;
@@ -13776,6 +14128,8 @@ Post:
       window.bfAllPlats = bfAllPlats;
       window.bfPhotoMode = bfPhotoMode;
       window.bfSetSite = bfSetSite;
+      window.bfSetToken = bfSetToken;
+      window.bfBrand = bfBrand;
       window.bfMake = bfMake;
       window.bfToggle = bfToggle;
       (function _bfStyles() {
@@ -13814,9 +14168,17 @@ Post:
           .bf-lab { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); min-width: 120px; }
           .bf-plats { display: flex; flex-wrap: wrap; gap: 5px; flex: 1; }
           .bf-all { border: none; background: none; color: var(--hi); font: 700 11.5px "DM Sans", sans-serif; cursor: pointer; text-decoration: underline; padding: 4px; }
-          .bf-site { margin-left: auto; font-size: 11px; color: var(--muted); }
-          .bf-site summary { cursor: pointer; }
-          .bf-site input { margin-top: 5px; width: 230px; max-width: 100%; box-sizing: border-box; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font: 12px "DM Sans", sans-serif; padding: 6px 8px; }
+          .bf-brand { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 18px 10px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+          .bf-brands { display: flex; gap: 5px; flex-wrap: wrap; }
+          .bf-siteform { display: flex; align-items: center; gap: 6px; flex: 1 1 260px; min-width: 0; }
+          .bf-siteform label { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+          #bf-site, #bf-token { flex: 1; min-width: 0; width: 100%; box-sizing: border-box; background: var(--sb); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font: 13px "DM Sans", sans-serif; padding: 7px 9px; outline: none; }
+          #bf-site:focus, #bf-token:focus { border-color: var(--hi); }
+          .bf-tok { font-size: 11px; color: var(--muted); }
+          .bf-tok summary { cursor: pointer; }
+          .bf-tok[open] { flex: 1 1 100%; display: flex; flex-direction: column; gap: 5px; }
+          .bf-how { font-size: 11px; color: var(--muted); margin-left: auto; }
+          .bf-why { display: block; margin-top: 10px; font-size: 11px; opacity: .8; }
           .bf-warn { color: #f5a623; font-weight: 600; }
           #bf-go:disabled { opacity: .45; cursor: not-allowed; }
           .bf-working .bf-list, .bf-working .bf-opts { opacity: .55; pointer-events: none; }
@@ -13825,7 +14187,7 @@ Post:
           .bf-modal .us-head > div { min-width: 0; }
           .bf-modal .us-x { flex-shrink: 0; margin-left: 10px; }
           @media (max-width: 640px) {
-            .bf-item { grid-template-columns: auto 22px 1fr; } .bf-img { display: none; } .bf-lab { min-width: 0; width: 100%; } .bf-site { margin-left: 0; max-width: 100%; }
+            .bf-item { grid-template-columns: auto 22px 1fr; } .bf-img { display: none; } .bf-lab { min-width: 0; width: 100%; } .bf-how { margin-left: 0; }
             .bf-blogs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .bf-blog { flex-shrink: 0; }
             .bf-modal .mix-sub { display: none; }
           }
