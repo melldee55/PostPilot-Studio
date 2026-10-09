@@ -12284,7 +12284,7 @@ Post:
         ov.innerHTML = `<div class="us-modal pb-modal">
             <div class="us-head"><div><div class="us-title" id="pb-title">📦 Batch</div>
               <div class="mix-sub" id="pb-sub"></div></div>
-              <div class="mix-head-actions"><button type="button" class="us-more" onclick="pbPasteNext()">📋 Paste</button><button type="button" class="us-more" onclick="pbFindPhotos()">🔍 Find photos for all</button><button type="button" class="us-more" onclick="pbNewLayouts()">⟳ New layouts</button><button type="button" class="us-more" onclick="pbClearAll()">Clear all</button><button type="button" class="us-x" aria-label="Close the batch" title="Back to the Post Creator" onclick="pbClose()">✕</button></div></div>
+              <div class="mix-head-actions"><button type="button" class="us-more" onclick="bfOpen()" title="Make posts from your blog articles">📝 From your blog</button><button type="button" class="us-more" onclick="pbPasteNext()">📋 Paste</button><button type="button" class="us-more" onclick="pbFindPhotos()">🔍 Find photos for all</button><button type="button" class="us-more" onclick="pbNewLayouts()">⟳ New layouts</button><button type="button" class="us-more" onclick="pbClearAll()">Clear all</button><button type="button" class="us-x" aria-label="Close the batch" title="Back to the Post Creator" onclick="pbClose()">✕</button></div></div>
             <div class="pb-plats" role="radiogroup" aria-label="Which platform this batch is for">${PB_ORDER.map(
               (pid) => `<button type="button" role="radio" class="pb-plat" data-pid="${pid}" aria-checked="false" style="--pc:${_pbColor(pid)}" onclick="pbSetPlatform('${pid}')">${_pbIcon(pid)}<span>${escHtml(_pbName(pid))}</span></button>`,
             ).join("")}</div>
@@ -12932,6 +12932,904 @@ Post:
           .pb-working .pb-grid { opacity: .6; pointer-events: none; }
           .pb-mini:focus-visible, .pb-act:focus-visible, .pb-in:focus-visible { outline: 2px solid var(--hi); outline-offset: 1px; }
           button:disabled.pb-act, button:disabled.pb-mini, button:disabled.pb-plat { opacity: .5; cursor: progress; }
+        `;
+        document.head.appendChild(st);
+      })();
+      // ══════════════════════════════════════════
+      // FROM YOUR BLOG (v108): batches made from your Shopify blog articles
+      // Reads every published article on your Shopify store (all of its blogs) from the store's public
+      // sitemap and blog feeds, no keys needed. Pick up to 10 articles and the platforms: each platform's
+      // batch fills with one post per article (image headline, a caption written for that platform, the
+      // article link, alt text) and the article's featured photo.
+      // ══════════════════════════════════════════
+      const BF_SITE_KEY = "bpc_blog_site";
+      const BF_USED_KEY = "bpc_blog_used_v1";
+      const BF_PLATS_KEY = "bpc_blog_plats";
+      const BF_PHOTO_KEY = "bpc_blog_photos";
+      const BF_DEFAULT_SITE = "youngdouglasinsurance.com";
+      const _bf = { items: null, site: "", at: 0, loading: null, busy: false, sel: [], blog: "all", q: "", hideUsed: false, plats: null, err: "", route: {} };
+
+      const _bfLS = (k, d) => {
+        try {
+          const v = localStorage.getItem(k);
+          return v == null ? d : JSON.parse(v);
+        } catch (e) {
+          return d;
+        }
+      };
+      const _bfSet = (k, v) => {
+        try {
+          localStorage.setItem(k, JSON.stringify(v));
+        } catch (e) {}
+      };
+      function _bfNormSite(v) {
+        return String(v || "")
+          .trim()
+          .replace(/^https?:\/\//i, "")
+          .replace(/\/.*$/, "")
+          .toLowerCase();
+      }
+      const _bfSite = () => _bfNormSite(_bfLS(BF_SITE_KEY, "")) || BF_DEFAULT_SITE;
+
+      // ── Reaching the store: straight from the browser, or through a public relay when the store doesn't allow that ──
+      const BF_ROUTES = [(u) => u, (u) => "https://corsproxy.io/?url=" + encodeURIComponent(u), (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u)];
+      async function _bfGet(url, kind, ok) {
+        const memo = _bf.route[kind];
+        const order = memo != null ? [memo].concat(BF_ROUTES.map((_, i) => i).filter((i) => i !== memo)) : BF_ROUTES.map((_, i) => i);
+        let last = null;
+        for (const r of order) {
+          const ctl = typeof AbortController === "function" ? new AbortController() : null;
+          const timer = setTimeout(() => ctl && ctl.abort(), 20000);
+          try {
+            const res = await fetch(BF_ROUTES[r](url), ctl ? { signal: ctl.signal } : {});
+            if (!res.ok) {
+              last = new Error("HTTP " + res.status);
+              continue;
+            }
+            const out = kind === "blob" ? await res.blob() : await res.text();
+            if (ok && !ok(out)) {
+              last = new Error("unexpected reply");
+              continue;
+            }
+            _bf.route[kind] = r;
+            return out;
+          } catch (e) {
+            last = e;
+          } finally {
+            clearTimeout(timer);
+          }
+        }
+        throw last || new Error("unreachable");
+      }
+      function _bfXml(text) {
+        try {
+          const d = new DOMParser().parseFromString(String(text || ""), "application/xml");
+          return d.getElementsByTagName("parsererror").length ? null : d;
+        } catch (e) {
+          return null;
+        }
+      }
+      const _bfIsXml = (root) => (t) => {
+        const d = _bfXml(t);
+        return !!(d && d.documentElement && root.test(d.documentElement.localName));
+      };
+      const _bfKids = (el, name) => (el ? [...el.children].filter((c) => c.localName === name) : []);
+      const _bfKid = (el, name) => {
+        const c = _bfKids(el, name)[0];
+        return c ? (c.textContent || "").trim() : "";
+      };
+      const _bfPath = (u) => {
+        try {
+          return new URL(u).pathname.replace(/\/+$/, "").toLowerCase();
+        } catch (e) {
+          return String(u || "").toLowerCase();
+        }
+      };
+      const BF_ART = /\/blogs\/([^\/?#]+)\/([^\/?#]+)\/?$/i;
+      const _bfTitleCase = (slug) =>
+        String(slug || "")
+          .split(/[-_]+/)
+          .filter(Boolean)
+          .map((w) => (/^(and|or|of|the|a|an|to|in|for|on)$/i.test(w) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+          .join(" ")
+          .replace(/^./, (c) => c.toUpperCase());
+      const _bfBlogName = (h) => _bfTitleCase(h).replace(/\bFaq\b/g, "FAQ");
+
+      // Plain text from a feed's HTML: the article's summary (or its opening paragraphs when there's no summary)
+      function _bfPlain(html, opening) {
+        if (!html) return "";
+        let doc;
+        try {
+          doc = new DOMParser().parseFromString(String(html), "text/html");
+        } catch (e) {
+          return "";
+        }
+        doc.querySelectorAll("a.read-more, script, style, h1, h2, h3, h4, h5, h6, figure, table, ul, ol").forEach((el) => el.remove());
+        let parts = [...doc.querySelectorAll("p")].map((p) => (p.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean);
+        if (!parts.length) parts = [(doc.body && doc.body.textContent) || ""].map((t) => t.replace(/\s+/g, " ").trim()).filter(Boolean);
+        parts = parts.filter((t) => !/^(current as of|disclosure|sources?\b|written by|last updated)/i.test(t) && !/^\[[^\]]+\]$/.test(t));
+        let out = "";
+        for (const t of parts) {
+          if (out && opening && out.length > 450) break;
+          out += (out ? " " : "") + t;
+          if (out.length > 1400) break;
+        }
+        return out
+          .replace(/\[(?:fact check needed|illustrative quote)[^\]]*\]/gi, "")
+          .replace(/\s*(?:read more|continue reading)\s*(?:→|»|›)?\s*$/i, "")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      // ── Loading every article: the sitemap lists them all (with each one's featured image), each blog's feed adds the summaries ──
+      async function _bfFetchAll(site) {
+        const base = "https://" + site;
+        const sitemaps = [];
+        try {
+          const idx = _bfXml(await _bfGet(base + "/sitemap.xml", "xml", _bfIsXml(/^(sitemapindex|urlset)$/)));
+          _bfKids(idx.documentElement, "sitemap").forEach((s) => {
+            const loc = _bfKid(s, "loc");
+            if (/sitemap_articles/i.test(loc)) sitemaps.push(loc);
+          });
+        } catch (e) {}
+        if (!sitemaps.length) sitemaps.push(base + "/sitemap_articles_1.xml");
+        const byPath = new Map();
+        let sitemapOk = false;
+        for (const sm of sitemaps) {
+          let d = null;
+          try {
+            d = _bfXml(await _bfGet(sm.replace(/^https?:\/\/[^/]+/i, base), "xml", _bfIsXml(/^urlset$/)));
+          } catch (e) {}
+          if (!d) continue;
+          sitemapOk = true;
+          _bfKids(d.documentElement, "url").forEach((u) => {
+            const loc = _bfKid(u, "loc");
+            const m = BF_ART.exec(_bfPath(loc));
+            if (!m) return;
+            const im = _bfKids(u, "image")[0];
+            byPath.set(_bfPath(loc), {
+              url: loc,
+              path: _bfPath(loc),
+              blog: m[1],
+              slug: m[2],
+              title: "",
+              imageTitle: im ? _bfKid(im, "title") : "",
+              image: im ? _bfKid(im, "loc") : "",
+              summary: "",
+              published: "",
+              updated: _bfKid(u, "lastmod"),
+            });
+          });
+        }
+        // Each blog's feed: titles, summaries and publish dates (the newest articles of each blog)
+        const blogs = [...new Set([...byPath.values()].map((a) => a.blog))];
+        if (!blogs.length && !sitemapOk) throw new Error("sitemap");
+        let at = 0;
+        const worker = async () => {
+          while (at < blogs.length) {
+            const h = blogs[at++];
+            let d = null;
+            try {
+              d = _bfXml(await _bfGet(`${base}/blogs/${h}.atom`, "xml", _bfIsXml(/^feed$/)));
+            } catch (e) {}
+            if (!d) continue;
+            _bfKids(d.documentElement, "entry").forEach((en) => {
+              const links = _bfKids(en, "link");
+              const alt = links.find((l) => (l.getAttribute("rel") || "alternate") === "alternate") || links[0];
+              const href = alt ? alt.getAttribute("href") || "" : "";
+              const p = _bfPath(href);
+              const m = BF_ART.exec(p);
+              if (!m) return;
+              const a =
+                byPath.get(p) ||
+                (byPath.set(p, { url: href, path: p, blog: m[1], slug: m[2], title: "", imageTitle: "", image: "", summary: "", published: "", updated: "" }), byPath.get(p));
+              a.title = _bfKid(en, "title") || a.title;
+              a.published = _bfKid(en, "published") || a.published;
+              a.updated = _bfKid(en, "updated") || a.updated;
+              const sum = _bfPlain(_bfKid(en, "summary"));
+              a.summary = sum.length >= 60 ? sum : _bfPlain(_bfKid(en, "content"), true) || sum;
+            });
+          }
+        };
+        await Promise.all([worker(), worker(), worker(), worker()]);
+        const items = [...byPath.values()].map((a) => {
+          a.title = (a.title || a.imageTitle || _bfTitleCase(a.slug)).replace(/\s+/g, " ").trim();
+          a.blogName = _bfBlogName(a.blog);
+          a.when = Date.parse(a.published || a.updated || "") || 0;
+          return a;
+        });
+        items.sort((x, y) => y.when - x.when);
+        return items;
+      }
+      function bfLoad(force) {
+        const site = _bfSite();
+        if (_bf.loading && !force) return _bf.loading;
+        if (!force && _bf.items && _bf.site === site && Date.now() - _bf.at < 30 * 60e3) return Promise.resolve(_bf.items);
+        _bf.err = "";
+        _bfRender();
+        _bf.loading = _bfFetchAll(site)
+          .then((items) => {
+            _bf.items = items;
+            _bf.site = site;
+            _bf.at = Date.now();
+            const have = new Set(items.map((a) => a.path));
+            _bf.sel = _bf.sel.filter((p) => have.has(p));
+            if (_bf.blog !== "all" && !items.some((a) => a.blog === _bf.blog)) _bf.blog = "all";
+            if (!items.length) _bf.err = `No published articles were found on ${site}.`;
+            return items;
+          })
+          .catch(() => {
+            _bf.err = `Couldn't reach ${escHtml(site)} right now. Check your internet connection and try <b>⟳ Refresh</b> in a minute.`;
+            return _bf.items || [];
+          })
+          .finally(() => {
+            _bf.loading = null;
+            _bfRender();
+          });
+        return _bf.loading;
+      }
+
+      // ── Writing the posts: one post per article, worded for each platform ──
+      const _bfSentences = (t) =>
+        String(t || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .split(/(?<=[.!?])\s+(?=["“(A-Z0-9])/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+      // Whole sentences up to max characters (at least the first one, cut at a word if it's too long)
+      function _bfFit(text, max) {
+        text = String(text || "").trim();
+        if (text.length <= max) return text;
+        let out = "";
+        for (const s of _bfSentences(text)) {
+          if ((out ? out.length + 1 : 0) + s.length > max) break;
+          out += (out ? " " : "") + s;
+        }
+        if (out) return out;
+        const cut = text.slice(0, Math.max(0, max - 1));
+        return (cut.replace(/\s+\S*$/, "") || cut).replace(/[,;:\s–—-]+$/, "") + "…";
+      }
+      function _bfFirst(text, n, max) {
+        return _bfFit(_bfSentences(text).slice(0, n).join(" "), max);
+      }
+      // The words on the image: a long SEO title gives its punchiest part
+      function _bfHeadline(title) {
+        const t = String(title || "").trim();
+        if (t.length <= 62) return t;
+        const parts = t
+          .split(/:\s+|,\s+|\s+[–—|]\s+|\s+-\s+|(?<=\?)\s+/)
+          .map((x) => x.trim())
+          .filter(Boolean);
+        const words = (x) => x.split(/\s+/).length;
+        const q = parts.find((x) => /\?$/.test(x) && words(x) >= 3 && x.length <= 70);
+        if (q) return q;
+        const good = parts.find((x) => words(x) >= 3 && x.length <= 62);
+        if (good) return good;
+        // No natural part: stop before a joining word ("…Policy and Who…" → "…Policy?")
+        const re = /\s+(?:and|or|but|for|in|with|that|who|which|when|while|to|from|without|vs\.?|versus)\s+/gi;
+        let m,
+          cut = "";
+        while ((m = re.exec(t)) && m.index <= 62) if (words(t.slice(0, m.index)) >= 3) cut = t.slice(0, m.index);
+        if (cut) return cut.replace(/[,;:\s]+$/, "") + (/\?$/.test(t) && /^(what|why|how|when|is|are|do|does|can|should|will|who|which)\b/i.test(cut) ? "?" : "");
+        return _bfFit(t, 62);
+      }
+      const BF_TOPICS = [
+        { re: /hir(e|ing)|career|join-our-team|jobs?\b/, tags: ["#Hiring", "#InsuranceCareers"], q: "Know someone who'd be a great fit? Tag them below.", photo: "team office" },
+        { re: /pet|dog|cat/, tags: ["#PetInsurance", "#PetParents"], q: "Pet owners, how do you plan for surprise vet bills?", photo: "dog owner" },
+        { re: /food-?truck|food-?cart|restaurant/, tags: ["#FoodTruck", "#SmallBusiness"], q: "Food business owners, what surprised you most when you were getting started?", photo: "food truck" },
+        { re: /barber|salon|beauty/, tags: ["#Barbershop", "#SmallBusiness"], q: "Barbers and shop owners, what do you wish you'd known when you started?", photo: "barbershop" },
+        { re: /auto|car|vehicle|driv|smog|dmv/, tags: ["#AutoInsurance", "#CarInsurance"], q: "When did you last look over your auto coverage?", photo: "car driving" },
+        { re: /home|house|renter|condo|landlord|water|fire|earthquake/, tags: ["#HomeInsurance", "#Homeowners"], q: "Homeowners, when did you last review what your policy covers?", photo: "california home" },
+        { re: /life|iul|retire|annuit|long-term-care|estate/, tags: ["#LifeInsurance", "#FinancialPlanning"], q: "What finally got you thinking about protecting your family's future?", photo: "family" },
+        { re: /business|commercial|contractor|workers-?comp|liability/, tags: ["#SmallBusiness", "#BusinessInsurance"], q: "Business owners, when did you last check that your coverage still fits?", photo: "small business owner" },
+        { re: /news|southern-california|los-angeles|socal|community/, tags: ["#SoCal", "#LosAngeles"], q: "How is this affecting you and your neighbors?", photo: "los angeles" },
+      ];
+      function _bfTopic(a) {
+        const key = (a.blog + " " + a.slug).toLowerCase();
+        const byBlog = BF_TOPICS.find((t) => t.re.test(a.blog.toLowerCase()));
+        return byBlog || BF_TOPICS.find((t) => t.re.test(key)) || { tags: [], q: "What has your experience been?", photo: "" };
+      }
+      function _bfTags(a, n) {
+        const t = _bfTopic(a).tags.concat(["#CaliforniaInsurance", "#Insurance", "#InsuranceTips", "#California"]);
+        return [...new Set(t)].slice(0, n).join(" ");
+      }
+      // Alignable and Google Business hide or reject posts with links, emails or phone numbers: leave out the sentences that have them
+      const BF_CONTACT = /https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w-]+\.[\w.]+|(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/i;
+      const _bfNoContact = (t) =>
+        _bfSentences(t)
+          .filter((x) => !BF_CONTACT.test(x))
+          .join(" ")
+          .trim();
+      // Everything a batch post needs, for one platform
+      function _bfPostFor(a, pid) {
+        const title = a.title;
+        const sum = a.summary || "";
+        const link = a.url;
+        const head = _bfHeadline(title);
+        const body = _bfFirst(sum, 1, 140);
+        const topic = _bfTopic(a);
+        const cap = (max, n) => _bfFirst(sum, n, max);
+        const join = (...xs) => xs.filter((x) => x && String(x).trim()).join("\n\n");
+        let desc = "",
+          pinTitle = "";
+        switch (pid) {
+          case "pinterest": {
+            pinTitle = _bfFit(title, 100);
+            const tags = _bfTags(a, 3);
+            const cta = "Read the full article on our blog.";
+            desc = join(_bfFit(sum || title, 500 - tags.length - cta.length - 5) + " " + cta, tags);
+            break;
+          }
+          case "instagram":
+            desc = join(title, cap(700, 3), "📖 Read the full article: link in bio.", _bfTags(a, 6));
+            break;
+          case "facebook":
+            desc = join(title, cap(500, 2), _bfTags(a, 2), "Read the full article:");
+            break;
+          case "linkedin":
+            desc = join(title, cap(900, 4), "Read the full article at the link below.", _bfTags(a, 3));
+            break;
+          case "alignable":
+            desc = _bfFit(join(_bfNoContact(title) || head, _bfFirst(_bfNoContact(sum), 3, 600)), 1000 - topic.q.length - 2);
+            desc = join(desc, topic.q);
+            break;
+          case "google":
+            desc = join(_bfNoContact(title) || head, _bfFirst(_bfNoContact(sum), 6, 1300));
+            break;
+          case "twitter": {
+            const room = 280 - 23 - 2;
+            const tag = _bfTags(a, 1);
+            const t = _bfFit(title, room);
+            desc = t.length + tag.length + 2 <= room ? join(t, tag) : t;
+            break;
+          }
+          case "bluesky": {
+            const tag = _bfTags(a, 1);
+            let t = _bfFit(title, 300);
+            const more = _bfFirst(sum, 1, 300 - t.length - tag.length - 4);
+            if (more && !/…$/.test(more)) t = join(t, more);
+            desc = t.length + tag.length + 2 <= 300 ? join(t, tag) : t;
+            break;
+          }
+          case "tiktok":
+            desc = join(title, cap(400, 2), "Full article on our blog (link in bio).", _bfTags(a, 4));
+            break;
+          case "threads": {
+            const room = 500 - link.length - 2;
+            const tag = _bfTags(a, 1);
+            desc = _bfFit(join(title, cap(320, 2)), room - tag.length - 2);
+            desc = join(desc, tag);
+            if (desc.length > room) desc = _bfFit(title, room);
+            break;
+          }
+          case "shopify":
+            desc = join(title, cap(900, 4));
+            break;
+          default:
+            desc = join(title, cap(500, 2), "Read the full article:");
+        }
+        return {
+          header: head,
+          body,
+          pinTitle,
+          desc,
+          link: PB_CFG[pid] && (PB_CFG[pid].link || PB_CFG[pid].linkInText) ? link : "",
+          alt: _bfFit((/[.!?]$/.test(title) ? title : title + ".") + (body ? " " + body.replace(/…$/, ".") : ""), 300),
+          topic: `${a.blogName} | ${topic.photo || head}`,
+        };
+      }
+
+      // ── Photos: the article's featured image (made into a photo the batch can draw), or a fresh Unsplash photo ──
+      const _bfThumb = (u, w) => (u ? u + (u.includes("?") ? "&" : "?") + "width=" + w : "");
+      function _bfJpeg(blob) {
+        return new Promise((res, rej) => {
+          const url = URL.createObjectURL(blob);
+          const im = new Image();
+          im.onload = () => {
+            try {
+              const k = Math.min(1, 1800 / Math.max(im.naturalWidth || 1, im.naturalHeight || 1));
+              const c = document.createElement("canvas");
+              c.width = Math.max(1, Math.round(im.naturalWidth * k));
+              c.height = Math.max(1, Math.round(im.naturalHeight * k));
+              const x = c.getContext("2d");
+              x.fillStyle = "#ffffff";
+              x.fillRect(0, 0, c.width, c.height);
+              x.drawImage(im, 0, 0, c.width, c.height);
+              res(c.toDataURL("image/jpeg", 0.86));
+            } catch (e) {
+              rej(e);
+            } finally {
+              URL.revokeObjectURL(url);
+            }
+          };
+          im.onerror = () => {
+            URL.revokeObjectURL(url);
+            rej(new Error("image"));
+          };
+          im.src = url;
+        });
+      }
+      async function _bfFeatured(a) {
+        if (!a.image) return null;
+        const blob = await _bfGet(_bfThumb(a.image, 1800), "blob", (b) => b && b.size > 800 && !/^(text|application\/json)/i.test(b.type || ""));
+        return await _bfJpeg(blob);
+      }
+      // A featured image made in Canva ("Untitled design") usually has words on it already: a plain photo suits a layout better
+      const _bfIsGraphic = (a) => /untitled[_-]?design|canva/i.test(a.image || "");
+      async function _bfUnsplash(a, used) {
+        if (!(typeof _usHasKeys === "function" && _usHasKeys() && typeof usFetch === "function")) return null;
+        const topic = _bfTopic(a);
+        const stop = /^(the|a|an|and|or|of|to|in|for|on|your|you|what|how|why|when|is|are|do|does|with|it|its|it's|this|that|from|about|here's|heres|need|know|should|can|will|my|our|we|vs|guide|tips)$/i;
+        const words = a.title
+          .replace(/[^\w\s'-]/g, " ")
+          .split(/\s+/)
+          .filter((w) => w && !stop.test(w) && !/^\d+$/.test(w))
+          .slice(0, 3)
+          .join(" ");
+        for (const q of [topic.photo, words].filter(Boolean)) {
+          let res;
+          try {
+            res = await usFetch("https://api.unsplash.com/search/photos?query=" + encodeURIComponent(q) + "&per_page=20&content_filter=high");
+          } catch (e) {
+            return null;
+          }
+          if (!res.ok) return null;
+          const data = await res.json();
+          const pick = (data.results || []).find((ph) => ph && ph.urls && !used.has(ph.id));
+          if (!pick) continue;
+          used.add(pick.id);
+          if (pick.links && pick.links.download_location) usFetch(pick.links.download_location).catch(() => {});
+          return {
+            photo: pick.urls.raw + (pick.urls.raw.includes("?") ? "&" : "?") + "w=2400&h=2400&fit=max&q=82&fm=jpg",
+            credit: { id: pick.id, name: (pick.user && pick.user.name) || "", link: (pick.user && pick.user.links && pick.user.links.html) || "", page: (pick.links && pick.links.html) || "" },
+          };
+        }
+        return null;
+      }
+
+      // ── Remembering which articles you've already turned into posts ──
+      const _bfUsed = () => _bfLS(BF_USED_KEY, {}) || {};
+      function _bfMarkUsed(paths, pids) {
+        const u = _bfUsed();
+        const day = new Date().toISOString().slice(0, 10);
+        paths.forEach((p) => {
+          u[p] = Object.assign({}, u[p] || {});
+          pids.forEach((pid) => (u[p][pid] = day));
+        });
+        const keys = Object.keys(u);
+        if (keys.length > 500) keys.slice(0, keys.length - 500).forEach((k) => delete u[k]);
+        _bfSet(BF_USED_KEY, u);
+      }
+      function _bfUsedText(path) {
+        const u = _bfUsed()[path];
+        if (!u) return "";
+        const pids = PB_ORDER.filter((p) => u[p]);
+        if (!pids.length) return "";
+        const last = pids.map((p) => u[p]).sort().pop();
+        const d = new Date(last + "T12:00:00");
+        return `Used on ${pids.length > 3 ? pids.length + " platforms" : pids.map((p) => _pbName(p)).join(", ")} · ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+      }
+      function _bfHasBatch(pid) {
+        if (_pb.byPid[pid]) return _pb.byPid[pid].some((s) => _pbFilled(s));
+        const a = _bfLS(_pbKey(pid), null);
+        return Array.isArray(a) && a.some((s) => s && _pbFilled(s));
+      }
+
+      // ── The picker ──
+      function _bfPlats() {
+        if (!_bf.plats) {
+          const saved = _bfLS(BF_PLATS_KEY, null);
+          _bf.plats = Array.isArray(saved) ? saved.filter((p) => PB_CFG[p]) : [];
+          if (!_bf.plats.length) _bf.plats = [_pb.pid];
+        }
+        return _bf.plats;
+      }
+      function _bfBuild() {
+        if (document.getElementById("bf-overlay")) return;
+        const ov = document.createElement("div");
+        ov.id = "bf-overlay";
+        ov.className = "us-overlay";
+        ov.setAttribute("role", "dialog");
+        ov.setAttribute("aria-modal", "true");
+        ov.setAttribute("aria-labelledby", "bf-title");
+        ov.innerHTML = `<div class="us-modal bf-modal">
+            <div class="us-head"><div><div class="us-title" id="bf-title">📝 Batches from your blog</div>
+              <div class="mix-sub">Pick up to 10 articles and the platforms. Each platform gets a batch with one post per article: a caption written for that platform, the article link and its photo.</div></div>
+              <button type="button" class="us-x" aria-label="Close" title="Close" onclick="bfClose()">✕</button></div>
+            <div class="bf-bar">
+              <input type="search" id="bf-q" placeholder="Search your articles" aria-label="Search your articles" autocomplete="off" />
+              <button type="button" class="us-more" onclick="bfQuick('latest')" title="The 10 newest articles (in the blog you're viewing)">🆕 Latest 10</button>
+              <button type="button" class="us-more" onclick="bfQuick('each')" title="The newest article from each of 10 different blogs">🗂 One from each blog</button>
+              <label class="bf-chk"><input type="checkbox" id="bf-hide" onchange="bfHideUsed(this.checked)" /> Hide used</label>
+              <button type="button" class="us-more" onclick="bfLoad(true)" title="Get your newest articles">⟳ Refresh</button>
+            </div>
+            <div class="bf-blogs" id="bf-blogs" role="group" aria-label="Which blog"></div>
+            <div class="bf-list" id="bf-list" role="group" aria-label="Articles"></div>
+            <div class="bf-opts">
+              <div class="bf-row"><span class="bf-lab" id="bf-plats-lab">Make batches for</span><div class="bf-plats" id="bf-plats" role="group" aria-labelledby="bf-plats-lab"></div></div>
+              <div class="bf-row"><span class="bf-lab">Photos</span>
+                <label class="bf-chk"><input type="radio" name="bf-photo" value="featured" onchange="bfPhotoMode(this.value)" /> Each article's featured image</label>
+                <label class="bf-chk"><input type="radio" name="bf-photo" value="unsplash" onchange="bfPhotoMode(this.value)" /> New Unsplash photos</label>
+                <details class="bf-site"><summary>Store address</summary><input id="bf-site" aria-label="Your Shopify store's web address" placeholder="${BF_DEFAULT_SITE}" onchange="bfSetSite(this.value)" /></details></div>
+            </div>
+            <div class="us-foot"><span class="us-status" id="bf-status" role="status" aria-live="polite"></span>
+              <button type="button" class="us-more" onclick="bfClearSel()">Clear picks</button>
+              <button type="button" class="us-go" id="bf-go" onclick="bfMake()">Make batches</button></div>
+          </div>`;
+        document.body.appendChild(ov);
+        ov.addEventListener("mousedown", (e) => (ov._down = e.target === ov));
+        ov.addEventListener("click", (e) => {
+          if (e.target === ov && ov._down) bfClose();
+          ov._down = false;
+        });
+        ov.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            bfClose();
+          }
+        });
+        const q = ov.querySelector("#bf-q");
+        let t = null;
+        q.addEventListener("input", () => {
+          clearTimeout(t);
+          t = setTimeout(() => {
+            _bf.q = q.value.trim().toLowerCase();
+            _bfRenderList();
+          }, 150);
+        });
+        ov.addEventListener("change", (e) => {
+          const cb = e.target;
+          if (cb && cb.classList && cb.classList.contains("bf-cb")) bfToggle(cb.value, cb.checked);
+        });
+      }
+      function _bfShown(ignoreBlog) {
+        const used = _bf.hideUsed ? _bfUsed() : null;
+        return (_bf.items || []).filter(
+          (a) =>
+            (ignoreBlog || _bf.blog === "all" || a.blog === _bf.blog) &&
+            (!used || !used[a.path] || _bf.sel.includes(a.path)) &&
+            (!_bf.q || (a.title + " " + a.summary + " " + a.blogName).toLowerCase().includes(_bf.q)),
+        );
+      }
+      function _bfRenderBlogs() {
+        const box = document.getElementById("bf-blogs");
+        if (!box) return;
+        const items = _bf.items || [];
+        if (!items.length) return (box.innerHTML = "");
+        const counts = {};
+        items.forEach((a) => (counts[a.blog] = (counts[a.blog] || 0) + 1));
+        const blogs = Object.keys(counts).sort((x, y) => _bfBlogName(x).localeCompare(_bfBlogName(y)));
+        const chip = (id, label, n) => `<button type="button" class="bf-blog${_bf.blog === id ? " on" : ""}" aria-pressed="${_bf.blog === id}" onclick="bfBlog('${id}')">${escHtml(label)} <span>${n}</span></button>`;
+        box.innerHTML = chip("all", "All blogs", items.length) + blogs.map((b) => chip(b, _bfBlogName(b), counts[b])).join("");
+      }
+      function _bfRenderList() {
+        const box = document.getElementById("bf-list");
+        if (!box) return;
+        if (!_bf.items) {
+          box.innerHTML = `<div class="bf-empty">${_bf.err || '<span class="bf-spin" aria-hidden="true"></span> Reading your blog…'}</div>`;
+          return;
+        }
+        const list = _bfShown();
+        if (!list.length) {
+          box.innerHTML = `<div class="bf-empty">${_bf.err || (_bf.q ? "No articles match your search." : _bf.hideUsed ? "You've used every article here. Untick <b>Hide used</b> to see them." : "No articles here yet.")}</div>`;
+          return;
+        }
+        const usedAll = _bfUsed();
+        box.innerHTML = list
+          .map((a) => {
+            const k = _bf.sel.indexOf(a.path);
+            const on = k >= 0;
+            const date = a.when ? new Date(a.when).toLocaleDateString("en-US", { month: "short", day: "numeric", year: new Date(a.when).getFullYear() === new Date().getFullYear() ? undefined : "numeric" }) : "";
+            const used = usedAll[a.path] ? _bfUsedText(a.path) : "";
+            return `<label class="bf-item${on ? " on" : ""}${used ? " used" : ""}">
+                <input type="checkbox" class="bf-cb" value="${escHtml(a.path)}"${on ? " checked" : ""} aria-label="${escHtml(a.title)}" />
+                <span class="bf-no" aria-hidden="true">${on ? k + 1 : ""}</span>
+                ${a.image ? `<img class="bf-img" src="${escHtml(_bfThumb(a.image, 160))}" alt="" loading="lazy" />` : `<span class="bf-img bf-noimg" aria-hidden="true">📝</span>`}
+                <span class="bf-txt"><span class="bf-t">${escHtml(a.title)}</span>
+                  <span class="bf-m">${escHtml(a.blogName)}${date ? " · " + date : ""}${used ? ` · <span class="bf-used">${escHtml(used)}</span>` : ""}</span>
+                  ${a.summary ? `<span class="bf-s">${escHtml(_bfFit(a.summary, 170))}</span>` : ""}</span>
+              </label>`;
+          })
+          .join("");
+      }
+      function _bfRenderPlats() {
+        const box = document.getElementById("bf-plats");
+        if (!box) return;
+        const on = new Set(_bfPlats());
+        box.innerHTML =
+          PB_ORDER.map(
+            (pid) =>
+              `<button type="button" class="pb-plat${on.has(pid) ? " on" : ""}" aria-pressed="${on.has(pid)}" style="--pc:${_pbColor(pid)}" onclick="bfPlat('${pid}')">${_pbIcon(pid)}<span>${escHtml(_pbName(pid))}</span></button>`,
+          ).join("") + `<button type="button" class="bf-all" onclick="bfAllPlats()">${on.size === PB_ORDER.length ? "None" : "All"}</button>`;
+      }
+      function _bfRenderFoot() {
+        const st = document.getElementById("bf-status"),
+          go = document.getElementById("bf-go");
+        if (!st || !go) return;
+        if (_bf.busy) return;
+        const n = _bf.sel.length,
+          pids = PB_ORDER.filter((p) => _bfPlats().includes(p));
+        const full = pids.filter(_bfHasBatch);
+        go.disabled = !n || !pids.length || !!_bf.loading;
+        go.textContent = !n || !pids.length ? "Make batches" : `${full.length ? "Replace & make" : "Make"} ${pids.length} batch${pids.length === 1 ? "" : "es"}`;
+        const names = (xs) => xs.map((p) => _pbName(p)).join(", ");
+        let msg;
+        if (!_bf.items) msg = _bf.err || "";
+        else if (!n) msg = `${_bf.items.length} articles on your blog. Pick up to 10 (the order you pick is the post order).`;
+        else if (!pids.length) msg = `${n} of 10 articles picked. Now pick the platforms.`;
+        else msg = `${n} of 10 articles picked → ${n} post${n === 1 ? "" : "s"} each for ${names(pids)}.`;
+        if (n && full.length) msg += ` <span class="bf-warn">Replaces what's in your ${names(full)} batch${full.length === 1 ? "" : "es"} now.</span>`;
+        st.innerHTML = msg;
+      }
+      function _bfRender() {
+        if (!document.getElementById("bf-overlay")) return;
+        _bfRenderBlogs();
+        _bfRenderList();
+        _bfRenderPlats();
+        _bfRenderFoot();
+      }
+      function _bfLock(on) {
+        document.querySelectorAll("#bf-overlay button, #bf-overlay input").forEach((b) => (b.disabled = !!on));
+        const ov = document.getElementById("bf-overlay");
+        if (ov) ov.classList.toggle("bf-working", !!on);
+      }
+      async function bfOpen() {
+        if (_pb.busy) return;
+        if (!document.getElementById("pb-overlay") || document.getElementById("pb-overlay").style.display !== "flex") await pbOpen();
+        _bfBuild();
+        const ov = document.getElementById("bf-overlay");
+        document.body.appendChild(ov);
+        _bf.opener = document.activeElement;
+        ov.style.display = "flex";
+        const mode = _bfLS(BF_PHOTO_KEY, "featured") === "unsplash" ? "unsplash" : "featured";
+        ov.querySelectorAll('input[name="bf-photo"]').forEach((r) => (r.checked = r.value === mode));
+        const site = document.getElementById("bf-site");
+        if (site) site.value = _bfSite();
+        document.getElementById("bf-hide").checked = _bf.hideUsed;
+        _bfRender();
+        setTimeout(() => document.getElementById("bf-q").focus(), 30);
+        await bfLoad(false);
+      }
+      function bfClose() {
+        if (_bf.busy) return;
+        const ov = document.getElementById("bf-overlay");
+        if (ov) ov.style.display = "none";
+        if (_bf.opener && _bf.opener.focus && document.contains(_bf.opener)) _bf.opener.focus();
+      }
+      function bfToggle(path, on) {
+        const k = _bf.sel.indexOf(path);
+        if (on && k < 0) {
+          if (_bf.sel.length >= PB_N) {
+            _bfRenderList();
+            const st = document.getElementById("bf-status");
+            if (st) st.innerHTML = `<span class="bf-warn">A batch holds 10 posts.</span> Untick an article to swap it for this one.`;
+            return;
+          }
+          _bf.sel.push(path);
+        } else if (!on && k >= 0) _bf.sel.splice(k, 1);
+        _bfRenderList();
+        _bfRenderFoot();
+      }
+      function bfQuick(kind) {
+        if (!_bf.items || _bf.busy) return;
+        if (kind === "latest") _bf.sel = _bfShown().slice(0, PB_N).map((a) => a.path);
+        else {
+          const seen = new Set();
+          _bf.sel = _bfShown(true)
+            .filter((a) => !seen.has(a.blog) && seen.add(a.blog))
+            .slice(0, PB_N)
+            .map((a) => a.path);
+          if (_bf.blog !== "all") _bf.blog = "all";
+        }
+        _bfRender();
+        const blogs = new Set(_bf.sel.map((p) => (_bf.items.find((a) => a.path === p) || {}).blog)).size;
+        const st = document.getElementById("bf-status");
+        if (kind === "each" && st && _bf.sel.length < PB_N) st.innerHTML += ` <span class="bf-warn">Your store has ${blogs} blog${blogs === 1 ? "" : "s"} with articles to pick from, so that's ${blogs}.</span>`;
+      }
+      function bfClearSel() {
+        if (_bf.busy) return;
+        _bf.sel = [];
+        _bfRender();
+      }
+      function bfBlog(id) {
+        _bf.blog = id;
+        _bfRenderBlogs();
+        _bfRenderList();
+      }
+      function bfHideUsed(on) {
+        _bf.hideUsed = !!on;
+        _bfRenderList();
+      }
+      function bfPlat(pid) {
+        const p = _bfPlats();
+        const k = p.indexOf(pid);
+        if (k >= 0) p.splice(k, 1);
+        else p.push(pid);
+        _bfSet(BF_PLATS_KEY, p);
+        _bfRenderPlats();
+        _bfRenderFoot();
+      }
+      function bfAllPlats() {
+        _bf.plats = _bfPlats().length === PB_ORDER.length ? [] : PB_ORDER.slice();
+        _bfSet(BF_PLATS_KEY, _bf.plats);
+        _bfRenderPlats();
+        _bfRenderFoot();
+      }
+      function bfPhotoMode(v) {
+        _bfSet(BF_PHOTO_KEY, v === "unsplash" ? "unsplash" : "featured");
+      }
+      function bfSetSite(v) {
+        const s = _bfNormSite(v);
+        _bfSet(BF_SITE_KEY, s && s !== BF_DEFAULT_SITE ? s : "");
+        const el = document.getElementById("bf-site");
+        if (el) el.value = _bfSite();
+        _bf.items = null;
+        _bf.sel = [];
+        bfLoad(true);
+      }
+      async function bfMake() {
+        if (_bf.busy || _pb.busy || !_bf.items) return;
+        const arts = _bf.sel.map((p) => _bf.items.find((a) => a.path === p)).filter(Boolean);
+        const pids = PB_ORDER.filter((p) => _bfPlats().includes(p));
+        if (!arts.length || !pids.length) return _bfRenderFoot();
+        const mode = _bfLS(BF_PHOTO_KEY, "featured") === "unsplash" ? "unsplash" : "featured";
+        const hasKey = typeof _usHasKeys === "function" && _usHasKeys();
+        const st = document.getElementById("bf-status");
+        const say = (h) => st && (st.innerHTML = h);
+        _bf.busy = true;
+        _bfLock(true);
+        let fromBlog = 0,
+          fromUnsplash = 0,
+          none = 0;
+        try {
+          // One photo per article, shared by every platform's post for it
+          const photos = [];
+          const used = new Set();
+          for (let i = 0; i < arts.length; i++) {
+            const a = arts[i];
+            say(`<span class="bf-spin" aria-hidden="true"></span> Getting the photo for article ${i + 1} of ${arts.length}…`);
+            let ph = null;
+            const wantUnsplash = mode === "unsplash" || (_bfIsGraphic(a) && hasKey) || !a.image;
+            if (wantUnsplash && hasKey) ph = await _bfUnsplash(a, used).catch(() => null);
+            if (ph) fromUnsplash++;
+            if (!ph && a.image) {
+              const data = await _bfFeatured(a).catch(() => null);
+              if (data) {
+                ph = { photo: data, credit: null };
+                fromBlog++;
+              }
+            }
+            if (!ph && !wantUnsplash && hasKey) {
+              ph = await _bfUnsplash(a, used).catch(() => null);
+              if (ph) fromUnsplash++;
+            }
+            if (!ph) none++;
+            photos.push(ph);
+          }
+          // Fill each platform's batch: post 1 is the first article you picked, and so on
+          for (const pid of pids) {
+            say(`<span class="bf-spin" aria-hidden="true"></span> Writing the ${escHtml(_pbName(pid))} posts…`);
+            await _pbLoad(pid);
+            const slots = _pb.byPid[pid];
+            for (let i = 0; i < PB_N; i++) {
+              const s = slots[i];
+              const a = arts[i];
+              if (!a) {
+                Object.assign(s, _pbEmpty(), { layout: s.layout, pal: s.pal });
+                await _pbPut(i, null, pid);
+                continue;
+              }
+              const ph = photos[i];
+              Object.assign(s, _bfPostFor(a, pid), { photo: ph ? ph.photo : "", credit: ph ? ph.credit : null, blogUrl: a.url });
+              await _pbPut(i, ph && /^data:/.test(ph.photo) ? ph.photo : null, pid);
+            }
+            _pbSaveNow(pid);
+          }
+          _bfMarkUsed(
+            arts.map((a) => a.path),
+            pids,
+          );
+          _bf.sel = [];
+        } catch (e) {
+          _bf.busy = false;
+          _bfLock(false);
+          say(`<span class="bf-warn">Something went wrong: ${escHtml(e.message || String(e))}</span>`);
+          return;
+        }
+        _bf.busy = false;
+        _bfLock(false);
+        bfClose();
+        // Show the first platform's batch
+        const first = pids.includes(_pb.pid) ? _pb.pid : pids[0];
+        if (first !== _pb.pid) await pbSetPlatform(first, true);
+        else {
+          _pbRenderAll();
+          await _pbEnsureLayouts();
+          _pbRenderAll();
+        }
+        _pb.sel = 0;
+        _pbMarkSel();
+        if (typeof _pbOthersSync === "function") _pbOthersSync();
+        const names = pids.map((p) => _pbName(p));
+        const list = names.length > 1 ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1] : names[0];
+        const photoNote =
+          none && !hasKey
+            ? ` ${none} article${none === 1 ? " has" : "s have"} no photo yet: <button type="button" class="pb-mini" onclick="pbSetupPhotos()">🔍 Set up photos</button>`
+            : none
+              ? ` ${none} still need${none === 1 ? "s" : ""} a photo (🔍 on the post).`
+              : fromUnsplash && fromBlog
+                ? ` Photos: ${fromBlog} featured image${fromBlog === 1 ? "" : "s"}, ${fromUnsplash} from Unsplash (for featured images that already had words on them).`
+                : "";
+        const msg = `✓ Made ${pids.length === 1 ? "a batch" : pids.length + " batches"} from ${arts.length} blog article${arts.length === 1 ? "" : "s"}: ${escHtml(list)}.${pids.length > 1 ? " Pick a platform above to look over each one." : ""}${photoNote}`;
+        _pbStatus(msg);
+        if (typeof _mpToast === "function") _mpToast(`📝 ${arts.length} article${arts.length === 1 ? "" : "s"} → ${escHtml(list)}`, 6000);
+      }
+      window.bfOpen = bfOpen;
+      window.bfClose = bfClose;
+      window.bfLoad = bfLoad;
+      window.bfQuick = bfQuick;
+      window.bfClearSel = bfClearSel;
+      window.bfBlog = bfBlog;
+      window.bfHideUsed = bfHideUsed;
+      window.bfPlat = bfPlat;
+      window.bfAllPlats = bfAllPlats;
+      window.bfPhotoMode = bfPhotoMode;
+      window.bfSetSite = bfSetSite;
+      window.bfMake = bfMake;
+      window.bfToggle = bfToggle;
+      (function _bfStyles() {
+        const st = document.createElement("style");
+        st.textContent = `
+          .bf-modal { width: min(980px, 100%); height: min(860px, calc(100vh - 40px)); }
+          #pb-overlay .mix-head-actions .us-more { white-space: nowrap; }
+          .bf-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 18px 10px; }
+          #bf-q { flex: 1 1 220px; min-width: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font: 13px "DM Sans", sans-serif; padding: 8px 11px; outline: none; }
+          #bf-q:focus { border-color: var(--hi); }
+          .bf-chk { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text); cursor: pointer; white-space: nowrap; }
+          .bf-blogs { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 18px 10px; }
+          .bf-blog { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 999px; padding: 4px 10px; font: 600 11.5px "DM Sans", sans-serif; cursor: pointer; }
+          .bf-blog span { color: var(--muted); font-weight: 700; margin-left: 2px; }
+          .bf-blog:hover { border-color: var(--hi); }
+          .bf-blog.on { background: var(--hi); border-color: var(--hi); color: #1a1206; }
+          .bf-blog.on span { color: #1a1206; opacity: .7; }
+          .bf-list { flex: 1; min-height: 160px; overflow-y: auto; padding: 2px 18px 10px; display: flex; flex-direction: column; gap: 6px; }
+          .bf-item { display: grid; grid-template-columns: auto 22px 64px 1fr; align-items: center; gap: 10px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); cursor: pointer; }
+          .bf-item:hover { border-color: var(--hi); }
+          .bf-item.on { border-color: var(--hi); box-shadow: 0 0 0 2px var(--hi-dim); }
+          .bf-item input { width: 16px; height: 16px; accent-color: var(--hi); margin: 0; }
+          .bf-no { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font: 800 11px "DM Sans", sans-serif; }
+          .bf-item.on .bf-no { background: var(--hi); color: #1a1206; }
+          .bf-img { width: 64px; height: 48px; border-radius: 6px; object-fit: cover; background: rgba(255,255,255,.06); display: block; }
+          .bf-noimg { display: flex; align-items: center; justify-content: center; font-size: 20px; }
+          .bf-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+          .bf-t { font-weight: 700; font-size: 13px; color: var(--text); line-height: 1.3; }
+          .bf-m { font-size: 11px; color: var(--muted); }
+          .bf-used { color: #3eb489; font-weight: 600; }
+          .bf-item.used:not(.on) { opacity: .78; }
+          .bf-s { font-size: 11.5px; color: var(--muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+          .bf-empty { text-align: center; color: var(--muted); padding: 50px 10px; font-size: 13px; line-height: 1.6; }
+          .bf-opts { border-top: 1px solid var(--border); padding: 10px 18px 4px; display: flex; flex-direction: column; gap: 8px; }
+          .bf-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+          .bf-lab { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); min-width: 120px; }
+          .bf-plats { display: flex; flex-wrap: wrap; gap: 5px; flex: 1; }
+          .bf-all { border: none; background: none; color: var(--hi); font: 700 11.5px "DM Sans", sans-serif; cursor: pointer; text-decoration: underline; padding: 4px; }
+          .bf-site { margin-left: auto; font-size: 11px; color: var(--muted); }
+          .bf-site summary { cursor: pointer; }
+          .bf-site input { margin-top: 5px; width: 230px; max-width: 100%; box-sizing: border-box; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font: 12px "DM Sans", sans-serif; padding: 6px 8px; }
+          .bf-warn { color: #f5a623; font-weight: 600; }
+          #bf-go:disabled { opacity: .45; cursor: not-allowed; }
+          .bf-working .bf-list, .bf-working .bf-opts { opacity: .55; pointer-events: none; }
+          .bf-spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--hi); border-radius: 50%; animation: studio-spin .8s linear infinite; vertical-align: -2px; margin-right: 4px; }
+          .bf-blog:focus-visible, .bf-all:focus-visible, .bf-item:focus-within { outline: 2px solid var(--hi); outline-offset: 2px; }
+          .bf-modal .us-head > div { min-width: 0; }
+          .bf-modal .us-x { flex-shrink: 0; margin-left: 10px; }
+          @media (max-width: 640px) {
+            .bf-item { grid-template-columns: auto 22px 1fr; } .bf-img { display: none; } .bf-lab { min-width: 0; width: 100%; } .bf-site { margin-left: 0; max-width: 100%; }
+            .bf-blogs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .bf-blog { flex-shrink: 0; }
+            .bf-modal .mix-sub { display: none; }
+          }
+          @media (prefers-reduced-motion: reduce) { .bf-spin { animation: none; } }
         `;
         document.head.appendChild(st);
       })();
@@ -14562,6 +15460,7 @@ Post:
         } else if (kind === "timely" && typeof tiOpen === "function") tiOpen();
         else if (kind === "ai") uxShow(document.getElementById("ai-gen-section"));
         else if (kind === "batch" && typeof pbOpen === "function") pbOpen();
+        else if (kind === "blog" && typeof bfOpen === "function") bfOpen();
         else if (kind === "blank" && typeof pcClearAllText === "function") pcClearAllText();
         else if (kind === "photo" && typeof pcUseBlank === "function") pcUseBlank();
       }
@@ -14659,6 +15558,7 @@ Post:
             <button type="button" role="menuitem" onclick="uxNewPost('timely')">📰 From a timely idea</button>
             <button type="button" role="menuitem" onclick="uxNewPost('ai')">✦ AI draft</button>
             <button type="button" role="menuitem" onclick="uxNewPost('batch')">📦 A batch of 10</button>
+            <button type="button" role="menuitem" onclick="uxNewPost('blog')">📝 Batches from your blog</button>
             <button type="button" role="menuitem" onclick="uxNewPost('blank')">🧹 Start blank (clear all text)</button>
             <button type="button" role="menuitem" onclick="uxNewPost('photo')">▢ Photo only (blank layout)</button>
           </div>`;
