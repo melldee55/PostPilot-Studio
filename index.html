@@ -12159,18 +12159,17 @@ Post:
         const src = s.photo ? (s.credit ? `📷 ${escHtml(s.credit.name || "Unsplash")}` : "Own photo") : "Main photo";
         const v = (f) => escHtml(s[f] || "");
         const pin = pid === "pinterest";
-        const moreLabel = pin ? "Image text, description, link, alt" : ["Image text"].concat(cfg.link ? ["link"] : [], cfg.alt ? ["alt text"] : []).join(", ");
+        const moreLabel = pin ? "Image text, alt" : ["Image text"].concat(cfg.alt ? ["alt text"] : []).join(", ");
         return `<div class="pb-slot${i === _pb.sel ? " sel" : ""}${_pbFilled(s) ? " filled" : ""}" data-i="${i}">
             <div class="pb-top"><span class="pb-num">${no}</span><span class="pb-topic" title="${escHtml(s.topic || "")}">${escHtml((s.topic || "").replace(/\s*\|\s*/g, " · ")) || _pbCap(nn) + " " + no}</span></div>
             <div class="pb-thumb${_pbFilled(s) ? "" : " empty"}" id="pb-thumb-${i}" onclick="pbSelect(${i})"></div>
             <div class="pb-photo"><button type="button" class="pb-mini" onclick="pbPickLayout(${i})" title="Choose another layout for ${nn} ${no}">🎨 Layout</button><button type="button" class="pb-mini" onclick="pbUpload(${i})" title="Upload a photo for ${nn} ${no}">🖼 Upload</button><button type="button" class="pb-mini" onclick="pbUnsplash(${i})" title="Find a photo for ${nn} ${no} on Unsplash">🔍 Unsplash</button><button type="button" class="pb-mini" onclick="pbRecent(${i})" title="Use a photo from your recently used photos">🕘 Recent</button>${s.photo ? `<button type="button" class="pb-mini" onclick="pbUseMain(${i})" title="Use your main photo instead" aria-label="Use your main photo for ${nn} ${no}">↺</button>` : ""}</div>
             <div class="pb-meta"><span class="pb-lay" title="${lay}">Layout ${lay}</span><span class="pb-src">${src}</span>${_pbPalSelect(i)}</div>
             <input class="pb-in" data-f="header" value="${v("header")}" placeholder="Headline on the image" aria-label="${_pbCap(nn)} ${no} headline"/>
-            ${pin ? `<input class="pb-in" data-f="pinTitle" value="${v("pinTitle")}" placeholder="Pin title" aria-label="Pin ${no} title"/>` : `<textarea class="pb-in" data-f="desc" rows="3" placeholder="${escHtml(cfg.text)}" aria-label="${_pbCap(nn)} ${no} ${escHtml(cfg.text)}">${v("desc")}</textarea>${_pbCountHtml(i)}`}
+            ${pin ? `<input class="pb-in" data-f="pinTitle" value="${v("pinTitle")}" placeholder="Pin title" aria-label="Pin ${no} title"/><textarea class="pb-in" data-f="desc" rows="${s.desc ? 6 : 3}" placeholder="Pin description" aria-label="Pin ${no} description">${v("desc")}</textarea>` : `<textarea class="pb-in" data-f="desc" rows="${s.desc ? 6 : 3}" placeholder="${escHtml(cfg.text)}" aria-label="${_pbCap(nn)} ${no} ${escHtml(cfg.text)}">${v("desc")}</textarea>${_pbCountHtml(i)}`}
+            ${cfg.link ? `<input class="pb-in pb-link" data-f="link" value="${v("link")}" placeholder="🔗 ${escHtml(cfg.link)}" title="${escHtml(cfg.link)}" aria-label="${_pbCap(nn)} ${no} ${escHtml(cfg.link)}"/>` : ""}
             <details class="pb-more"><summary>${moreLabel}</summary>
               <textarea class="pb-in" data-f="body" rows="2" placeholder="Image text (the smaller line)" aria-label="${_pbCap(nn)} ${no} image text">${v("body")}</textarea>
-              ${pin ? `<textarea class="pb-in" data-f="desc" rows="3" placeholder="Pin description" aria-label="Pin ${no} description">${v("desc")}</textarea>` : ""}
-              ${cfg.link ? `<input class="pb-in" data-f="link" value="${v("link")}" placeholder="${escHtml(cfg.link)}" aria-label="${_pbCap(nn)} ${no} ${escHtml(cfg.link)}"/>` : ""}
               ${cfg.alt ? `<input class="pb-in" data-f="alt" value="${v("alt")}" placeholder="Alt text" aria-label="${_pbCap(nn)} ${no} alt text"/>` : ""}
             </details>
             <div class="pb-acts"><button type="button" class="pb-mini" onclick="pbPasteInto(${i})">📋 Paste</button><button type="button" class="pb-mini" onclick="pbClearSlot(${i})">✕ Clear</button></div>
@@ -12919,6 +12918,7 @@ Post:
           .pb-mini { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 6px; font: 600 10.5px "DM Sans", sans-serif; padding: 3px 7px; cursor: pointer; }
           .pb-mini:hover { border-color: var(--hi); }
           .pb-in { width: 100%; box-sizing: border-box; background: var(--bg, #0e0b22); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; font: 500 11.5px "DM Sans", sans-serif; resize: vertical; }
+          .pb-link { font-size: 10.5px; color: #8fb8ff; }
           .pb-count { align-self: flex-end; font-size: 10px; color: var(--muted); margin-top: -3px; }
           .pb-count.over { color: #ef4444; font-weight: 700; }
           .pb-more summary { font-size: 10.5px; color: var(--muted); cursor: pointer; padding: 2px 0; }
@@ -13502,25 +13502,148 @@ Post:
         if (cut) return cut.replace(/[,;:\s]+$/, "") + (/\?$/.test(t) && /^(what|why|how|when|is|are|do|does|can|should|will|who|which)\b/i.test(cut) ? "?" : "");
         return _bfFit(t, 62);
       }
+      // ── Your social media protocol ──
+      // Image: only a short hook (about 15 words, no colons) that leads with the topic's keywords.
+      // Every post: a scroll-stopping hook that changes from post to post, short paragraphs with a blank line
+      // between them, no em dashes. Instagram, LinkedIn and Bluesky ask a question; Instagram and LinkedIn say
+      // "click the blog link below" (the link goes in the comments); Facebook and X carry the blog URL, then
+      // hashtags; Pinterest gets an SEO title with an emoji and "click the image to read the full article";
+      // Google Business: no hashtags, emojis or hyphens, ties back to the agency, "click the blog link below",
+      // under 1,450 characters, ending "Learn More by clicking the button below!"
       const BF_TOPICS = [
-        { re: /hir(e|ing)|career|join-our-team|jobs?\b/, tags: ["#Hiring", "#InsuranceCareers"], q: "Know someone who'd be a great fit? Tag them below.", photo: "team office" },
-        { re: /pet|dog|cat/, tags: ["#PetInsurance", "#PetParents"], q: "Pet owners, how do you plan for surprise vet bills?", photo: "dog owner" },
-        { re: /food-?truck|food-?cart|restaurant/, tags: ["#FoodTruck", "#SmallBusiness"], q: "Food business owners, what surprised you most when you were getting started?", photo: "food truck" },
-        { re: /barber|salon|beauty/, tags: ["#Barbershop", "#SmallBusiness"], q: "Barbers and shop owners, what do you wish you'd known when you started?", photo: "barbershop" },
-        { re: /auto|car|vehicle|driv|smog|dmv/, tags: ["#AutoInsurance", "#CarInsurance"], q: "When did you last look over your auto coverage?", photo: "car driving" },
-        { re: /home|house|renter|condo|landlord|water|fire|earthquake/, tags: ["#HomeInsurance", "#Homeowners"], q: "Homeowners, when did you last review what your policy covers?", photo: "california home" },
-        { re: /life|iul|retire|annuit|long-term-care|estate/, tags: ["#LifeInsurance", "#FinancialPlanning"], q: "What finally got you thinking about protecting your family's future?", photo: "family" },
-        { re: /business|commercial|contractor|workers-?comp|liability/, tags: ["#SmallBusiness", "#BusinessInsurance"], q: "Business owners, when did you last check that your coverage still fits?", photo: "small business owner" },
-        { re: /news|southern-california|los-angeles|socal|community/, tags: ["#SoCal", "#LosAngeles"], q: "How is this affecting you and your neighbors?", photo: "los angeles" },
+        {
+          id: "hiring",
+          re: /hir(e|ing)|career|join-our-team|jobs?\b|producer/,
+          key: "Insurance careers",
+          tags: ["#Hiring", "#InsuranceCareers", "#InlandEmpireJobs"],
+          emoji: ["🤝", "🚀"],
+          photo: "team office",
+          hooks: ["Looking for a career where helping people is the whole job?", "Some jobs pay the bills. This one changes families' lives.", "What if your next career move came with a team that actually has your back?"],
+          lines: ["Your next career move starts here.", "Grow with a team that cares.", "Help families, build your future."],
+          qs: ["Know someone who'd be a great fit? Tag them below.", "What matters most to you in a new role?"],
+        },
+        {
+          id: "pet",
+          re: /pet|dog|cat|vet/,
+          key: "Pet insurance",
+          tags: ["#PetInsurance", "#PetParents", "#DogMom"],
+          emoji: ["🐾", "🐶"],
+          photo: "dog owner",
+          hooks: ["Your dog just ate something it shouldn't have. Now the vet wants a deposit.", "Vet bills have a way of showing up at the worst possible time.", "Your best friend can't tell you something's wrong. Your coverage should already be ready.", "One emergency vet visit can cost more than a month of rent."],
+          lines: ["Your best friend is counting on you.", "Read this before the next vet visit.", "California pet parents, read this first."],
+          qs: ["Pet parents, have you ever been hit with a surprise vet bill?", "What's the craziest thing your pet has ever gotten into?"],
+        },
+        {
+          id: "foodtruck",
+          re: /food-?truck|food-?cart|restaurant|catering/,
+          key: "Food truck coverage",
+          tags: ["#FoodTruck", "#SmallBusiness", "#FoodTruckLife"],
+          emoji: ["🚚", "🌮"],
+          photo: "food truck",
+          hooks: ["Your truck is your kitchen, your storefront and your paycheck. What happens if it stops rolling?", "One kitchen fire can close a food truck for weeks.", "The lunch rush is the easy part. Staying protected is the part nobody talks about."],
+          lines: ["Keep your truck rolling all year.", "Protect the business you built.", "SoCal food truck owners, read this."],
+          qs: ["Food truck owners, what surprised you most when you got started?", "What's one thing you wish you'd known before opening?"],
+        },
+        {
+          id: "barber",
+          re: /barber|salon|beauty|stylist/,
+          key: "Barbershop coverage",
+          tags: ["#Barbershop", "#BarberLife", "#SmallBusiness"],
+          emoji: ["💈", "✂️"],
+          photo: "barbershop",
+          hooks: ["One slip near your chair can cost more than a month of cuts.", "Your clients trust your hands. Who protects the shop?", "Every fade, every lineup, every client. One accident can put it all at risk."],
+          lines: ["Protect your chair and your clients.", "Read this before your next appointment.", "Shop owners, this one matters."],
+          qs: ["Barbers, what do you wish you'd known when you started?", "Shop owners, what's your biggest worry on a busy day?"],
+        },
+        {
+          id: "auto",
+          re: /auto|car|vehicle|driv|smog|dmv|teen/,
+          key: "Auto insurance",
+          tags: ["#AutoInsurance", "#CarInsurance", "#SoCalDrivers"],
+          emoji: ["🚗", "🛣️"],
+          photo: "car driving",
+          hooks: ["One fender bender on the 10 can change your whole month.", "You check your mirrors every drive. When did you last check your coverage?", "The other driver doesn't have insurance. Now what?", "Your car is paid off. Your risks aren't."],
+          lines: ["Read this before your next drive.", "SoCal drivers, read this first.", "Know this before you hit the road."],
+          qs: ["Drivers, when did you last look over your auto coverage?", "What's the wildest thing you've seen on a California freeway?"],
+        },
+        {
+          id: "home",
+          re: /home|house|renter|condo|landlord|water|fire|earthquake|roof|flood/,
+          key: "Home insurance",
+          tags: ["#HomeInsurance", "#Homeowners", "#CaliforniaHomes"],
+          emoji: ["🏡", "🔑"],
+          photo: "california home",
+          hooks: ["Your roof just started leaking. It's a good thing you're covered, right?", "The pipe burst at 2 a.m. Do you know what your policy actually pays for?", "California homeowners are getting letters they never expected.", "Your home is the biggest thing you'll ever protect."],
+          lines: ["Protect the place you call home.", "California homeowners, read this first.", "Know what your policy really covers."],
+          qs: ["Homeowners, when did you last read your policy?", "What's the one home repair you never saw coming?"],
+        },
+        {
+          id: "life",
+          re: /life|iul|retire|annuit|long-term-care|estate|final-expense|term/,
+          key: "Life insurance",
+          tags: ["#LifeInsurance", "#FinancialPlanning", "#FamilyFirst"],
+          emoji: ["💙", "👨‍👩‍👧"],
+          photo: "family",
+          hooks: ["Nobody likes to think about it. Your family will be glad you did.", "If something happened tomorrow, would your family keep the house?", "The best time to protect your family was yesterday. The next best time is today.", "Life coverage costs less than most people guess."],
+          lines: ["Your family's future starts here.", "Peace of mind starts with one read.", "Protect the people who count on you."],
+          qs: ["What finally got you thinking about protecting your family's future?", "Parents, what's the one thing you'd want covered no matter what?"],
+        },
+        {
+          id: "business",
+          re: /business|commercial|contractor|workers-?comp|liability|llc|tax/,
+          key: "Business insurance",
+          tags: ["#SmallBusiness", "#BusinessInsurance", "#InlandEmpireBusiness"],
+          emoji: ["💼", "📈"],
+          photo: "small business owner",
+          hooks: ["One lawsuit can undo years of hard work.", "You built the business from nothing. One bad day shouldn't take it away.", "Most small business owners find their coverage gaps the hard way.", "Your busiest day is also your riskiest one."],
+          lines: ["Protect what you've built.", "Business owners, read this first.", "Know your gaps before they cost you."],
+          qs: ["Business owners, when did you last check that your coverage still fits?", "What's one risk in your business that keeps you up at night?"],
+        },
+        {
+          id: "news",
+          re: /news|southern-california|los-angeles|socal|community/,
+          key: "California coverage news",
+          tags: ["#SoCal", "#LosAngeles", "#CaliforniaNews"],
+          emoji: ["📰", "🌴"],
+          photo: "los angeles",
+          hooks: ["This just happened in Southern California. Would your coverage hold up?", "Headlines like this one are why we check our policies twice.", "It could happen on your street next."],
+          lines: ["What it means for your coverage.", "SoCal, here's what to know.", "Read this before it happens to you."],
+          qs: ["How is this affecting you and your neighbors?", "Have you ever had to file a claim after something like this?"],
+        },
       ];
+      const BF_GENERAL = {
+        id: "general",
+        key: "Coverage tips",
+        tags: ["#InsuranceTips", "#Insurance", "#California"],
+        emoji: ["🛡️", "✨"],
+        photo: "",
+        hooks: ["Most people find out what their policy covers on the worst day of their year.", "A five minute read now can save you a lot of stress later.", "Here's something most people don't learn until it's too late."],
+        lines: ["Know this before you need it.", "Here's what most people miss.", "Your coverage questions, answered."],
+        qs: ["What's one coverage question you've always wanted answered?", "Have you ever been surprised by what your policy didn't cover?"],
+      };
       function _bfTopic(a) {
-        const key = (a.blog + " " + a.slug).toLowerCase();
-        const byBlog = BF_TOPICS.find((t) => t.re.test(a.blog.toLowerCase()));
-        return byBlog || BF_TOPICS.find((t) => t.re.test(key)) || { tags: [], q: "What has your experience been?", photo: "" };
+        const blog = String(a.blog || "").toLowerCase(),
+          slug = String(a.slug || "").toLowerCase();
+        // a hiring post is a hiring post, whichever blog it's in; agency news isn't Southern California news
+        if (BF_TOPICS[0].re.test(slug) || BF_TOPICS[0].re.test(blog)) return BF_TOPICS[0];
+        const ok = (t) => !(t.id === "news" && /agency/.test(blog));
+        return BF_TOPICS.find((t) => ok(t) && t.re.test(blog)) || BF_TOPICS.find((t) => ok(t) && t.re.test(slug)) || BF_GENERAL;
       }
-      function _bfTags(a, n) {
-        const t = _bfTopic(a).tags.concat(["#CaliforniaInsurance", "#Insurance", "#InsuranceTips", "#California"]);
-        return [...new Set(t)].slice(0, n).join(" ");
+      // A different hook, image line or question for each post and each platform, chosen the same way every time
+      const _bfHash = (s) => [...String(s || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+      const BF_PLAT_OFF = { instagram: 0, facebook: 1, linkedin: 2, pinterest: 3, google: 4, twitter: 5, bluesky: 6, tiktok: 7, threads: 8, alignable: 9, shopify: 10, tumblr: 11, kofi: 12, patreon: 13 };
+      const _bfPick = (arr, a, k, salt) => (arr && arr.length ? arr[(_bfHash(a.slug + salt) + (k || 0)) % arr.length] : "");
+      const _bfIsYDI = () => /youngdouglasinsurance\.com$/i.test(_bf.site || "");
+      function _bfAgency() {
+        if (_bfIsYDI()) return "Young Douglas Insurance";
+        const nm = _bfBrandNames()[_bfBrandIdx()] || "";
+        return /^(brand|account)\s*\d+$/i.test(nm) ? "" : nm;
+      }
+      function _bfTags(a, n, pid) {
+        const t = _bfTopic(a);
+        const base = t.tags.concat(["#CaliforniaInsurance", "#InlandEmpire", "#InsuranceTips"]);
+        const out = (pid === "instagram" && _bfIsYDI() ? ["#YDInsurance"] : []).concat(base);
+        return [...new Set(out)].slice(0, n).join(" ");
       }
       // Alignable and Google Business hide or reject posts with links, emails or phone numbers: leave out the sentences that have them
       const BF_CONTACT = /https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w-]+\.[\w.]+|(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/i;
@@ -13529,82 +13652,124 @@ Post:
           .filter((x) => !BF_CONTACT.test(x))
           .join(" ")
           .trim();
+      // No em dashes anywhere; for Google Business no hyphens or emojis either
+      const _bfNoDash = (t) => String(t || "").replace(/\s*[—–]\s*/g, ", ").replace(/,\s*,/g, ",");
+      const _bfNoEmoji = (t) => String(t || "").replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, "").replace(/[ \t]{2,}/g, " ");
+      const _bfNoHyphen = (t) => String(t || "").replace(/\s+-\s+/g, ", ").replace(/(\w)-(\w)/g, "$1 $2");
+      // Short paragraphs for short attention spans: one or two sentences each, a blank line between
+      function _bfParas(text, per) {
+        const s = _bfSentences(text);
+        const out = [];
+        for (let i = 0; i < s.length; i += per || 2) out.push(s.slice(i, i + (per || 2)).join(" "));
+        return out.join("\n\n");
+      }
+      const _bfWords = (t) => String(t || "").trim().split(/\s+/).filter(Boolean);
+      // The image text: about 15 words in all and no colons. The headline (from the article's SEO title, so it
+      // leads with the topic's keywords) is the big line; a short line that makes people want to read sits under it.
+      function _bfImageText(a, k) {
+        const t = _bfTopic(a);
+        let head = _bfHeadline(a.title).replace(/\s*[:;]\s*/g, " ").replace(/\s{2,}/g, " ").trim();
+        const hw = _bfWords(head);
+        if (hw.length > 11) head = hw.slice(0, 11).join(" ").replace(/[,.]$/, "") + (/\?$/.test(a.title) ? "?" : "");
+        const room = 15 - _bfWords(head).length;
+        const fits = (l) => _bfWords(l).length <= room;
+        const body = _bfPick(t.lines.filter(fits), a, k, "line") || _bfPick(BF_GENERAL.lines.filter(fits), a, k, "g") || "";
+        return { head, body };
+      }
       // Everything a batch post needs, for one platform
-      function _bfPostFor(a, pid) {
-        const title = a.title;
-        const sum = a.summary || "";
+      function _bfPostFor(a, pid, k) {
+        k = k || 0;
+        const t = _bfTopic(a);
+        const off = (BF_PLAT_OFF[pid] || 0) + k;
+        const title = _bfNoDash(a.title);
+        const sum = _bfNoDash(a.summary || "");
         const link = a.url;
-        const head = _bfHeadline(title);
-        const body = _bfFirst(sum, 1, 140);
-        const topic = _bfTopic(a);
-        const cap = (max, n) => _bfFirst(sum, n, max);
+        const hook = _bfNoDash(_bfPick(t.hooks, a, off, "hook"));
+        const q = _bfPick(t.qs, a, off, "q");
+        const img = _bfImageText(a, k);
+        const seoSummary = _bfFirst(sum, 2, 300) || title;
         const join = (...xs) => xs.filter((x) => x && String(x).trim()).join("\n\n");
+        const cap = (n, max, per) => _bfParas(_bfFirst(sum, n, max), per || 1);
+        const agency = _bfAgency();
         let desc = "",
           pinTitle = "";
         switch (pid) {
-          case "pinterest": {
-            pinTitle = _bfFit(title, 100);
-            const tags = _bfTags(a, 3);
-            const cta = "Read the full article on our blog.";
-            desc = join(_bfFit(sum || title, 500 - tags.length - cta.length - 5) + " " + cta, tags);
-            break;
-          }
           case "instagram":
-            desc = join(title, cap(700, 3), "📖 Read the full article: link in bio.", _bfTags(a, 6));
+            // a short, captivating paragraph or two, a question, then the link-below line and hashtags
+            desc = join(hook, cap(2, 260, 1), q, "👇 Click the blog link below to read the full article.", _bfTags(a, 8, pid));
             break;
           case "facebook":
-            desc = join(title, cap(500, 2), _bfTags(a, 2), "Read the full article:");
+            desc = join(hook, cap(3, 420), "Read the full blog here 👉 " + link, _bfTags(a, 3, pid));
             break;
           case "linkedin":
-            desc = join(title, cap(900, 4), "Read the full article at the link below.", _bfTags(a, 3));
+            // the SEO headline is the first line
+            desc = join(title, hook, cap(4, 600), q, "Click the blog link below to read the full article.", _bfTags(a, 3, pid));
             break;
-          case "alignable":
-            desc = _bfFit(join(_bfNoContact(title) || head, _bfFirst(_bfNoContact(sum), 3, 600)), 1000 - topic.q.length - 2);
-            desc = join(desc, topic.q);
+          case "pinterest": {
+            const [e1, e2] = t.emoji;
+            pinTitle = _bfFit(title.replace(/\s*:\s*/g, ", "), 96) + " " + e1;
+            const tags = _bfTags(a, 4, pid);
+            const cta = "Click the image to read the full article on our blog. " + e2;
+            const room = 500 - tags.length - cta.length - 4;
+            desc = join(_bfFit(join(hook, _bfFirst(sum, 3, 400)).replace(/\n\n/g, " "), room) + " " + cta, tags);
             break;
-          case "google":
-            desc = join(_bfNoContact(title) || head, _bfFirst(_bfNoContact(sum), 6, 1300));
+          }
+          case "google": {
+            // no hashtags, emojis or hyphens; ties back to the agency; under 1,450 characters
+            const close = "Click the blog link below to read the full article.\n\nLearn More by clicking the button below!";
+            const tie = agency ? `At ${agency}, our agents are ready to help you review your coverage and find the right protection for you and your family.` : "";
+            const g = (x) => _bfNoHyphen(_bfNoEmoji(x));
+            const room = 1450 - close.length - tie.length - g(title).length - g(hook).length - 10;
+            desc = join(g(title), g(hook), _bfParas(_bfFirst(_bfNoContact(g(sum)), 5, Math.max(200, room)), 1), g(tie), close);
             break;
+          }
           case "twitter": {
-            const room = 280 - 23 - 2;
-            const tag = _bfTags(a, 1);
-            const t = _bfFit(title, room);
-            desc = t.length + tag.length + 2 <= room ? join(t, tag) : t;
+            // post, link, hashtags (X counts the link as 23 characters)
+            const tag = _bfTags(a, 2, pid);
+            const room = 280 - 23 - tag.length - 4;
+            let p = hook.length + title.length + 2 <= room ? join(hook, title) : hook.length <= room ? hook : _bfFit(title, room);
+            desc = join(p, link, tag);
             break;
           }
           case "bluesky": {
-            const tag = _bfTags(a, 1);
-            let t = _bfFit(title, 300);
-            const more = _bfFirst(sum, 1, 300 - t.length - tag.length - 4);
-            if (more && !/…$/.test(more)) t = join(t, more);
-            desc = t.length + tag.length + 2 <= 300 ? join(t, tag) : t;
+            const tag = _bfTags(a, 1, pid);
+            const parts = [hook, q];
+            let p = join(...parts);
+            if (p.length + tag.length + 2 > 300) p = hook;
+            if (p.length + tag.length + 2 > 300) p = _bfFit(hook, 300 - tag.length - 2);
+            desc = join(p, tag);
             break;
           }
+          case "alignable":
+            // a friendly discussion starter, no links or contact details
+            desc = join(_bfNoContact(hook), _bfParas(_bfFirst(_bfNoContact(sum), 3, 520), 1), t.qs[(off + 1) % t.qs.length] || q);
+            desc = _bfFit(desc, 1000);
+            break;
           case "tiktok":
-            desc = join(title, cap(400, 2), "Full article on our blog (link in bio).", _bfTags(a, 4));
+            desc = join(hook, cap(2, 260, 1), "Full article on our blog, link in bio.", _bfTags(a, 5, pid));
             break;
           case "threads": {
-            const room = 500 - link.length - 2;
-            const tag = _bfTags(a, 1);
-            desc = _bfFit(join(title, cap(320, 2)), room - tag.length - 2);
-            desc = join(desc, tag);
-            if (desc.length > room) desc = _bfFit(title, room);
+            const tag = _bfTags(a, 1, pid);
+            const room = 500 - link.length - tag.length - 6;
+            desc = join(_bfFit(join(hook, _bfFirst(sum, 1, 200)), room), link, tag);
+            if (desc.length > 500) desc = join(_bfFit(hook, room), link);
             break;
           }
           case "shopify":
-            desc = join(title, cap(900, 4));
+            desc = join(title, hook, cap(4, 800));
             break;
           default:
-            desc = join(title, cap(500, 2), "Read the full article:");
+            desc = join(hook, cap(2, 360), "Read the full blog here 👉 " + link, _bfTags(a, 3, pid));
         }
+        const cfg = PB_CFG[pid] || {};
         return {
-          header: head,
-          body,
+          header: img.head,
+          body: img.body,
           pinTitle,
-          desc,
-          link: PB_CFG[pid] && (PB_CFG[pid].link || PB_CFG[pid].linkInText) ? link : "",
-          alt: _bfFit((/[.!?]$/.test(title) ? title : title + ".") + (body ? " " + body.replace(/…$/, ".") : ""), 300),
-          topic: `${a.blogName} | ${topic.photo || head}`,
+          desc: _bfNoDash(desc).replace(/\n{3,}/g, "\n\n").trim(),
+          link: cfg.link || cfg.linkInText ? link : "",
+          alt: _bfFit(seoSummary, 300),
+          topic: `${a.blogName} | ${t.photo || img.head}`,
         };
       }
 
@@ -14073,7 +14238,7 @@ Post:
                 continue;
               }
               const ph = photos[i];
-              Object.assign(s, _bfPostFor(a, pid), { photo: ph ? ph.photo : "", credit: ph ? ph.credit : null, blogUrl: a.url });
+              Object.assign(s, _bfPostFor(a, pid, i), { photo: ph ? ph.photo : "", credit: ph ? ph.credit : null, blogUrl: a.url });
               await _pbPut(i, ph && /^data:/.test(ph.photo) ? ph.photo : null, pid);
             }
             _pbSaveNow(pid);
@@ -16173,7 +16338,7 @@ Post:
         const st = document.createElement("style");
         st.textContent = `
           body.ux .ux-pb .pb-slot:not(.ux-open) > .pb-photo, body.ux .ux-pb .pb-slot:not(.ux-open) > .pb-meta, body.ux .ux-pb .pb-slot:not(.ux-open) > .pb-acts,
-          body.ux .ux-pb .pb-slot:not(.ux-open) > input.pb-in ~ input.pb-in { display: none !important; }
+          body.ux .ux-pb .pb-slot:not(.ux-open) > input.pb-in ~ input.pb-in:not(.pb-link) { display: none !important; }
           .ux-pin-more { margin-left: auto; padding: 3px 8px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: 700 11px 'DM Sans', sans-serif; cursor: pointer; }
           .ux-pin-more:hover { color: var(--text, #fff); border-color: var(--hi, #f5a623); }
           body.ux .ux-pb .pb-top { display: flex; align-items: center; gap: 6px; }
