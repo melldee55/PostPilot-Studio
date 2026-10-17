@@ -3308,6 +3308,44 @@
       #gate-btn:focus-visible { outline: 2px solid var(--hi); outline-offset: 3px; }
       #gate-error { font-size: 12px; color: var(--coral); min-height: 16px; text-align: center; }
       @media (prefers-reduced-motion: reduce) { .studio-spinner { animation-duration: 2.4s; } #gate-input.error { animation: none; } }
+      /* ── Phone posting view (#phone) ── */
+      body.phone-mode { display: block !important; height: auto !important; min-height: 100vh; overflow: auto !important; padding-top: 0 !important; background: var(--main); }
+      body.phone-mode > *:not(#ph-view):not(#studio-gate):not(script):not(style):not(link) { display: none !important; }
+      #ph-view { max-width: 620px; margin: 0 auto; padding: 0 14px 48px; font-family: "DM Sans", sans-serif; color: var(--text); }
+      .ph-top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0; background: var(--main); border-bottom: 1px solid var(--border); }
+      .ph-brand { font-weight: 800; color: var(--hi); font-size: 16px; }
+      .ph-brand span { color: #a59cc8; font-weight: 600; font-size: 13px; }
+      .ph-ref { width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 20px; cursor: pointer; }
+      .ph-count { font-size: 13.5px; color: #a59cc8; margin: 14px 2px 4px; }
+      .ph-card { background: var(--sb); border: 1px solid var(--border); border-top: 4px solid var(--pc); border-radius: 14px; padding: 12px; margin: 12px 0; display: flex; flex-direction: column; gap: 10px; }
+      .ph-card.done { opacity: .62; }
+      .ph-h { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+      .ph-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--pc); flex-shrink: 0; }
+      .ph-time { color: #a59cc8; font-size: 13.5px; }
+      .ph-st { margin-left: auto; color: #4ade80; font-weight: 800; font-size: 13px; }
+      .ph-img { display: block; width: 100%; max-height: 62vh; object-fit: contain; border-radius: 10px; background: var(--panel); min-height: 140px; }
+      .ph-img:not(.on) { opacity: .3; }
+      .ph-title { font-weight: 800; font-size: 14.5px; }
+      .ph-cap { font-size: 14px; line-height: 1.5; color: #ddd6f6; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 6.4em; overflow: hidden; cursor: pointer; }
+      .ph-cap.open { max-height: none; }
+      .ph-acts, .ph-live { display: flex; flex-wrap: wrap; gap: 8px; }
+      .ph-b { flex: 1 1 auto; min-height: 44px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font: 700 14px "DM Sans", sans-serif; text-align: center; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+      .ph-b.ph-main { background: var(--pc); border-color: var(--pc); color: var(--ink, #fff); }
+      .ph-b:disabled { opacity: .45; }
+      .ph-live input { flex: 1 1 100%; min-height: 44px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--hi); background: var(--panel); color: var(--text); font: 16px "DM Sans", sans-serif; box-sizing: border-box; }
+      .ph-or { font-size: 13.5px; color: #a59cc8; }
+      .ph-l { background: none; border: none; color: var(--hi); font: 700 14px "DM Sans", sans-serif; text-decoration: underline; padding: 6px 0; cursor: pointer; }
+      .ph-livelink { font-size: 13.5px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; overflow-wrap: anywhere; }
+      .ph-livelink a { color: #8fb8ff; }
+      .ph-note { font-size: 13.5px; color: #a59cc8; line-height: 1.55; margin: 12px 2px; }
+      .ph-note a { color: var(--hi); }
+      .ph-warn { color: var(--hi); }
+      .ph-foot { margin-top: 26px; border-top: 1px solid var(--border); padding-top: 12px; }
+      .ph-foot summary { cursor: pointer; font-weight: 700; color: var(--text); font-size: 14px; padding: 6px 0; }
+      .ph-b:focus-visible, .ph-l:focus-visible, .ph-ref:focus-visible, .ph-live input:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+      #ph-hint { position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 2147483001; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; background: var(--sb); border: 1px solid var(--hi); color: var(--text); font: 600 13px "DM Sans", sans-serif; box-shadow: 0 8px 28px rgba(0,0,0,.5); }
+      #ph-hint-go { background: var(--hi); color: #1a1206; border: none; border-radius: 8px; padding: 8px 12px; font: 800 13px "DM Sans", sans-serif; cursor: pointer; }
+      #ph-hint-x { margin-left: auto; background: none; border: 1px solid var(--border); color: var(--text); border-radius: 8px; width: 34px; height: 34px; cursor: pointer; }
     </style>
   </head>
   <body class="studio">
@@ -37665,7 +37703,7 @@ function _suxAttention() {
 function suxAttToggle() { _suxAttOpen = !_suxAttOpen; _suxApply(); }
 function suxHolToggle() { _suxHolOpen = !_suxHolOpen; _suxApply(); }
 function suxMoreToggle() { _suxMoreOpen = !_suxMoreOpen; _suxApply(); }
-const SUX_MORE_FIELD = /^f-(liveurl|tz|alttext|alt|location|firstcomment|first-comment)$/; // blog links stay up front
+const SUX_MORE_FIELD = /^f-(tz|alttext|alt|location|firstcomment|first-comment)$/; // blog links and the live link stay up front
 const _suxNorm = (s) => (s || '').toLowerCase().replace(/nat'?l\b/g, 'national').replace(/int'?l\b/g, 'international').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 function _suxApply() {
   if (!_suxOn()) return;
@@ -41592,6 +41630,1485 @@ function renderAnalyticsView() {
   </div>`;
 }
 
+// ═════════════════════════════════════════════════════════════════
+// POSTING DESK (v110)
+// Post ↗ opens the post's editor with everything you copy first and the live link at the top; a posting run
+// through Today; the live link caught from your clipboard (or pasted as a list); "Scheduled on the platform"
+// with a schedule-ahead run and Pinterest's bulk spreadsheet; one-click Bluesky; a night-before check;
+// reply reminders; and today's posts sent to your phone.
+// ═════════════════════════════════════════════════════════════════
+const _pd = { mode: null, key: null, fromToday: false, prevPlatform: null, run: null, awaiting: null, opened: {}, copied: {},
+  msg: '', status: '', showSched: false, liveDraft: '', offer: null, lastOffered: '', clipDenied: false, capture: false,
+  lastMsg: '', saveLive: false, switching: false, focusLive: false, busy: false, err: '' };
+const _pdE = (v) => escapeHtml(v == null ? '' : String(v));
+const _pdK = (pid, id) => pid + '|' + id;
+const _pdFind = (pid, id) => (state.posts[pid] || []).find(p => String(p.id) === String(id)) || null;
+const _pdName = (pid) => (PLATFORMS[pid] && PLATFORMS[pid].name) || pid;
+const _pdColor = (pid) => (PLATFORMS[pid] && PLATFORMS[pid].color) || '#f5a623';
+const _pdIcon = (pid, n) => ((PLATFORMS[pid] && PLATFORMS[pid].icon) || '').replace(/width="20" height="20"/, `width="${n || 16}" height="${n || 16}"`);
+const _pdDay = (off) => { const d = new Date(); d.setDate(d.getDate() + (off || 0)); return _ppDayStr(d); };
+const _pdLS = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+const _pdSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+// Where each platform keeps its blog link
+const PD_LINK = Object.assign({}, PP_LINK_FIELD, { facebook: 'fbLink', kofi: 'kofiLink' });
+// The most each platform's text can hold (Google Business: your protocol's 1,450; X counts every link as 23)
+const PD_LIMITS = { instagram: 2200, linkedin: 3000, pinterest: 500, google: 1450, twitter: 280, bluesky: 300, tiktok: 4000, youtube: 300, alignable: 1000, shopify: 10000 };
+// Links go in the first comment on these (your protocol), unless the post text already carries the link
+const PD_COMMENT_PLATS = new Set(['instagram', 'facebook', 'linkedin']);
+const _pdCaption = (src, pid) => (src ? _ppPostText(src, pid) : '');
+const _pdLink = (src, pid) => String((src && (src[PD_LINK[pid]] || (pid === 'google' ? '' : src.postLink))) || '').trim();
+function _pdLen(pid, t) {
+  t = String(t || '');
+  if (pid === 'twitter') return t.replace(/https?:\/\/\S+/gi, 'x'.repeat(23)).length;
+  if (pid === 'bluesky') return _bsGraphemes(t);
+  return t.length;
+}
+function _pdFirstComment(src, pid) {
+  if (!PD_COMMENT_PLATS.has(pid)) return '';
+  const link = _pdLink(src, pid);
+  if (!link || _pdCaption(src, pid).includes(link)) return '';
+  return String(_pdLS('postpilot_pd_comment_tpl', '📖 Read the full article here: {link}') || '').replace('{link}', link);
+}
+const _pdPostedLike = (p) => !!(p && (p.publishStatus === 'published' || _ppLiveUrl(p)));
+const _pdOnPlat = (p) => !!(p && p.platformScheduled && !_pdPostedLike(p));
+
+// ── Live links: which platform an address belongs to, and whether it's a post (not a profile) ──
+const PD_HOSTS = [
+  ['instagram', /(^|\.)(instagram\.com|instagr\.am)$/i], ['facebook', /(^|\.)(facebook\.com|fb\.com|fb\.me|fb\.watch)$/i],
+  ['linkedin', /(^|\.)(linkedin\.com|lnkd\.in)$/i], ['pinterest', /(^|\.)(pinterest\.[a-z.]+|pin\.it)$/i],
+  ['twitter', /(^|\.)(x\.com|twitter\.com)$/i], ['bluesky', /(^|\.)bsky\.app$/i], ['tiktok', /(^|\.)tiktok\.com$/i],
+  ['youtube', /(^|\.)(youtube\.com|youtu\.be)$/i], ['alignable', /(^|\.)alignable\.com$/i], ['tumblr', /(^|\.)tumblr\.com$/i],
+  ['kofi', /(^|\.)ko-fi\.com$/i], ['patreon', /(^|\.)patreon\.com$/i],
+  ['google', /(^|\.)(posts\.gle|g\.page|g\.co|maps\.app\.goo\.gl|goo\.gl|business\.google\.com|google\.[a-z.]+)$/i],
+];
+function _pdHostPid(url) {
+  try { const h = new URL(url).hostname; const m = PD_HOSTS.find(([, rx]) => rx.test(h)); return m ? m[0] : ''; } catch (e) { return ''; }
+}
+function _pdIsPostUrl(pid, url) {
+  let u;
+  try { u = new URL(url); } catch (e) { return false; }
+  if (_pdHostPid(url) !== pid) return false;
+  const h = u.hostname.toLowerCase(), p = u.pathname + (u.search || '');
+  switch (pid) {
+    case 'instagram': return /^\/(p|reel|reels|tv)\//i.test(u.pathname);
+    case 'facebook': return /fb\.me$|fb\.watch$/.test(h) || /\/posts\/|permalink\.php|\/share\/|\/photo|story\.php|\/reel\/|\/watch|\/videos\/|fbid=/i.test(p);
+    case 'linkedin': return /lnkd\.in$/.test(h) || /^\/(feed\/update|posts|pulse)\//i.test(u.pathname);
+    case 'pinterest': return /pin\.it$/.test(h) || /^\/pin\//i.test(u.pathname);
+    case 'twitter': return /\/status\//i.test(u.pathname);
+    case 'bluesky': return /\/post\//i.test(u.pathname);
+    case 'tiktok': return /^(vm|vt)\./.test(h) || /\/(video|photo)\/|^\/t\//i.test(u.pathname);
+    case 'youtube': return /youtu\.be$/.test(h) || /^\/(shorts\/|watch)/i.test(u.pathname);
+    case 'google': return /posts\.gle|g\.page|g\.co|goo\.gl/.test(h) || /\/(maps|search|localposts)/i.test(u.pathname);
+    case 'patreon': return /^\/posts\//i.test(u.pathname);
+    default: return u.pathname.length > 1;
+  }
+}
+function _pdUrls(text) { return (String(text || '').match(/(?:https?:\/\/|www\.)[^\s<>"'\])]+/gi) || []).map(u => _ppCleanUrl(u.replace(/[.,;:!?)]+$/, ''))).filter(Boolean); }
+function _pdUrlTaken(url) { return Object.values(state.posts || {}).some(list => (list || []).some(p => _ppLiveUrl(p) === url)); }
+// Save a live link: the post is Live. Posts scheduled on the platform keep the time they went out; others show when you posted them.
+function pdSaveLive(pid, id, raw) {
+  const url = _ppCleanUrl(raw);
+  if (!url) return { ok: false, why: 'bad' };
+  const list = state.posts[pid] || [];
+  const cur = list.find(p => String(p.id) === String(id));
+  if (!cur) return { ok: false, why: 'gone' };
+  const field = pid === 'tiktok' ? 'tiktokLiveUrl' : pid === 'youtube' ? 'ytLiveUrl' : 'liveUrl';
+  const had = _ppLiveUrl(cur);
+  if (had === url) return { ok: true, same: true };
+  const editing = !!(state.showComposer && state.form && state.activePlatform === pid && String(state.editingPostId) === String(id));
+  if (editing) { try { syncFormFromDOM(); } catch (e) {} }
+  const dirty = !!(editing && _pdDirty());
+  const onPlat = !!cur.platformScheduled;
+  state.posts = { ...state.posts, [pid]: list.map(p => String(p.id) === String(id) ? { ...p, [field]: url, liveUrl: url, platformScheduled: false } : p) };
+  let moved = null;
+  if (!had) {
+    const due = cur.scheduledDate ? _ppT(cur.scheduledDate, cur.scheduledTime || '00:00') : 0;
+    if (cur.publishStatus === 'published') {
+      state.posts = { ...state.posts, [pid]: state.posts[pid].map(p => String(p.id) === String(id) ? { ...p, liveAt: Date.now() } : p) };
+    } else if (onPlat && due && due <= Date.now() + 10 * 60e3) {
+      state.posts = { ...state.posts, [pid]: state.posts[pid].map(p => String(p.id) === String(id) ? { ...p, publishStatus: 'published', liveAt: Date.now(), publishedAt: p.publishedAt || new Date(due).toISOString() } : p) };
+    } else moved = _ppMarkLiveNow(pid, id);
+  }
+  _ppNormalizeLive();
+  savePosts(state.posts);
+  try { recalcStreak(pid); } catch (e) {}
+  if (editing) {
+    const np = _pdFind(pid, id) || {};
+    const f = { ...state.form };
+    ['liveUrl', field, 'publishStatus', 'liveAt', 'scheduledDate', 'scheduledTime', 'plannedFor', 'platformScheduled', 'publishedAt'].forEach(k => { f[k] = np[k]; });
+    state.form = f;
+    if (!dirty) state._formOpenSig = _formSig(state.form);
+    else state._formOpenSig = null;
+  }
+  if (_pd.awaiting && _pd.awaiting.pid === pid && String(_pd.awaiting.id) === String(id)) _pd.awaiting = null;
+  try { _pdReplyScan(); } catch (e) {}
+  return { ok: true, moved, dirty, had: !!had, url };
+}
+// A post that's already out is never held back by daily limits or posting days when you save it
+const _pdOrigLimit = getDailyLimit;
+getDailyLimit = function () { return _pd.saveLive ? 1e9 : _pdOrigLimit.apply(this, arguments); };
+const _pdOrigDayRule = _ppDayRule;
+_ppDayRule = function () { return _pd.saveLive ? '' : _pdOrigDayRule.apply(this, arguments); };
+const _pdOrigSavePost = savePost;
+savePost = function () {
+  const f = state.form;
+  _pd.saveLive = !!(state.showComposer && f && state.editingPostId && (f.publishStatus === 'published' || _ppLiveUrl(f)));
+  try { return _pdOrigSavePost.apply(this, arguments); } finally { _pd.saveLive = false; }
+};
+// Has anything you'd care about changed in the editor, compared with the saved post?
+const PD_DIRTY_KEYS = ['title', 'description', 'caption', 'content', 'liText', 'fbText', 'twitterText', 'bskyText', 'tiktokText', 'ytText', 'shopifyText', 'tumblrText', 'kofiText', 'alignableText', 'patreonText',
+  'hashtags', 'altText', 'igLink', 'destinationUrl', 'ctaUrl', 'ctaType', 'liArticleUrl', 'fbLink', 'bskyUrl', 'kofiLink', 'shopifyUrl', 'board', 'image', 'imageName', 'scheduledDate', 'scheduledTime', 'tags', 'location', 'eventTitle', 'couponCode', 'offerTerms'];
+function _pdDirty() {
+  const f = state.form, p = state.editingPostId != null ? _pdFind(state.activePlatform, state.editingPostId) : null;
+  if (!f || !p) return false;
+  return PD_DIRTY_KEYS.some(k => JSON.stringify(f[k] == null ? '' : f[k]) !== JSON.stringify(p[k] == null ? '' : p[k]));
+}
+// Save edits made in the editor (if any) before moving on; false if the save didn't go through
+function _pdCommitEdits() {
+  if (!state.showComposer || !state.form || state.editingPostId == null) return true;
+  try { syncFormFromDOM(); } catch (e) {}
+  if (!_pdDirty()) return true;
+  _pd.switching = true;
+  try { savePost(); } finally { _pd.switching = false; }
+  return !state.showComposer;
+}
+
+// ── Opening a post: "post" mode (from Post ↗), "ahead" mode (schedule it on the platform), or the plain editor ──
+function pdOpen(pid, id, mode, opts) {
+  opts = opts || {};
+  const post = _pdFind(pid, id);
+  if (!post) return;
+  if (state.showToday) { _pd.fromToday = true; state.showToday = false; state.todayLink = null; }
+  if (!_pd.key) _pd.prevPlatform = state.activePlatform;
+  const key = _pdK(pid, id);
+  if (_pd.key !== key) { _pd.copied = {}; _pd.liveDraft = ''; _pd.offer = null; _pd.showSched = false; _pd.err = ''; }
+  _pd.mode = mode || null;
+  _pd.key = key;
+  _pd.msg = opts.msg || (opts.keepMsg ? _pd.msg : '');
+  _pd.status = opts.status || '';
+  if (opts.opened) _pd.opened[key] = Date.now();
+  state.activePlatform = pid;
+  if (state.activeView === 'drafts') state.activeView = 'scheduled';
+  try { if (typeof ppCloseMissed === 'function' && document.querySelector('.pp-missed')) ppCloseMissed(); } catch (e) {}
+  openComposer(String(id));
+  const b = document.getElementById('composer-body');
+  if (b) b.scrollTop = 0;
+}
+function pdEdit(pid, id) { pdOpen(pid, id, null); }
+// Closing the editor takes you back where you were (Today, or the platform you were on)
+function _pdEndSession() {
+  const back = _pd.fromToday, prev = _pd.prevPlatform, hadKey = !!_pd.key;
+  _pd.mode = null; _pd.key = null; _pd.msg = ''; _pd.status = ''; _pd.offer = null; _pd.err = ''; _pd.fromToday = false; _pd.prevPlatform = null;
+  if (_pd.run) _pd.run.paused = true;
+  if (hadKey && prev && PLATFORMS[prev]) state.activePlatform = prev;
+  if (back) state.showToday = true;
+  if (hadKey) render();
+}
+const _pdOrigCloseComposer = closeComposer;
+closeComposer = function () {
+  const r = _pdOrigCloseComposer.apply(this, arguments);
+  if (!_pd.switching) _pdEndSession();
+  return r;
+};
+
+// ── Post ↗: still copies the caption, saves the image and opens the platform; now the post's editor opens too ──
+const _pdOrigToast = _ppToast;
+_ppToast = function (html, ms) {
+  if (_pd.capture) {
+    const d = document.createElement('div');
+    d.innerHTML = html;
+    _pd.lastMsg = d.firstElementChild ? d.firstElementChild.innerHTML : '';
+    return d;
+  }
+  return _pdOrigToast.apply(this, arguments);
+};
+const _pdOrigPost = postOnPlatform;
+postOnPlatform = async function (postId, pid, btn) {
+  pid = pid || state.activePlatform;
+  const id = String(postId), post = _pdFind(pid, id);
+  if (!post) return _pdOrigPost.apply(this, arguments);
+  const ahead = !!(_pd.run && _pd.run.kind === 'ahead' && _pd.key === _pdK(pid, id));
+  // Bluesky, connected: PostPilot posts it for you
+  if (!ahead && pid === 'bluesky' && _bsReady() && !post.isVideo) {
+    pdOpen(pid, id, 'post', { opened: true });
+    return pdBlueskyPost(pid, id);
+  }
+  const keepUrls = {};
+  if (ahead) Object.keys(PD_AHEAD_URLS).forEach(k => { keepUrls[k] = PP_OPEN_URLS[k]; PP_OPEN_URLS[k] = PD_AHEAD_URLS[k]; });
+  _pd.capture = true; _pd.lastMsg = '';
+  let r;
+  try { r = await _pdOrigPost.call(this, postId, pid, btn); }
+  finally { _pd.capture = false; Object.keys(keepUrls).forEach(k => { PP_OPEN_URLS[k] = keepUrls[k]; }); }
+  if (!ahead) _pd.awaiting = { pid, id, at: Date.now() };
+  const copied = /paste the caption/i.test(_pd.lastMsg);
+  pdOpen(pid, id, ahead ? 'ahead' : 'post', { opened: true, msg: _pd.lastMsg });
+  if (_pd.key === _pdK(pid, id) && copied) { _pd.copied.caption = true; _pdRefreshPanel(); }
+  return r;
+};
+// Where to schedule a post ahead on the platform itself
+const PD_AHEAD_URLS = { instagram: 'https://business.facebook.com/latest/', facebook: 'https://business.facebook.com/latest/' };
+const _pdOpenName = (pid, mode) => mode === 'ahead' && PD_AHEAD_URLS[pid] ? 'Meta Business Suite' : _pdName(pid);
+
+// ── The posting panel at the top of the editor ──
+const _pdC = (s) => '<' + '!-- ' + s + ' -->';
+function _pdCur() {
+  if (!_pd.key || !state.showComposer || !state.form) return null;
+  const i = _pd.key.indexOf('|'), pid = _pd.key.slice(0, i), id = _pd.key.slice(i + 1);
+  if (state.activePlatform !== pid || String(state.editingPostId) !== id) return null;
+  return { pid, id, f: state.form, post: _pdFind(pid, id) };
+}
+function _pdRow(n, title, main, actions, cls) {
+  return `<li class="pd-step${cls ? ' ' + cls : ''}"><span class="pd-n">${n}</span><div class="pd-s-main"><div class="pd-s-t">${title}</div>${main || ''}</div><div class="pd-s-act">${actions || ''}</div></li>`;
+}
+function _pdBtn(what, label, extra) {
+  const done = _pd.copied[what];
+  return `<button type="button" class="pd-btn${done ? ' done' : ''}" data-pd="copy" data-what="${what}"${extra || ''}>${done ? '✓ Copied' : label}</button>`;
+}
+function _pdPanelHtml() {
+  const c = _pdCur();
+  if (!c) return '';
+  const { pid, id, f } = c;
+  const name = _pdName(pid), color = _pdColor(pid), ink = _ppInk(color);
+  const ahead = _pd.mode === 'ahead';
+  const run = _pd.run && !_pd.run.paused ? _pd.run : null;
+  const opened = !!_pd.opened[_pd.key];
+  const cap = _pdCaption(f, pid), lim = PD_LIMITS[pid], len = _pdLen(pid, cap);
+  const link = _pdLink(f, pid), fc = _pdFirstComment(f, pid);
+  const img = f.imageOriginal || f.image || '';
+  const when = f.scheduledDate ? _ppNiceDay(f.scheduledDate) + ' · ' + _ppClock(f.scheduledTime || '09:00') : '';
+  const live = _ppLiveUrl(f);
+  let n = 0, rows = '';
+  // Caption
+  rows += _pdRow(++n, `Caption ${lim ? `<span class="pd-cc${len > lim ? ' over' : ''}">${len.toLocaleString()} / ${lim.toLocaleString()}</span>` : ''}`,
+    cap ? `<div class="pd-prev">${_pdE(cap.slice(0, 220))}${cap.length > 220 ? '…' : ''}</div>` : `<div class="pd-prev pd-none">No caption yet: write it under ${_pdE(name)} details below.</div>`,
+    cap ? _pdBtn('caption', '📋 Copy caption') : '');
+  if (pid === 'pinterest') rows += _pdRow(++n, 'Pin title', f.title ? `<div class="pd-prev">${_pdE(f.title)}</div>` : `<div class="pd-prev pd-none">No title yet.</div>`, f.title ? _pdBtn('title', '📋 Copy title') : '');
+  // Image
+  if (img) {
+    const share = typeof navigator.canShare === 'function' ? `<button type="button" class="pd-btn" data-pd="share">↗ Share</button>` : '';
+    rows += _pdRow(++n, 'Image', `<div class="pd-imgrow">${f.isVideo ? `<video class="pd-thumb" src="${_pdE(img)}" muted></video>` : `<img class="pd-thumb" src="${_pdE(img)}" alt=""/>`}<span class="pd-fn">${_pdE(f.imageName || '')}</span></div>`,
+      `${f.isVideo ? '' : _pdBtn('image', '🖼 Copy image')}<button type="button" class="pd-btn" data-pd="save">⬇ Save</button>${share}`);
+  }
+  // The blog link: in the post's own link field (Pinterest, Google's button, Bluesky…) or the first comment
+  if (fc) rows += _pdRow(++n, 'First comment <span class="pd-sub">(the blog link goes in the comments)</span>', `<div class="pd-prev">${_pdE(fc)}</div>`,
+    `${_pdBtn('comment', '📋 Copy first comment')}<button type="button" class="pd-btn pd-ghost" data-pd="tpl" title="Change the wording of first comments">✎</button>`);
+  else if (link && !cap.includes(link)) rows += _pdRow(++n, pid === 'google' ? 'Button link' : 'Link', `<div class="pd-prev pd-url">${_pdE(link)}</div>`, _pdBtn('link', '📋 Copy link'));
+  // The live link (or "scheduled on the platform")
+  if (ahead) {
+    rows += _pdRow(++n, `Schedule it on ${_pdE(name)}`, `<div class="pd-prev">Set it for <b>${_pdE(when || 'its day and time')}</b>, then come back and press Done.</div>`,
+      `<button type="button" class="pd-btn pd-main" style="--pc:${color};--ink:${ink}" data-pd="sched-done">📅 Done: it's scheduled</button>`, 'pd-live');
+  } else if (live) {
+    rows += _pdRow(++n, 'Live link', `<div class="pd-prev"><a href="${_pdE(live)}" target="_blank" rel="noopener">${_pdE(live)}</a></div>`, '<span class="pd-ok">✅ Live</span>', 'pd-live');
+  } else {
+    const offer = _pd.offer && _pd.offer.key === _pd.key ? _pd.offer : null;
+    const tip = _pd.clipDenied ? `<div class="pd-tip">Tip: allow clipboard access for this site (the 🔒 icon by the address) and PostPilot will catch the link for you.</div>` : '';
+    rows += _pdRow(++n, 'Live link <span class="pd-sub">(paste it and the post is marked Live)</span>',
+      `<div class="pd-liverow"><input type="url" id="pd-live-in" inputmode="url" autocomplete="off" spellcheck="false" placeholder="Paste the link to the live ${_pdE(name)} post (https://…)" value="${_pdE(_pd.liveDraft)}" aria-label="Live link for this ${_pdE(name)} post"/><button type="button" class="pd-btn" data-pd="live-save">Save</button><button type="button" class="pd-btn pd-ghost" data-pd="clip" title="Read the link from your clipboard">📋 From clipboard</button></div>
+       ${_pd.err ? `<div class="pd-err" role="alert">${_pdE(_pd.err)}</div>` : ''}
+       ${offer ? `<div class="pd-offer" role="status">🔗 On your clipboard: <b>${_pdE(offer.url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60))}</b> <button type="button" class="pd-btn pd-main" style="--pc:#22c55e;--ink:#08130b" data-pd="offer-yes">Save as the live link</button><button type="button" class="pd-btn pd-ghost" data-pd="offer-no">Not this one</button></div>` : tip}
+       <div class="pd-alt">No link? <button type="button" class="pd-link" data-pd="posted">✓ Mark as posted</button> · <button type="button" class="pd-link" data-pd="onplat">📅 I scheduled it on ${_pdE(name)}</button></div>`, '', 'pd-live');
+  }
+  const bsky = pid === 'bluesky' && !ahead && !live;
+  const go = !ahead && !live && !opened
+    ? (bsky && _bsReady() ? `<button type="button" class="pd-go" style="--pc:${color};--ink:${ink}" data-pd="bsky">🦋 Post to Bluesky now</button>`
+      : `<button type="button" class="pd-go" style="--pc:${color};--ink:${ink}" data-pd="go">Post ↗ on ${_pdE(name)}</button>`)
+    : ahead && !opened ? `<button type="button" class="pd-go" style="--pc:${color};--ink:${ink}" data-pd="go">↗ Open ${_pdE(_pdOpenName(pid, 'ahead'))} (copies the caption)</button>` : '';
+  const head = ahead ? `📅 Schedule on ${_pdE(name)} for <b>${_pdE(when)}</b>` : live ? `✅ Live on ${_pdE(name)}` : opened ? `Posting on ${_pdE(name)}` : `Next up: ${_pdE(name)}${when ? ' · ' + _pdE(_ppClock(f.scheduledTime || '09:00')) : ''}`;
+  const runBar = run ? `<span class="pd-run">${run.kind === 'ahead' ? 'Scheduling ahead' : 'Posting run'} · <b>${Math.min(run.i + 1, run.list.length)} of ${run.list.length}</b><button type="button" class="pd-link" data-pd="skip">Skip ›</button><button type="button" class="pd-link" data-pd="end">End</button></span>` : '';
+  const tools = `<div class="pd-foot">${opened || ahead ? `<button type="button" class="pd-link" data-pd="open">↗ Open ${_pdE(_pdOpenName(pid, _pd.mode))}${opened ? ' again' : ''}</button>` : ''}${bsky && !_bsReady() ? `<button type="button" class="pd-link" data-pd="bsky-setup">🦋 Set up one-click Bluesky</button>` : ''}${bsky && _bsReady() && opened ? `<button type="button" class="pd-link" data-pd="bsky">🦋 Post to Bluesky now</button>` : ''}</div>`;
+  return `<div class="pd-panel" style="--pc:${color}" role="region" aria-label="Posting on ${_pdE(name)}">
+    <div class="pd-head"><span class="pd-plat" style="color:${color}">${_pdIcon(pid, 16)}<span class="pd-ht">${head}</span></span>${runBar}</div>
+    ${_pd.msg ? `<div class="pd-msg">${_pd.msg}</div>` : ''}${_pd.status ? `<div class="pd-msg pd-status">${_pd.status}</div>` : ''}
+    ${go}
+    <ol class="pd-steps">${rows}</ol>${tools}
+  </div>`;
+}
+// Redraw just the panel (keeps your place in the editor)
+function _pdRefreshPanel() {
+  const el = document.querySelector('#composer-modal .pd-panel');
+  if (!el) return;
+  const a = document.activeElement, keep = a && a.id === 'pd-live-in' ? [a.selectionStart, a.selectionEnd] : null;
+  const html = _pdPanelHtml();
+  if (!html) return;
+  const t = document.createElement('div');
+  t.innerHTML = html;
+  el.replaceWith(t.firstElementChild);
+  if (keep) { const i = document.getElementById('pd-live-in'); if (i) { i.focus(); try { i.setSelectionRange(keep[0], keep[1]); } catch (e) {} } }
+}
+const _pdOrigComposer = renderComposerModal;
+renderComposerModal = function () {
+  let html = _pdOrigComposer.apply(this, arguments);
+  try {
+    html = html.replace('<div class="modal-body">', '<div class="modal-body" id="composer-body">');
+    const fm = String((state.form && state.form.scheduledTime) || '').split(':')[1];
+    if (fm && /^\d\d$/.test(fm) && +fm % 5) html = html.replace('<select id="f-min">', `<select id="f-min"><option value="${fm}" selected>${fm}</option>`);
+    const c = _pdCur();
+    if (c && _pd.mode) {
+      html = html.replace('<div class="modal" id="composer-modal">', `<div class="modal pd-posting${_pd.showSched ? ' pd-sched-open' : ''}" id="composer-modal">`);
+      html = html.replace('<div class="modal-body" id="composer-body">', '<div class="modal-body" id="composer-body">' + _pdPanelHtml());
+      const S = _pdC('Schedule'), P = _pdC('Platform-specific fields');
+      if (html.includes(S) && html.includes(P)) {
+        html = html.replace(S, `<div class="pd-fold"><button type="button" class="pd-fold-btn" data-pd="fold" aria-expanded="${_pd.showSched ? 'true' : 'false'}">${_pd.showSched ? 'Hide the schedule and image ▴' : '📅 Schedule and image ▾'}</button><div class="pd-fold-body">` + S);
+        html = html.replace(P, '</div></div>' + P);
+      }
+      html = html.replace(/(<h2 class="modal-title">)Edit ([^<]*?) Post(<\/h2>)/, (m, a, n, z) => a + (_pd.mode === 'ahead' ? 'Schedule ahead: ' + n : 'Post on ' + n) + z);
+    }
+  } catch (e) {}
+  return html;
+};
+const _pdOrigSummary = getPostSummary;
+getPostSummary = function (p) {
+  const r = _pdOrigSummary.apply(this, arguments);
+  if (p && (!r || r === 'No content')) { const t = _ppPostText(p, p.platform); if (t) return t; }
+  return r;
+};
+// Opening a saved post: the editor's starting point is taken after its boxes are filled, so just opening and closing isn't a change
+const _pdOrigOpenComposer = openComposer;
+openComposer = function () {
+  const r = _pdOrigOpenComposer.apply(this, arguments);
+  try { if (state.showComposer && state.form && state.editingPostId != null) { syncFormFromDOM(); _markComposerOpened(); } } catch (e) {}
+  return r;
+};
+// After each redraw: the live link box at the top of the editor, chips on the post list
+function _pdAfterRender() {
+  const inp = document.getElementById('f-liveurl');
+  if (inp && state.showComposer) {
+    const g = inp.closest('.form-group');
+    if (g) {
+      g.classList.add('pd-live-orig');
+      g.classList.remove('sux-more-f');
+      const editing = state.editingPostId != null;
+      if (editing && !g.querySelector('.pd-live-hint')) {
+        const h = document.createElement('div');
+        h.className = 'pd-live-hint';
+        h.textContent = _ppLiveUrl(state.form || {}) ? 'This post is Live. Paste a new link here to change it.' : 'Posted it? Paste the link to the live post here: it saves right away and marks the post Live.';
+        g.appendChild(h);
+      }
+      const f = state.form || {};
+      if (editing && f.platformScheduled && !_pdPostedLike(f) && !g.parentNode.querySelector('.pd-onplat-note')) {
+        const n = document.createElement('div');
+        n.className = 'pd-onplat-note';
+        n.innerHTML = `📅 Scheduled on ${_pdE(_pdName(state.activePlatform))}: it goes out by itself at its time. Add its live link above once it's up. <button type="button" class="pd-link" data-pd="onplat-undo">Undo</button>`;
+        g.after(n);
+      }
+    }
+    if (!inp.dataset.pd) {
+      inp.dataset.pd = '1';
+      inp.setAttribute('placeholder', 'Paste the link to the live post (https://…)');
+      const save = () => {
+        if (state.editingPostId == null) return;
+        const v = inp.value.trim();
+        if (!v || !_ppCleanUrl(v) || _ppCleanUrl(v) === _ppLiveUrl(_pdFind(state.activePlatform, state.editingPostId) || {})) return;
+        _pdLiveSaved(state.activePlatform, String(state.editingPostId), v, 'editor');
+      };
+      inp.addEventListener('paste', () => setTimeout(save, 0));
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+      inp.addEventListener('change', save);
+    }
+  }
+  if (_pd.focusLive) { _pd.focusLive = false; const i = document.getElementById('pd-live-in'); if (i) i.focus(); }
+  // The post list: posts scheduled on the platform say so
+  if (!state.showComposer && state.activeView === 'scheduled') {
+    (state.posts[state.activePlatform] || []).forEach(p => {
+      if (!_pdOnPlat(p)) return;
+      const card = document.getElementById('bulk-card-' + p.id);
+      const t = card && card.querySelector('.post-title');
+      if (t && !card.querySelector('.pd-chip')) t.insertAdjacentHTML('afterend', `<span class="status-chip pd-chip">📅 On ${_pdE(_pdName(state.activePlatform))}</span>`);
+    });
+  }
+}
+render = (function (orig) { return function () { const r = orig.apply(this, arguments); try { _pdAfterRender(); } catch (e) {} return r; }; })(render);
+
+// A live link was saved from the panel or the editor: what happens next
+function _pdLiveSaved(pid, id, raw, from) {
+  const res = pdSaveLive(pid, id, raw);
+  if (!res.ok) {
+    _pd.err = res.why === 'bad' ? "That doesn't look like a link. Paste the post's web address (https://…)." : "Couldn't find this post any more.";
+    _pdRefreshPanel();
+    if (from === 'editor') showToast(_pd.err, 'error');
+    return false;
+  }
+  _pd.err = ''; _pd.liveDraft = ''; _pd.offer = null;
+  if (res.same) return true;
+  const msg = `✅ ${_pdName(pid)} post is Live.` + (res.moved && res.moved.from ? ' ' + _ppMovedNote(res.moved) : '');
+  if (_pd.mode && _pd.key === _pdK(pid, id)) {
+    if (res.dirty) { render(); if (!_pdCommitEdits()) return true; }
+    showToast(msg);
+    if (_pd.run && !_pd.run.paused) { pdRunNext(); return true; }
+    if (state.showComposer) closeComposer(); else _pdEndSession();
+    return true;
+  }
+  render();
+  showToast(msg);
+  return true;
+}
+// ── Copying, saving and sharing from the panel ──
+function _pdImgEl(src) {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    if (/^https?:/i.test(src)) im.crossOrigin = 'anonymous';
+    im.onload = () => res(im);
+    im.onerror = () => rej(new Error("Couldn't load the image"));
+    im.src = src;
+  });
+}
+async function _pdCanvas(src, maxDim, opaque) {
+  const im = await _pdImgEl(src);
+  let w = im.naturalWidth || im.width, h = im.naturalHeight || im.height;
+  const k = maxDim ? Math.min(1, maxDim / Math.max(w, h)) : 1;
+  w = Math.max(1, Math.round(w * k)); h = Math.max(1, Math.round(h * k));
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  if (opaque) { x.fillStyle = '#ffffff'; x.fillRect(0, 0, w, h); }
+  x.imageSmoothingQuality = 'high';
+  x.drawImage(im, 0, 0, w, h);
+  return c;
+}
+const _pdBlob = (c, type, q) => new Promise((res, rej) => c.toBlob(b => (b ? res(b) : rej(new Error('image'))), type, q));
+// A JPEG of the image, as small as it needs to be (Bluesky takes 1 MB at most)
+async function _pdJpeg(src, maxDim, maxBytes) {
+  let dim = maxDim || 2000, out = null;
+  for (let round = 0; round < 4 && !out; round++, dim = Math.round(dim * 0.8)) {
+    const c = await _pdCanvas(src, dim, true);
+    for (const q of [0.92, 0.86, 0.8, 0.72, 0.64, 0.55]) {
+      const b = await _pdBlob(c, 'image/jpeg', q);
+      if (!maxBytes || b.size <= maxBytes) { out = { blob: b, width: c.width, height: c.height }; break; }
+    }
+  }
+  if (!out) throw new Error('The image is too large to send.');
+  return out;
+}
+const _pdB64 = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
+async function _pdCopyImage(src) {
+  if (!src || typeof ClipboardItem === 'undefined' || !navigator.clipboard || !navigator.clipboard.write) return false;
+  const png = _pdCanvas(src, 0, false).then(c => _pdBlob(c, 'image/png'));
+  try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]); return true; }
+  catch (e) { try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': await png })]); return true; } catch (e2) { return false; } }
+}
+async function _pdCopyWhat(what) {
+  const c = _pdCur();
+  if (!c) return;
+  const { pid, f } = c;
+  let ok = false;
+  if (what === 'image') ok = await _pdCopyImage(f.imageOriginal || f.image);
+  else {
+    const t = what === 'caption' ? _pdCaption(f, pid) : what === 'title' ? f.title : what === 'link' ? _pdLink(f, pid) : what === 'comment' ? _pdFirstComment(f, pid) : '';
+    ok = !!t && await _ppCopy(t);
+  }
+  _pd.copied = ok ? { [what]: true } : {};
+  _pd.err = ok ? '' : what === 'image' ? "Couldn't copy the image here. Use ⬇ Save, then upload or drag it in." : "Couldn't copy that. Select the text below and copy it.";
+  _pdRefreshPanel();
+}
+async function _pdSaveImg() {
+  const c = _pdCur();
+  if (!c) return;
+  const { pid, f } = c;
+  try {
+    const s = await _ppSaveImage({ image: f.imageOriginal || f.image, imageName: f.imageName }, pid);
+    _pd.status = s ? `⬇ <b>${_pdE(s.name)}</b> is in your ${s.folder ? '<b>' + _pdE(s.folder) + '</b> folder' : 'Downloads'}.` : '';
+  } catch (e) { _pd.status = "Couldn't save the image."; }
+  _pdRefreshPanel();
+}
+async function _pdShareImg() {
+  const c = _pdCur();
+  if (!c) return;
+  const { pid, f } = c;
+  try {
+    const blob = await (await fetch(f.imageOriginal || f.image)).blob();
+    const file = new File([blob], f.imageName || pid + '-post.png', { type: blob.type || 'image/png' });
+    if (!(navigator.canShare && navigator.canShare({ files: [file] }))) { _pd.status = "This browser can't share images. Use ⬇ Save instead."; return _pdRefreshPanel(); }
+    _ppCopy(_pdCaption(f, pid));
+    await navigator.share({ files: [file] });
+  } catch (e) { if (!e || e.name !== 'AbortError') { _pd.status = "Couldn't share the image. Use ⬇ Save instead."; _pdRefreshPanel(); } }
+}
+function _pdEditTemplate() {
+  const cur = _pdLS('postpilot_pd_comment_tpl', '📖 Read the full article here: {link}');
+  const v = prompt('Wording for first comments. {link} becomes the blog link.', cur);
+  if (v == null) return;
+  _pdSet('postpilot_pd_comment_tpl', v.includes('{link}') ? v : (v.trim() + ' {link}').trim());
+  _pdRefreshPanel();
+}
+async function _pdFromClipboard() {
+  const c = _pdCur();
+  if (!c) return;
+  let text = '';
+  try { text = await navigator.clipboard.readText(); }
+  catch (e) { _pd.clipDenied = /denied|permission/i.test(String(e && e.message)); _pd.err = "PostPilot can't read your clipboard here. Paste the link into the box with Ctrl+V."; return _pdRefreshPanel(); }
+  _pd.clipDenied = false;
+  const url = _pdUrls(text)[0];
+  if (!url) { _pd.err = `There's no link on your clipboard. Copy the post's link on ${_pdName(c.pid)} first.`; return _pdRefreshPanel(); }
+  _pdLiveSaved(c.pid, c.id, url, 'panel');
+}
+// "Scheduled on the platform": it goes out by itself, so it isn't missed or overdue
+function pdMarkOnPlat(pid, id, on) {
+  state.posts = { ...state.posts, [pid]: (state.posts[pid] || []).map(p => String(p.id) === String(id) ? { ...p, platformScheduled: !!on, platformScheduledAt: on ? Date.now() : null } : p) };
+  savePosts(state.posts);
+  if (state.showComposer && state.form && state.activePlatform === pid && String(state.editingPostId) === String(id)) {
+    const clean = !state._formOpenSig || _formSig(state.form) === state._formOpenSig;
+    state.form = { ...state.form, platformScheduled: !!on, platformScheduledAt: on ? Date.now() : null };
+    if (clean) state._formOpenSig = _formSig(state.form);
+  }
+}
+const _pdSplit = (k) => { const i = String(k).indexOf('|'); return [String(k).slice(0, i), String(k).slice(i + 1)]; };
+// Done with the post in the panel: posted without a link, scheduled on the platform, or skipped
+function _pdFinish(kind) {
+  const c = _pdCur();
+  if (!c) return;
+  const { pid, id } = c;
+  if (!_pdCommitEdits()) return;
+  if (kind === 'posted') {
+    state.posts = { ...state.posts, [pid]: (state.posts[pid] || []).map(p => String(p.id) === String(id) ? { ...p, publishStatus: 'published', publishedAt: new Date().toISOString() } : p) };
+    savePosts(state.posts);
+    try { recalcStreak(pid); } catch (e) {}
+    if (_pd.awaiting && String(_pd.awaiting.id) === String(id)) _pd.awaiting = null;
+  }
+  if (kind === 'onplat') { pdMarkOnPlat(pid, id, true); if (_pd.awaiting && String(_pd.awaiting.id) === String(id)) _pd.awaiting = null; }
+  const name = _pdName(pid);
+  if (kind === 'posted') showToast(`✓ ${name} post marked as posted.`);
+  if (kind === 'onplat') showToast(`📅 Scheduled on ${name}. It goes out by itself; add its live link once it's up.`);
+  if (_pd.run && !_pd.run.paused) return pdRunNext();
+  if (state.showComposer) closeComposer(); else _pdEndSession();
+}
+
+// ── A posting run: today's posts one at a time ──
+function _pdRunList() {
+  return _ppTodayItems().filter(({ p }) => !_pdPostedLike(p) && !p.platformScheduled).map(({ p, pl }) => _pdK(pl.id, p.id));
+}
+function _pdRunLeft(r) {
+  if (!r) return 0;
+  return r.list.slice(r.i).filter(k => { const [pid, id] = _pdSplit(k); const p = _pdFind(pid, id); return p && !_pdPostedLike(p) && !p.platformScheduled; }).length;
+}
+function pdStartRun() {
+  const list = _pdRunList();
+  if (!list.length) { showToast("Nothing left to post today. 🎉"); return; }
+  _pd.run = { kind: 'post', list, i: 0, paused: false };
+  const [pid, id] = _pdSplit(list[0]);
+  postOnPlatform(id, pid);
+}
+function pdContinueRun() {
+  const r = _pd.run;
+  if (!r || !_pdRunLeft(r)) return pdStartRun();
+  r.paused = false;
+  r.i--;
+  pdRunNext(true);
+}
+function pdRunNext(postNow) {
+  const r = _pd.run;
+  if (!r) return;
+  r.i++;
+  while (r.i < r.list.length) {
+    const [pid, id] = _pdSplit(r.list[r.i]);
+    const p = _pdFind(pid, id);
+    if (p && !_pdPostedLike(p) && !p.platformScheduled) break;
+    r.i++;
+  }
+  if (r.i >= r.list.length) return pdEndRun(true);
+  const [pid, id] = _pdSplit(r.list[r.i]);
+  if (postNow && r.kind === 'post') return postOnPlatform(id, pid);
+  pdOpen(pid, id, r.kind === 'ahead' ? 'ahead' : 'post');
+}
+function pdEndRun(finished) {
+  const r = _pd.run;
+  _pd.run = null;
+  if (state.showComposer) closeComposer(); else _pdEndSession();
+  if (finished && r) showToast(r.kind === 'ahead' ? `📅 All ${r.list.length} posts are scheduled on their platforms.` : "🎉 That's everything for today.");
+}
+
+// ── Catching the live link: when you come back from posting, PostPilot looks at your clipboard ──
+async function _pdCatch() {
+  const aw = _pd.awaiting;
+  if (!aw || Date.now() - aw.at > 4 * 3600e3 || _pd.clipDenied || _pd.catching) return;
+  const post = _pdFind(aw.pid, aw.id);
+  if (!post || _ppLiveUrl(post)) { _pd.awaiting = null; return; }
+  if (!navigator.clipboard || !navigator.clipboard.readText) return;
+  _pd.catching = true;
+  let text = '';
+  try { text = await navigator.clipboard.readText(); }
+  catch (e) { if (/denied|permission/i.test(String(e && e.message))) { _pd.clipDenied = true; _pdRefreshPanel(); } return; }
+  finally { _pd.catching = false; }
+  const url = _pdUrls(text)[0];
+  if (!url || url === _pd.lastOffered || !_pdIsPostUrl(aw.pid, url) || _pdUrlTaken(url)) return;
+  _pd.lastOffered = url;
+  _pdOffer(aw.pid, aw.id, url);
+}
+function _pdArmCatch() { if (_pd.awaiting) { _pd.catchArmed = true; setTimeout(_pdCatch, 200); } }
+window.addEventListener('focus', _pdArmCatch);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') _pdArmCatch(); });
+document.addEventListener('pointerdown', () => { if (_pd.catchArmed) { _pd.catchArmed = false; _pdCatch(); } }, true);
+// A small card in the corner (reminders, offers, tomorrow's check)
+function _pdBox() {
+  let box = document.getElementById('pp-remind');
+  if (!box) { box = document.createElement('div'); box.id = 'pp-remind'; box.setAttribute('role', 'status'); box.setAttribute('aria-live', 'polite'); document.body.appendChild(box); }
+  return box;
+}
+function _pdCard(id, html, actions, color, onX) {
+  const cid = 'pdc-' + String(id).replace(/[^a-z0-9_-]/gi, '');
+  const old = document.getElementById(cid);
+  if (old) old.remove();
+  const card = document.createElement('div');
+  card.className = 'pp-rem pd-card'; card.id = cid; card.style.borderLeftColor = color || '#f5a623';
+  card.innerHTML = `<button type="button" class="pp-rem-x" aria-label="Dismiss">✕</button>${html}<div class="pp-rem-actions"></div>`;
+  card.querySelector('.pp-rem-x').onclick = () => { card.remove(); if (onX) onX(); };
+  const row = card.querySelector('.pp-rem-actions');
+  (actions || []).forEach(([label, fn, primary]) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = label;
+    if (primary) { b.className = 'pp-rem-go'; b.style.background = color || '#f5a623'; b.style.setProperty('color', _ppInk(color || '#f5a623'), 'important'); }
+    else b.className = 'pp-rem-done';
+    b.onclick = (e) => fn(e, card);
+    row.appendChild(b);
+  });
+  _pdBox().prepend(card);
+  return card;
+}
+function _pdOffer(pid, id, url) {
+  const key = _pdK(pid, id), post = _pdFind(pid, id);
+  if (!post) return;
+  _pd.offer = { key, pid, id, url };
+  if (_pd.key === key && state.showComposer) { _pdRefreshPanel(); return; }
+  const sum = String(getPostSummary(post) || 'this post').slice(0, 60);
+  _pdCard('offer', `<div class="pp-rem-title">🔗 Found a ${_pdE(_pdName(pid))} post link</div><div class="pp-rem-text"><b>${_pdE(url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 64))}</b><br>Save it as the live link for “${_pdE(sum)}”?</div>`,
+    [['Save as the live link', (e, card) => { card.remove(); _pd.offer = null; _pdLiveSaved(pid, id, url, 'card'); }, true], ['Not now', (e, card) => { card.remove(); _pd.offer = null; }]], _pdColor(pid));
+}
+// The post a pasted link most likely belongs to
+function _pdCandidates(pid) {
+  const lo = _pdDay(-7), hi = _pdDay(1);
+  return (state.posts[pid] || []).filter(p => p.scheduledDate && !_ppLiveUrl(p) && p.scheduledDate >= lo && p.scheduledDate <= hi)
+    .sort((a, b) => _ppT(a.scheduledDate, a.scheduledTime) - _ppT(b.scheduledDate, b.scheduledTime));
+}
+function _pdBestFor(pid) {
+  const aw = _pd.awaiting;
+  if (aw && aw.pid === pid) { const p = _pdFind(pid, aw.id); if (p && !_ppLiveUrl(p)) return p; }
+  const c = _pdCandidates(pid), now = Date.now();
+  return c.find(p => p.publishStatus === 'published') || c.find(p => _ppT(p.scheduledDate, p.scheduledTime) <= now + 30 * 60e3) || c[0] || null;
+}
+// Paste a post's link anywhere in the Scheduler (not in a box): PostPilot matches it to the post
+document.addEventListener('paste', (e) => {
+  const t = e.target;
+  if (t && t.closest && t.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]')) return;
+  const text = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
+  const urls = _pdUrls(text);
+  if (!urls.length) return;
+  e.preventDefault();
+  if (urls.length > 1) return pdBulkOpen(text);
+  const url = urls[0], pid = _pdHostPid(url);
+  if (!pid) return pdBulkOpen(text);
+  if (_pdUrlTaken(url)) { showToast('That link is already saved on a post.'); return; }
+  // In the posting window for that platform: it's this post's live link
+  const cur = _pdCur();
+  if (cur && _pd.mode === 'post' && cur.pid === pid && !_ppLiveUrl(cur.f)) return void _pdLiveSaved(cur.pid, cur.id, url, 'panel');
+  const p = _pdBestFor(pid);
+  if (!p) { showToast(`There's no ${_pdName(pid)} post waiting for a live link this week.`); return; }
+  _pdOffer(pid, String(p.id), url);
+});
+
+// ── Add several live links at once ──
+function _pdModal(id, html, wide) {
+  pdCloseModal(id);
+  const ov = document.createElement('div');
+  ov.className = 'pd-ov'; ov.id = id;
+  ov.innerHTML = `<div class="pd-modal${wide ? ' wide' : ''}" role="dialog" aria-modal="true">${html}</div>`;
+  ov.addEventListener('mousedown', (e) => { ov._down = e.target === ov; });
+  ov.addEventListener('click', (e) => { if (e.target === ov && ov._down) pdCloseModal(id); });
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); pdCloseModal(id); } });
+  document.body.appendChild(ov);
+  setTimeout(() => { const f = ov.querySelector('[autofocus], textarea, input, select, button.pd-primary'); if (f) f.focus(); }, 30);
+  return ov;
+}
+function pdCloseModal(id) { const el = document.getElementById(id); if (el) el.remove(); }
+function pdBulkOpen(prefill) {
+  const ov = _pdModal('pd-bulk', `<div class="pd-mh"><h2>🔗 Add live links</h2><button type="button" class="pd-x" aria-label="Close" onclick="pdCloseModal('pd-bulk')">✕</button></div>
+    <div class="pd-mb"><p class="pd-note">Paste the links to the posts you put up (one per line, any order). PostPilot works out the platform from each link and matches it to that platform's posts, earliest first. Check the matches, then save.</p>
+    <textarea id="pd-bulk-in" rows="5" spellcheck="false" placeholder="https://www.instagram.com/p/…&#10;https://www.linkedin.com/feed/update/…&#10;https://pin.it/…">${_pdE(prefill || '')}</textarea>
+    <div id="pd-bulk-out"></div></div>
+    <div class="pd-mf"><button type="button" class="pd-btn" onclick="pdCloseModal('pd-bulk')">Cancel</button><button type="button" class="pd-btn pd-primary" id="pd-bulk-go" onclick="pdBulkSave()" disabled>Save links</button></div>`, true);
+  const ta = ov.querySelector('#pd-bulk-in');
+  let t = null;
+  ta.addEventListener('input', () => { clearTimeout(t); t = setTimeout(pdBulkMatch, 250); });
+  pdBulkMatch();
+}
+function pdBulkMatch() {
+  const ta = document.getElementById('pd-bulk-in'), out = document.getElementById('pd-bulk-out'), go = document.getElementById('pd-bulk-go');
+  if (!ta || !out) return;
+  const urls = [...new Set(_pdUrls(ta.value))];
+  const used = {}, rows = [];
+  urls.forEach((url) => {
+    const pid = _pdHostPid(url), taken = _pdUrlTaken(url);
+    const cands = pid ? _pdCandidates(pid) : [];
+    used[pid] = used[pid] || 0;
+    const pick = !taken && cands[used[pid]] ? cands[used[pid]++] : null;
+    rows.push({ url, pid, taken, cands, pick });
+  });
+  out.innerHTML = rows.length ? `<div class="pd-bulk-list">${rows.map((r, i) => `<div class="pd-bulk-row" style="border-left-color:${r.pid ? _pdColor(r.pid) : '#555'}">
+      <div class="pd-bulk-url"><b>${r.pid ? _pdE(_pdName(r.pid)) : 'Unknown site'}</b> · ${_pdE(r.url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 70))}</div>
+      ${r.taken ? '<div class="pd-bulk-note">Already saved on a post.</div>' : !r.pid ? "<div class=\"pd-bulk-note\">PostPilot can't tell which platform this is.</div>" : !r.cands.length ? `<div class="pd-bulk-note">No ${_pdE(_pdName(r.pid))} post this week is waiting for a link.</div>`
+        : `<select data-i="${i}" data-url="${_pdE(r.url)}" aria-label="Which post this link is for"><option value="">Skip this link</option>${r.cands.map(p => `<option value="${_pdE(_pdK(r.pid, p.id))}"${r.pick === p ? ' selected' : ''}>${_pdE(_ppNiceDay(p.scheduledDate) + ' ' + _ppClock(p.scheduledTime || '09:00') + ' · ' + String(getPostSummary(p) || '').slice(0, 60))}</option>`).join('')}</select>`}
+    </div>`).join('')}</div>` : '';
+  const n = rows.filter(r => r.pick).length;
+  if (go) { go.disabled = !rows.some(r => r.cands.length && !r.taken); go.textContent = n ? `Save ${n} link${n === 1 ? '' : 's'}` : 'Save links'; }
+  out.querySelectorAll('select').forEach(s => s.addEventListener('change', () => {
+    const k = out.querySelectorAll('select'), m = [...k].filter(x => x.value).length;
+    if (go) go.textContent = m ? `Save ${m} link${m === 1 ? '' : 's'}` : 'Save links';
+  }));
+}
+function pdBulkSave() {
+  const sels = [...document.querySelectorAll('#pd-bulk-out select')].filter(s => s.value);
+  const seen = new Set();
+  let n = 0;
+  sels.forEach(s => {
+    if (seen.has(s.value)) return;
+    seen.add(s.value);
+    const [pid, id] = _pdSplit(s.value);
+    const r = pdSaveLive(pid, id, s.dataset.url);
+    if (r.ok && !r.same) n++;
+  });
+  pdCloseModal('pd-bulk');
+  render();
+  showToast(n ? `✅ ${n} post${n === 1 ? ' is' : 's are'} Live.` : 'No links were saved.');
+}
+
+// ── Posts scheduled on the platform: not missed, not overdue; at their time, a nudge to add the live link ──
+const _pdOrigIsMissed = _ppIsMissed;
+_ppIsMissed = function (p) { if (p && p.platformScheduled) return false; return _pdOrigIsMissed.apply(this, arguments); };
+const _pdOrigOverdue = isPostOverdue;
+isPostOverdue = function (p) { if (p && p.platformScheduled) return false; return _pdOrigOverdue.apply(this, arguments); };
+const _pdOrigRemind = _ppRemind;
+_ppRemind = function (post, platform) {
+  try {
+    if (post && post.platformScheduled && platform) return _pdRemindOnPlat(post, platform);
+    if (post && platform && platform.id === 'bluesky' && _bsReady() && _bsAuto() && !post.isVideo) { pdBlueskyAuto(post); return; }
+  } catch (e) {}
+  return _pdOrigRemind.apply(this, arguments);
+};
+function _pdRemindOnPlat(post, platform) {
+  const pid = platform.id, id = String(post.id), fc = _pdFirstComment(post, pid);
+  const sum = String(getPostSummary(post) || '').slice(0, 80);
+  const acts = [];
+  if (fc) acts.push(['📋 Copy first comment', async (e) => { if (await _ppCopy(fc)) e.target.textContent = '✓ Copied'; }]);
+  acts.push(['🔗 Add live link', (e, card) => { card.remove(); _pd.awaiting = { pid, id, at: Date.now() }; pdOpen(pid, id, 'post', { opened: true }); _pd.focusLive = true; render(); }, true]);
+  _pdCard('onplat-' + id, `<div class="pp-rem-title">📅 Your <b style="color:${platform.color}">${_pdE(platform.name)}</b> post goes out now</div><div class="pp-rem-text">${_pdE(sum)}${fc ? '<br>Add the first comment with the blog link, then save its live link.' : '<br>Save its live link once it’s up.'}</div>`, acts, platform.color);
+  if (state.notificationsEnabled !== false) { try { playNotificationSound(); } catch (e) {} }
+}
+
+// ── The Today list: everything due today, and the tools for posting it ──
+renderTodayList = function () {
+  const items = _ppTodayItems(), today = _pdDay(0);
+  const done = items.filter(x => _pdPostedLike(x.p)).length;
+  let missed = 0;
+  _ppVisible().forEach(pl => (state.posts[pl.id] || []).forEach(p => { if (p.scheduledDate && p.scheduledDate < today && !_pdPostedLike(p) && !p.platformScheduled) missed++; }));
+  const todo = _pdRunList().length, r = _pd.run && _pd.run.kind === 'post' ? _pd.run : null, left = _pdRunLeft(r);
+  const nb = _pdTomorrowIssues().length, replyOn = _pdReplyOn();
+  const row = ({ p, pl }) => {
+    const posted = _pdPostedLike(p), onplat = _pdOnPlat(p);
+    const acts = posted ? (_ppLiveUrl(p) ? '' : '<span class="td-ok">Posted</span>')
+      : onplat ? `<span class="td-onplat" title="Scheduled on ${_pdE(pl.name)}: it goes out by itself">📅 On ${_pdE(pl.name)}</span>`
+      : `<button class="btn-edit pp-post-btn" style="background:${pl.color};color:${_ppInk(pl.color)} !important" onclick="postOnPlatform('${p.id}','${pl.id}',this)">Post ↗</button><button class="btn-edit" onclick="updatePostStatus('${p.id}','${pl.id}','published')">✓ Posted</button>`;
+    return `<div class="td-row${posted ? ' done' : ''}${onplat ? ' onplat' : ''}" style="border-left-color:${pl.color}">
+      <span class="td-check" aria-label="${posted ? 'Posted' : onplat ? 'Scheduled on the platform' : 'Not posted yet'}">${posted ? '✓' : onplat ? '📅' : ''}</span>
+      <span class="td-time">${_ppClock(p.scheduledTime || '00:00')}</span>
+      <span class="td-plat" style="color:${pl.color}">${escapeHtml(pl.name)}</span>
+      ${p.image ? `<img src="${escapeHtml(p.image)}" alt=""/>` : ''}
+      <span class="td-text">${escapeHtml(String((typeof getPostSummary === 'function' ? getPostSummary(p) : '') || p.title || p.caption || '').slice(0, 80))}</span>
+      <span class="td-act">${acts}${_ppTdLinkBtn(p, pl)}<button class="btn-edit" style="background:var(--bg-elevated)" onclick="pdEdit('${pl.id}','${p.id}')">Edit</button></span>${_ppTdLinkRow(p, pl)}
+    </div>`;
+  };
+  const tools = `<div class="td-tools">
+      ${todo ? `<button type="button" class="td-go" data-pd="${r && left ? 'run-continue' : 'run-start'}" title="Goes through today's posts one at a time: each opens its platform and the post, ready to paste">▶ ${r && left ? `Continue posting (${left} left)` : `Start posting (${todo})`}</button>` : ''}
+      <button type="button" class="td-tool" data-pd="ahead" title="Set posts up on the platforms' own schedulers, so they go out on time without you">📅 Schedule ahead</button>
+      <button type="button" class="td-tool" data-pd="bulk" title="Paste several live links at once">🔗 Add live links</button>
+      <button type="button" class="td-tool${nb ? ' warn' : ''}" data-pd="nb" title="Check tomorrow's posts for anything missing">🌙 Check tomorrow${nb ? ` (${nb})` : ''}</button>
+      <button type="button" class="td-tool" data-pd="phone" title="Post today's posts from your phone">📱 Send to phone</button>
+      <button type="button" class="td-tool" data-pd="bsky-setup" title="One-click posting to Bluesky">🦋 Bluesky${_bsReady() ? ' ✓' : ''}</button>
+    </div>`;
+  return `<div class="overlay" onclick="ppCloseToday()" style="z-index:820"><div class="modal" style="width:780px;max-width:100%" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="td-title">
+    <div class="modal-header"><h2 class="modal-title" id="td-title">📋 Today · ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</h2><button class="close-btn" onclick="ppCloseToday()" aria-label="Close">×</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:8px;max-height:72vh;overflow-y:auto">
+      ${tools}
+      ${items.length ? `<div class="td-prog"><div class="td-bar"><div style="width:${Math.round(done / items.length * 100)}%"></div></div><span>${done} of ${items.length} posted</span></div>` + items.map(row).join('') : `<div class="pw-empty">Nothing is scheduled for today.</div>`}
+      ${missed ? `<div class="td-miss">⚠ ${missed} post${missed === 1 ? '' : 's'} from earlier days ${missed === 1 ? 'is' : 'are'} still not marked posted.</div>` : ''}
+      <div class="td-foot">💬 Reply reminders are <b>${replyOn ? 'on' : 'off'}</b>: a nudge to check comments an hour after a post goes live. <button type="button" class="pd-link" data-pd="reply-toggle">${replyOn ? 'Turn off' : 'Turn on'}</button></div>
+    </div></div></div>`;
+};
+
+// ── Clicks on the panel, Today's tools and the cards ──
+document.addEventListener('click', (e) => {
+  const b = e.target && e.target.closest ? e.target.closest('[data-pd]') : null;
+  if (!b || b.disabled) return;
+  const a = b.dataset.pd, c = _pdCur();
+  switch (a) {
+    case 'copy': return void _pdCopyWhat(b.dataset.what);
+    case 'save': return void _pdSaveImg();
+    case 'share': return void _pdShareImg();
+    case 'tpl': return _pdEditTemplate();
+    case 'live-save': { const i = document.getElementById('pd-live-in'); if (c && i) _pdLiveSaved(c.pid, c.id, i.value, 'panel'); return; }
+    case 'clip': return void _pdFromClipboard();
+    case 'offer-yes': { const o = _pd.offer; if (o) { _pd.offer = null; _pdLiveSaved(o.pid, o.id, o.url, 'panel'); } return; }
+    case 'offer-no': _pd.offer = null; return _pdRefreshPanel();
+    case 'posted': return _pdFinish('posted');
+    case 'onplat': case 'sched-done': return _pdFinish('onplat');
+    case 'onplat-undo': if (state.showComposer && state.editingPostId != null) { pdMarkOnPlat(state.activePlatform, String(state.editingPostId), false); render(); } return;
+    case 'skip': return _pdFinish('skip');
+    case 'end': return pdEndRun(false);
+    case 'go': if (c) postOnPlatform(c.id, c.pid); return;
+    case 'open': if (c) { const u = (_pd.mode === 'ahead' && PD_AHEAD_URLS[c.pid]) || PP_OPEN_URLS[c.pid]; if (u) { const w = window.open(u, '_blank'); if (w) { try { w.opener = null; } catch (x) {} } } } return;
+    case 'bsky': if (c) pdBlueskyPost(c.pid, c.id); return;
+    case 'bsky-setup': return pdBskySetup();
+    case 'fold': _pd.showSched = !_pd.showSched; return render();
+    case 'run-start': return pdStartRun();
+    case 'run-continue': return pdContinueRun();
+    case 'ahead': return pdAheadOpen();
+    case 'bulk': return pdBulkOpen('');
+    case 'nb': return pdTomorrowOpen();
+    case 'phone': return void pdSendToPhone();
+    case 'reply-toggle': _pdSet('postpilot_pd_reply_on', !_pdReplyOn()); return render();
+  }
+}, true);
+// The live link box in the panel: pasting saves it
+document.addEventListener('input', (e) => { if (e.target && e.target.id === 'pd-live-in') _pd.liveDraft = e.target.value; }, true);
+document.addEventListener('paste', (e) => {
+  const t = e.target;
+  if (!t || t.id !== 'pd-live-in') return;
+  setTimeout(() => { const c = _pdCur(); if (c && _ppCleanUrl(t.value)) _pdLiveSaved(c.pid, c.id, t.value, 'panel'); }, 0);
+}, true);
+document.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (!t || t.id !== 'pd-live-in' || e.key !== 'Enter') return;
+  e.preventDefault();
+  const c = _pdCur();
+  if (c) _pdLiveSaved(c.pid, c.id, t.value, 'panel');
+}, true);
+// ── GitHub (your existing GitHub Sync settings): hosting images for Pinterest's spreadsheet and posts for your phone ──
+function _pdGhCfg() {
+  const g = state.githubSync || {};
+  if (!g.username || !g.token || !g.repo) return null;
+  return { user: g.username, repo: g.repo, branch: g.branch || 'main', token: g.token };
+}
+async function _pdGh(cfg, method, path, body) {
+  const url = `https://api.github.com/repos/${cfg.user}/${cfg.repo}/contents/${path}` + (method === 'GET' ? `?ref=${encodeURIComponent(cfg.branch)}&t=${Date.now()}` : '');
+  const headers = { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json' };
+  if (body) headers['Content-Type'] = 'application/json';
+  return fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
+}
+async function _pdGhPut(cfg, path, b64, message, knownNew) {
+  let sha = null;
+  if (!knownNew) { const g = await _pdGh(cfg, 'GET', path); if (g.ok) sha = (await g.json()).sha; }
+  for (let tries = 0; tries < 2; tries++) {
+    const r = await _pdGh(cfg, 'PUT', path, { message, content: b64, branch: cfg.branch, ...(sha ? { sha } : {}) });
+    if (r.ok) return r.json();
+    if ((r.status === 409 || r.status === 422) && tries === 0) { const g = await _pdGh(cfg, 'GET', path); sha = g.ok ? (await g.json()).sha : null; continue; }
+    let m = '';
+    try { m = (await r.json()).message || ''; } catch (e) {}
+    throw new Error(r.status === 401 ? 'GitHub turned the token down (it may have expired).' : r.status === 404 ? "GitHub couldn't find the repository." : `GitHub said: ${m || r.status}`);
+  }
+}
+const _pdUtf8B64 = (s) => btoa(unescape(encodeURIComponent(s)));
+const _pdFromB64 = (b) => decodeURIComponent(escape(atob(String(b || '').replace(/\n/g, ''))));
+async function _pdGhJson(cfg, path) {
+  const g = await _pdGh(cfg, 'GET', path);
+  if (g.status === 404) return { data: null, sha: null };
+  if (!g.ok) throw new Error(`GitHub ${g.status}`);
+  const d = await g.json();
+  let data = null;
+  try { data = JSON.parse(_pdFromB64(d.content)); } catch (e) {}
+  if (data == null && d.download_url) { try { data = await (await fetch(d.download_url + '?t=' + Date.now(), { cache: 'no-store' })).json(); } catch (e) {} }
+  return { data, sha: d.sha };
+}
+const _pdSlug = (s) => String(s || 'post').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'post';
+const _pdGhNeed = () => 'This uses your GitHub Sync settings (⚙ Settings → GitHub Sync: username, repository and token). Add those first, then try again.';
+
+// ── Schedule ahead: put the coming days' posts on the platforms' own schedulers, in one sitting ──
+const PD_AHEAD_DEFAULT = ['google', 'linkedin', 'facebook', 'instagram', 'pinterest'];
+function _pdAheadPosts(days) {
+  const from = Date.now() + 20 * 60e3, to = new Date(); to.setHours(23, 59, 0, 0); to.setDate(to.getDate() + (days || 7));
+  const out = {};
+  _ppVisible().forEach(pl => {
+    out[pl.id] = (state.posts[pl.id] || []).filter(p => p.scheduledDate && !_pdPostedLike(p) && !p.platformScheduled && !p.manualUpload)
+      .filter(p => { const t = _ppT(p.scheduledDate, p.scheduledTime || '09:00'); return t >= from && t <= to.getTime(); })
+      .sort((a, b) => _ppT(a.scheduledDate, a.scheduledTime) - _ppT(b.scheduledDate, b.scheduledTime));
+  });
+  return out;
+}
+function pdAheadOpen() {
+  const days = _pdLS('postpilot_pd_ahead_days', 7), pick = new Set(_pdLS('postpilot_pd_ahead_plats', PD_AHEAD_DEFAULT));
+  const by = _pdAheadPosts(days);
+  const plats = _ppVisible().filter(pl => (by[pl.id] || []).length);
+  const pins = (_pdAheadPosts(30).pinterest || []);
+  const gh = _pdGhCfg();
+  const html = `<div class="pd-mh"><h2>📅 Schedule ahead</h2><button type="button" class="pd-x" aria-label="Close" onclick="pdCloseModal('pd-ahead')">✕</button></div>
+  <div class="pd-mb">
+    <p class="pd-note">Set posts up on each platform's own scheduler, so they go out on time without you at your desk. PostPilot goes through them one at a time with everything ready to copy, and marks each <b>📅 Scheduled on the platform</b> (they won't show as missed).</p>
+    <label class="pd-inline">Posts in the <select id="pd-ahead-days">${[7, 14, 30].map(d => `<option value="${d}"${d === days ? ' selected' : ''}>next ${d} days</option>`).join('')}</select></label>
+    ${plats.length ? `<div class="pd-plats">${plats.map(pl => `<label class="pd-plat-cb" style="--pc:${pl.color}"><input type="checkbox" value="${pl.id}"${pick.has(pl.id) ? ' checked' : ''}/> ${_pdIcon(pl.id, 14)} ${_pdE(pl.name)} <span class="pd-cnt">${by[pl.id].length}</span></label>`).join('')}</div>
+      <p class="pd-note pd-small">Facebook and Instagram are scheduled in Meta Business Suite; LinkedIn, Google Business and Pinterest each have a schedule option when you make the post.</p>`
+      : `<p class="pd-note">Nothing is scheduled in that time that still needs posting.</p>`}
+    <div class="pd-sec">
+      <h3>📌 Pinterest: all the pins at once</h3>
+      <p class="pd-note">Pinterest can take a spreadsheet of up to 200 pins, each with its own publish date. PostPilot builds it from your pins in the next 30 days (<b>${pins.length}</b>). The images go into your GitHub repository's <code>images/pins</code> folder so Pinterest can fetch them, which means they're public.</p>
+      ${gh ? `<div class="pd-row"><label>Board for pins that don't have one <input id="pd-pin-board" value="${_pdE(_pdLS('postpilot_pd_pin_board', ''))}" placeholder="Your board's name, exactly as on Pinterest"/></label></div>
+        <div class="pd-row"><button type="button" class="pd-btn pd-primary" id="pd-pin-go" onclick="pdPinterestCsv()"${pins.length ? '' : ' disabled'}>⬇ Make the Pinterest spreadsheet (${pins.length} pin${pins.length === 1 ? '' : 's'})</button></div>
+        <div id="pd-pin-out" class="pd-note"></div>` : `<p class="pd-note pd-warn">${_pdGhNeed()}</p>`}
+    </div>
+  </div>
+  <div class="pd-mf"><button type="button" class="pd-btn" onclick="pdCloseModal('pd-ahead')">Close</button><button type="button" class="pd-btn pd-primary" id="pd-ahead-go" onclick="pdAheadStart()"${plats.length ? '' : ' disabled'}>Start scheduling</button></div>`;
+  const ov = _pdModal('pd-ahead', html, true);
+  const upd = () => {
+    const sel = [...ov.querySelectorAll('.pd-plat-cb input')].filter(x => x.checked).map(x => x.value);
+    const n = sel.reduce((t, k) => t + ((by[k] || []).length), 0);
+    const go = ov.querySelector('#pd-ahead-go');
+    if (go) { go.disabled = !n; go.textContent = n ? `Start scheduling (${n})` : 'Start scheduling'; }
+  };
+  ov.querySelectorAll('.pd-plat-cb input').forEach(x => x.addEventListener('change', upd));
+  const ds = ov.querySelector('#pd-ahead-days');
+  if (ds) ds.addEventListener('change', () => { _pdSet('postpilot_pd_ahead_days', +ds.value); pdAheadOpen(); });
+  upd();
+}
+function pdAheadStart() {
+  const ov = document.getElementById('pd-ahead');
+  if (!ov) return;
+  const sel = [...ov.querySelectorAll('.pd-plat-cb input')].filter(x => x.checked).map(x => x.value);
+  _pdSet('postpilot_pd_ahead_plats', sel);
+  const by = _pdAheadPosts(_pdLS('postpilot_pd_ahead_days', 7));
+  // One platform at a time (so you stay in one scheduler), each in date order
+  const order = state.platformOrder && state.platformOrder.length ? state.platformOrder : Object.keys(PLATFORMS);
+  const list = [];
+  order.filter(pid => sel.includes(pid)).forEach(pid => (by[pid] || []).forEach(p => list.push(_pdK(pid, p.id))));
+  pdCloseModal('pd-ahead');
+  if (!list.length) return;
+  _pd.run = { kind: 'ahead', list, i: 0, paused: false };
+  const [pid, id] = _pdSplit(list[0]);
+  pdOpen(pid, id, 'ahead');
+}
+// Pinterest's bulk spreadsheet: Title, Media URL, Pinterest board, Thumbnail, Description, Link, Publish date, Keywords
+const _pdCsvCell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
+function _pdUtc(date, time) { const d = new Date(date + 'T' + (time || '09:00')); return d.toISOString().slice(0, 19); }
+const _pdImgSig = (p) => { const s = String(p.imageOriginal || p.image || ''); return s.length + ':' + s.slice(-48); };
+async function pdPinterestCsv() {
+  const out = document.getElementById('pd-pin-out'), go = document.getElementById('pd-pin-go');
+  const say = (h) => { if (out) out.innerHTML = h; };
+  const cfg = _pdGhCfg();
+  if (!cfg) return say(_pdGhNeed());
+  const boardIn = document.getElementById('pd-pin-board');
+  const board = boardIn ? boardIn.value.trim() : '';
+  _pdSet('postpilot_pd_pin_board', board);
+  const pins = (_pdAheadPosts(30).pinterest || []).slice(0, 200);
+  if (!pins.length) return say('No pins to schedule in the next 30 days.');
+  const noBoard = pins.filter(p => !String(p.board || '').trim()).length;
+  if (noBoard && !board) return say(`<span class="pd-warn">${noBoard} pin${noBoard === 1 ? " doesn't" : "s don't"} have a board. Type the board's name above (exactly as it is on Pinterest), then try again.</span>`);
+  if (go) go.disabled = true;
+  try {
+    // Pinterest fetches the images itself, so the repository must be public
+    try {
+      const rr = await fetch(`https://api.github.com/repos/${cfg.user}/${cfg.repo}`, { headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json' } });
+      if (rr.ok && (await rr.json()).private) throw new Error(`Your sync repository (${cfg.repo}) is private, so Pinterest can't fetch the images from it.`);
+    } catch (e) { if (/private/.test(e.message)) throw e; }
+    const rows = [['Title', 'Media URL', 'Pinterest board', 'Thumbnail', 'Description', 'Link', 'Publish date', 'Keywords']];
+    let up = 0;
+    for (let i = 0; i < pins.length; i++) {
+      const p = pins[i];
+      say(`Uploading pin images… ${i + 1} of ${pins.length}`);
+      let url = p.pinMediaUrl && p.pinMediaSig === _pdImgSig(p) ? p.pinMediaUrl : '';
+      if (!url && (p.imageOriginal || p.image)) {
+        const j = await _pdJpeg(p.imageOriginal || p.image, 2000, 9e6);
+        const name = `${p.scheduledDate}-${_pdSlug(p.title || p.imageName)}-${Math.random().toString(36).slice(2, 7)}.jpg`;
+        await _pdGhPut(cfg, `images/pins/${name}`, await _pdB64(j.blob), `PostPilot pin image: ${name}`, true);
+        url = `https://raw.githubusercontent.com/${cfg.user}/${cfg.repo}/${cfg.branch}/images/pins/${name}`;
+        const sig = _pdImgSig(p);
+        state.posts = { ...state.posts, pinterest: (state.posts.pinterest || []).map(x => String(x.id) === String(p.id) ? { ...x, pinMediaUrl: url, pinMediaSig: sig } : x) };
+        up++;
+      }
+      const kw = String(p.hashtags || '').split(/[\s,]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean).slice(0, 10).join(', ');
+      const desc = _pdCaption(p, 'pinterest'), title = String(p.title || '').trim() || (String(desc).split(/(?<=[.!?])\s/)[0] || '').slice(0, 100);
+      rows.push([title.slice(0, 100), url, String(p.board || '').trim() || board, '', desc.slice(0, 500), p.destinationUrl || '', _pdUtc(p.scheduledDate, p.scheduledTime), kw]);
+    }
+    if (up) savePosts(state.posts);
+    const csv = rows.map(r => r.map(_pdCsvCell).join(',')).join('\r\n');
+    const name = `PostPilot-Pinterest-${_pdDay(0)}.csv`;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+    _pd.pinBatch = pins.map(p => String(p.id));
+    say(`✅ <b>${_pdE(name)}</b> is in your Downloads (${pins.length} pins). In Pinterest, choose <b>Create Pin</b> and use its bulk <b>.csv</b> upload, then check that every pin shows up (Pinterest's bulk upload has had glitches).
+      <div class="pd-row"><button type="button" class="pd-btn pd-primary" onclick="pdPinMarkScheduled()">✓ I uploaded it: mark these ${pins.length} pins as scheduled on Pinterest</button></div>`);
+  } catch (e) {
+    say(`<span class="pd-warn">Couldn't make the spreadsheet: ${_pdE(e.message || String(e))}</span>`);
+  } finally { if (go) go.disabled = false; }
+}
+function pdPinMarkScheduled() {
+  const ids = new Set(_pd.pinBatch || []);
+  if (!ids.size) return;
+  state.posts = { ...state.posts, pinterest: (state.posts.pinterest || []).map(p => ids.has(String(p.id)) ? { ...p, platformScheduled: true, platformScheduledAt: Date.now() } : p) };
+  savePosts(state.posts);
+  _pd.pinBatch = [];
+  pdCloseModal('pd-ahead');
+  render();
+  showToast(`📅 ${ids.size} pins marked as scheduled on Pinterest.`);
+}
+// ── One-click Bluesky: posts with a Bluesky app password (kept in this browser only, never synced) ──
+const BS_API = 'https://bsky.social';
+const _bsKey = () => wsKey('postpilot_pd_bsky');
+const _bsCfg = () => _pdLS(_bsKey(), null) || {};
+const _bsReady = () => { const c = _bsCfg(); return !!(c.handle && c.pass); };
+const _bsAuto = () => !!_bsCfg().auto;
+let _bsSess = null;
+const _bsSeg = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter('en', { granularity: 'grapheme' }) : null;
+function _bsGraphemes(s) { s = String(s || ''); return _bsSeg ? [..._bsSeg.segment(s)].length : [...s].length; }
+const _bsHandle = (h) => String(h || '').trim().replace(/^@/, '').toLowerCase();
+async function _bsCall(base, nsid, opts) {
+  opts = opts || {};
+  const headers = Object.assign({}, opts.headers || {});
+  if (opts.jwt) headers.Authorization = 'Bearer ' + opts.jwt;
+  if (opts.json !== undefined) headers['Content-Type'] = 'application/json';
+  let res;
+  try {
+    res = await fetch(`${base}/xrpc/${nsid}`, { method: opts.method || 'POST', headers, body: opts.json !== undefined ? JSON.stringify(opts.json) : opts.body });
+  } catch (e) { throw Object.assign(new Error("Couldn't reach Bluesky. Check your internet connection."), { net: true }); }
+  let data = {};
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) throw Object.assign(new Error(data.message || data.error || ('Bluesky said ' + res.status)), { status: res.status, code: data.error });
+  return data;
+}
+async function _bsLogin(force) {
+  const c = _bsCfg();
+  if (!c.handle || !c.pass) throw new Error('Bluesky isn’t connected yet.');
+  if (_bsSess && !force && _bsSess.handle === _bsHandle(c.handle)) return _bsSess;
+  let d;
+  try { d = await _bsCall(BS_API, 'com.atproto.server.createSession', { json: { identifier: _bsHandle(c.handle), password: String(c.pass).trim() } }); }
+  catch (e) { if (e.status === 401 || e.code === 'AuthenticationRequired') throw new Error('Bluesky turned the handle or app password down. Check them under 🦋 Bluesky.'); throw e; }
+  const svc = d.didDoc && Array.isArray(d.didDoc.service) ? d.didDoc.service.find(s => s.id === '#atproto_pds' || s.type === 'AtprotoPersonalDataServer') : null;
+  _bsSess = { did: d.did, handle: d.handle || _bsHandle(c.handle), jwt: d.accessJwt, refresh: d.refreshJwt, pds: (svc && svc.serviceEndpoint) || BS_API };
+  return _bsSess;
+}
+async function _bsAuthed(nsid, opts) {
+  let s = await _bsLogin();
+  const call = async (sess) => {
+    try { return await _bsCall(sess.pds, nsid, Object.assign({}, opts, { jwt: sess.jwt })); }
+    catch (e) { if (e.net && sess.pds !== BS_API) { sess.pds = BS_API; return _bsCall(BS_API, nsid, Object.assign({}, opts, { jwt: sess.jwt })); } throw e; }
+  };
+  try { return await call(s); }
+  catch (e) {
+    if (!(e.code === 'ExpiredToken' || e.code === 'InvalidToken' || e.status === 401)) throw e;
+    s = await _bsLogin(true);
+    return call(s);
+  }
+}
+// Links and hashtags become clickable (Bluesky needs their byte positions)
+function _bsFacets(text, extra) {
+  const enc = new TextEncoder(), at = (i) => enc.encode(text.slice(0, i)).length, out = [];
+  for (const m of text.matchAll(/https?:\/\/[^\s<>"]+/g)) {
+    const url = m[0].replace(/[.,;:!?)]+$/, '');
+    out.push({ index: { byteStart: at(m.index), byteEnd: at(m.index + url.length) }, features: [{ $type: 'app.bsky.richtext.facet#link', uri: url }] });
+  }
+  for (const m of text.matchAll(/(^|\s)(#[^\s#.,;:!?()"']+)/g)) {
+    const start = m.index + m[1].length, tag = m[2];
+    if (/^#\d+$/.test(tag) || tag.length > 64) continue;
+    out.push({ index: { byteStart: at(start), byteEnd: at(start + tag.length) }, features: [{ $type: 'app.bsky.richtext.facet#tag', tag: tag.slice(1) }] });
+  }
+  (extra || []).forEach(x => out.push({ index: { byteStart: at(x.start), byteEnd: at(x.start + x.len) }, features: [{ $type: 'app.bsky.richtext.facet#link', uri: x.uri }] }));
+  return out.sort((a, b) => a.index.byteStart - b.index.byteStart);
+}
+const _bsShort = (u) => { const s = String(u).replace(/^https?:\/\/(www\.)?/, ''); return s.length > 38 ? s.slice(0, 35) + '…' : s; };
+async function _bsPublish(post) {
+  const text0 = String(post.bskyText || _ppPostText(post, 'bluesky') || '').trim();
+  const link = String(post.bskyUrl || '').trim();
+  if (!text0 && !post.image) throw new Error('This post has no text or image.');
+  if (_bsGraphemes(text0) > 300) throw new Error(`The text is ${_bsGraphemes(text0)} characters; Bluesky allows 300.`);
+  // The blog link: added at the end (shortened, still the full link) if it fits, otherwise in a reply under the post
+  let text = text0, extra = [], replyLink = '';
+  if (link && !text0.includes(link)) {
+    const disp = _bsShort(link), add = (text0 ? '\n\n' : '') + disp;
+    if (_bsGraphemes(text0 + add) <= 300) { extra = [{ start: text0.length + (text0 ? 2 : 0), len: disp.length, uri: link }]; text = text0 + add; }
+    else replyLink = link;
+  }
+  const s = await _bsLogin();
+  const record = { $type: 'app.bsky.feed.post', text, createdAt: new Date().toISOString(), langs: ['en'] };
+  const facets = _bsFacets(text, extra);
+  if (facets.length) record.facets = facets;
+  const src = post.imageOriginal || post.image;
+  if (src && !post.isVideo) {
+    const j = await _pdJpeg(src, 2000, 950000);
+    const up = await _bsAuthed('com.atproto.repo.uploadBlob', { body: j.blob, headers: { 'Content-Type': 'image/jpeg' } });
+    record.embed = { $type: 'app.bsky.embed.images', images: [{ image: up.blob, alt: String(post.altText || '').slice(0, 2000), aspectRatio: { width: j.width, height: j.height } }] };
+  }
+  const made = await _bsAuthed('com.atproto.repo.createRecord', { json: { repo: s.did, collection: 'app.bsky.feed.post', record } });
+  const rkey = String(made.uri || '').split('/').pop();
+  if (replyLink) {
+    const rt = `📖 Read the full article: ${_bsShort(replyLink)}`, i = rt.indexOf(_bsShort(replyLink));
+    const reply = { $type: 'app.bsky.feed.post', text: rt, createdAt: new Date().toISOString(), langs: ['en'], facets: _bsFacets(rt, [{ start: i, len: _bsShort(replyLink).length, uri: replyLink }]),
+      reply: { root: { uri: made.uri, cid: made.cid }, parent: { uri: made.uri, cid: made.cid } } };
+    try { await _bsAuthed('com.atproto.repo.createRecord', { json: { repo: s.did, collection: 'app.bsky.feed.post', record: reply } }); } catch (e) {}
+  }
+  return `https://bsky.app/profile/${s.handle}/post/${rkey}`;
+}
+async function pdBlueskyPost(pid, id) {
+  if (_pd.busy) return;
+  const post = _pdFind(pid, id);
+  if (!post) return;
+  if (!_bsReady()) return pdBskySetup();
+  if (state.showComposer && state.editingPostId != null && String(state.editingPostId) === String(id)) { try { syncFormFromDOM(); } catch (e) {} }
+  const src = state.showComposer && String(state.editingPostId) === String(id) ? { ...post, ...state.form } : post;
+  _pd.busy = true; _pd.status = '🦋 Posting to Bluesky…'; _pd.err = ''; _pdRefreshPanel();
+  try {
+    const url = await _bsPublish(src);
+    _pd.busy = false; _pd.status = '';
+    if (state.showComposer && String(state.editingPostId) === String(id)) _pdCommitEdits();
+    _pdLiveSaved(pid, id, url, 'bluesky');
+  } catch (e) {
+    _pd.busy = false; _pd.status = ''; _pd.err = '🦋 ' + (e.message || String(e));
+    _pdRefreshPanel();
+    if (!document.querySelector('#composer-modal .pd-panel')) showToast(_pd.err, 'error');
+  }
+}
+// At its scheduled time (if you turned that on): posted for you while PostPilot is open
+async function pdBlueskyAuto(post) {
+  const platform = PLATFORMS.bluesky;
+  try {
+    const url = await _bsPublish(post);
+    pdSaveLive('bluesky', String(post.id), url);
+    render();
+    if (state.notificationsEnabled !== false) { try { fireNotification(post, platform, true); } catch (e) {} }
+    _pdCard('bsky-' + post.id, `<div class="pp-rem-title">🦋 Posted to <b style="color:${platform.color}">Bluesky</b></div><div class="pp-rem-text">${_pdE(String(getPostSummary(post) || '').slice(0, 80))}</div>`,
+      [['Open post ↗', () => window.open(url, '_blank')]], platform.color);
+  } catch (e) {
+    _pdOrigRemind(post, platform);
+    _pdCard('bsky-err-' + post.id, `<div class="pp-rem-title">🦋 Couldn't post to Bluesky automatically</div><div class="pp-rem-text">${_pdE(e.message || String(e))}</div>`, [], '#ef4444');
+  }
+}
+function pdBskySetup() {
+  const c = _bsCfg(), keyPass = (state.apiKeys && state.apiKeys.bluesky) || '';
+  const ov = _pdModal('pd-bsky', `<div class="pd-mh"><h2>🦋 One-click Bluesky</h2><button type="button" class="pd-x" aria-label="Close" onclick="pdCloseModal('pd-bsky')">✕</button></div>
+    <div class="pd-mb">
+      <p class="pd-note">With an <b>app password</b>, PostPilot can post to Bluesky for you: the text, the image (with its alt text) and the blog link, then it saves the live link itself. Make one in Bluesky under <b>Settings → Privacy and security → App passwords</b> (<a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener">open it</a>). It's not your real password, and you can delete it there any time.</p>
+      <div class="pd-row"><label>Your Bluesky handle <input id="pd-bs-h" autocomplete="off" spellcheck="false" placeholder="yourname.bsky.social" value="${_pdE(c.handle || '')}"/></label></div>
+      <div class="pd-row"><label>App password <input id="pd-bs-p" type="password" autocomplete="off" spellcheck="false" placeholder="xxxx-xxxx-xxxx-xxxx" value="${_pdE(c.pass || keyPass)}"/></label></div>
+      <label class="pd-check"><input type="checkbox" id="pd-bs-auto"${c.auto ? ' checked' : ''}/> Also post Bluesky posts by themselves at their scheduled time (while PostPilot is open)</label>
+      <p class="pd-note pd-small">Saved in this browser only, for this brand. It isn't included in GitHub Sync.</p>
+      <div id="pd-bs-out" class="pd-note" role="status"></div>
+    </div>
+    <div class="pd-mf">${c.handle ? '<button type="button" class="pd-btn pd-danger" onclick="pdBskyForget()">Disconnect</button>' : ''}<button type="button" class="pd-btn" onclick="pdCloseModal('pd-bsky')">Close</button><button type="button" class="pd-btn pd-primary" onclick="pdBskySave()">Connect</button></div>`);
+  return ov;
+}
+async function pdBskySave() {
+  const h = _bsHandle((document.getElementById('pd-bs-h') || {}).value), p = String((document.getElementById('pd-bs-p') || {}).value || '').trim();
+  const auto = !!(document.getElementById('pd-bs-auto') || {}).checked, out = document.getElementById('pd-bs-out');
+  if (!h || !p) { if (out) out.innerHTML = '<span class="pd-warn">Enter your handle and an app password.</span>'; return; }
+  _pdSet(_bsKey(), { handle: h, pass: p, auto });
+  _bsSess = null;
+  if (out) out.textContent = 'Checking with Bluesky…';
+  try {
+    const s = await _bsLogin(true);
+    if (out) out.innerHTML = `✅ Connected as <b>@${_pdE(s.handle)}</b>.`;
+    setTimeout(() => { pdCloseModal('pd-bsky'); render(); _pdRefreshPanel(); }, 900);
+  } catch (e) { if (out) out.innerHTML = `<span class="pd-warn">${_pdE(e.message || String(e))}</span>`; }
+}
+function pdBskyForget() { try { localStorage.removeItem(_bsKey()); } catch (e) {} _bsSess = null; pdCloseModal('pd-bsky'); render(); showToast('Bluesky disconnected.'); }
+// ── The night-before check: tomorrow's posts, checked for anything missing ──
+const PD_NEEDS_IMAGE = new Set(['instagram', 'pinterest', 'tiktok', 'youtube', 'google']);
+function _pdIssues(p, pid) {
+  const out = [], cap = _pdCaption(p, pid), lim = PD_LIMITS[pid];
+  if (!p.image && PD_NEEDS_IMAGE.has(pid)) out.push('No image');
+  if (!cap.trim()) out.push(pid === 'pinterest' ? 'No description' : 'No caption');
+  else if (lim && _pdLen(pid, cap) > lim) out.push(`The caption is ${_pdLen(pid, cap).toLocaleString()} characters (${_pdName(pid)} takes ${lim.toLocaleString()})`);
+  if (pid === 'pinterest') {
+    if (!String(p.title || '').trim()) out.push('No pin title');
+    else if (String(p.title).length > 100) out.push('The pin title is over 100 characters');
+    if (!String(p.destinationUrl || '').trim()) out.push('The pin has no link');
+  }
+  if (pid === 'google') {
+    const noUrl = cap.replace(/https?:\/\/\S+/g, '');
+    if (/(^|\s)#\w/.test(cap)) out.push('Has hashtags (your Google Business posts use none)');
+    if (/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(cap)) out.push('Has emojis (your Google Business posts use none)');
+    if (/[—–]|\s-\s|\w-\w/.test(noUrl)) out.push('Has a dash or hyphen (use commas instead)');
+    if (cap.trim() && !/Learn More by clicking the button below!\s*$/i.test(cap.trim())) out.push('Doesn’t end with “Learn More by clicking the button below!”');
+    if (!String(p.ctaUrl || '').trim()) out.push('The Learn more button has no link');
+  }
+  if (pid === 'alignable' && /https?:\/\/|www\.|[\w.+-]+@[\w-]+\.[\w.]+|\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/.test(cap)) out.push('Has a link, email or phone number (Alignable hides those)');
+  if (pid === 'instagram') { const n = (cap.match(/(^|\s)#[\w]+/g) || []).length; if (n > 30) out.push(`${n} hashtags (Instagram allows 30)`); }
+  if (pid !== 'google' && /—/.test(cap)) out.push('Has an em dash');
+  if (cap.trim().length > 20) {
+    const dup = (state.posts[pid] || []).find(q => String(q.id) !== String(p.id) && q.scheduledDate && Math.abs(_ppT(q.scheduledDate, '12:00') - _ppT(p.scheduledDate, '12:00')) <= 14 * 864e5 && _pdCaption(q, pid).trim() === cap.trim());
+    if (dup) out.push(`Same caption as your ${_ppNiceDay(dup.scheduledDate)} ${_pdName(pid)} post`);
+  }
+  return out;
+}
+function _pdTomorrowPosts() {
+  const d = _pdDay(1), out = [];
+  _ppVisible().forEach(pl => (state.posts[pl.id] || []).forEach(p => { if (p.scheduledDate === d && !_pdPostedLike(p)) out.push({ p, pl }); }));
+  return out.sort((a, b) => String(a.p.scheduledTime || '').localeCompare(String(b.p.scheduledTime || '')));
+}
+function _pdTomorrowIssues() { return _pdTomorrowPosts().map(x => ({ ...x, iss: _pdIssues(x.p, x.pl.id) })).filter(x => x.iss.length); }
+function pdTomorrowOpen() {
+  const all = _pdTomorrowPosts(), bad = _pdTomorrowIssues();
+  const day = new Date(_pdDay(1) + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  _pdModal('pd-nb', `<div class="pd-mh"><h2>🌙 Tomorrow · ${_pdE(day)}</h2><button type="button" class="pd-x" aria-label="Close" onclick="pdCloseModal('pd-nb')">✕</button></div>
+    <div class="pd-mb">${!all.length ? '<p class="pd-note">Nothing is scheduled for tomorrow yet.</p>'
+      : !bad.length ? `<p class="pd-note pd-good">✅ All ${all.length} of tomorrow's posts look ready.</p>`
+      : `<p class="pd-note">${bad.length} of tomorrow's ${all.length} posts need a fix. Fix them now and tomorrow is only copy and paste.</p>
+        <div class="pd-nb-list">${bad.map(({ p, pl, iss }) => `<div class="pd-nb-row" style="border-left-color:${pl.color}">
+          <div class="pd-nb-top"><b style="color:${pl.color}">${_pdE(pl.name)}</b> · ${_pdE(_ppClock(p.scheduledTime || '09:00'))} · <span class="pd-nb-sum">${_pdE(String(getPostSummary(p) || '').slice(0, 70))}</span>
+          <button type="button" class="pd-btn" onclick="pdCloseModal('pd-nb'); pdEdit('${pl.id}','${p.id}')">Fix</button></div>
+          <ul>${iss.map(t => `<li>${_pdE(t)}</li>`).join('')}</ul></div>`).join('')}</div>`}</div>
+    <div class="pd-mf"><button type="button" class="pd-btn pd-primary" onclick="pdCloseModal('pd-nb')">Done</button></div>`, true);
+}
+function _pdNightTick() {
+  const now = new Date();
+  if (now.getHours() < 17) return;
+  const d = _pdDay(1), k = wsKey('postpilot_pd_nb_seen'), sk = wsKey('postpilot_pd_nb_snooze');
+  if (_pdLS(k, '') === d || document.getElementById('pdc-nb') || Number(_pdLS(sk, 0)) > Date.now()) return;
+  const bad = _pdTomorrowIssues();
+  if (!bad.length) return;
+  const seen = () => _pdSet(k, d); // once an evening
+  _pdCard('nb', `<div class="pp-rem-title">🌙 Tomorrow: ${bad.length} post${bad.length === 1 ? ' needs' : 's need'} a fix</div><div class="pp-rem-text">${_pdE(bad.slice(0, 3).map(x => x.pl.name + ': ' + x.iss[0]).join(' · '))}${bad.length > 3 ? ' …' : ''}</div>`,
+    [['Review', (e, card) => { seen(); card.remove(); pdTomorrowOpen(); }, true], ['Remind me in 1 hour', (e, card) => { _pdSet(sk, Date.now() + 3600e3); card.remove(); }]], '#8b5cf6', seen);
+}
+
+// ── Reply reminders: an hour after a post goes live, a nudge to check its comments ──
+const _pdReplyOn = () => _pdLS('postpilot_pd_reply_on', true) !== false;
+const _pdReplyKey = () => wsKey('postpilot_pd_reply');
+function _pdReplyScan() {
+  if (!_pdReplyOn()) return;
+  const m = _pdLS(_pdReplyKey(), {}) || {}, now = Date.now();
+  let changed = false;
+  _ppVisible().forEach(pl => (state.posts[pl.id] || []).forEach(p => {
+    const u = _ppLiveUrl(p), k = _pdK(pl.id, p.id);
+    if (!u || !p.liveAt || m[k] || now - p.liveAt > 6 * 3600e3) return;
+    m[k] = { due: p.liveAt + 60 * 60e3, url: u, st: 'wait' };
+    changed = true;
+  }));
+  Object.keys(m).forEach(k => { if (now - (m[k].due || 0) > 3 * 864e5) { delete m[k]; changed = true; } });
+  if (changed) _pdSet(_pdReplyKey(), m);
+}
+function _pdReplyTick() {
+  if (!_pdReplyOn()) return;
+  _pdReplyScan();
+  const m = _pdLS(_pdReplyKey(), {}) || {}, now = Date.now();
+  const due = Object.keys(m).filter(k => m[k].st === 'wait' && m[k].due <= now).map(k => { const [pid, id] = _pdSplit(k); const p = _pdFind(pid, id); return p ? { k, pid, p, url: m[k].url } : null; }).filter(Boolean);
+  if (!due.length) return;
+  const fresh = due.some(x => !m[x.k].shown);
+  if (!fresh && document.getElementById('pdc-reply')) return;
+  due.forEach(x => { m[x.k].shown = 1; });
+  _pdSet(_pdReplyKey(), m);
+  const set = (st, extra) => { const mm = _pdLS(_pdReplyKey(), {}) || {}; due.forEach(x => { if (mm[x.k]) { mm[x.k].st = st; Object.assign(mm[x.k], extra || {}); delete mm[x.k].shown; } }); _pdSet(_pdReplyKey(), mm); };
+  _pdCard('reply', `<div class="pp-rem-title">💬 Time to check your comments</div><div class="pp-rem-text">${due.length === 1 ? 'This post has' : `These ${due.length} posts have`} been live for an hour. Replying now keeps the conversation going.</div>
+    <div class="pd-rl">${due.slice(0, 6).map(x => `<a href="${_pdE(x.url)}" target="_blank" rel="noopener" style="border-left-color:${_pdColor(x.pid)}"><b style="color:${_pdColor(x.pid)}">${_pdE(_pdName(x.pid))}</b> ${_pdE(String(getPostSummary(x.p) || '').slice(0, 46))} ↗</a>`).join('')}</div>`,
+    [['✓ Done', (e, card) => { set('done'); card.remove(); }, true], ['Snooze 30 min', (e, card) => { set('wait', { due: Date.now() + 30 * 60e3 }); card.remove(); }]], '#22c55e', () => set('done'));
+  if (fresh && state.notificationsEnabled !== false) {
+    try { playNotificationSound(); } catch (e) {}
+    try { if ('Notification' in window && Notification.permission === 'granted') new Notification('Time to check your comments', { body: due.map(x => _pdName(x.pid)).join(', '), tag: 'pd-reply' }); } catch (e) {}
+  }
+}
+
+// ── Send today's posts to your phone (through your GitHub repository) ──
+function _pdPhoneLink(cfg) {
+  let loc = null;
+  try { loc = window.parent && window.parent !== window ? window.parent.location : window.location; } catch (e) {}
+  const base = loc && /^https?:$/.test(loc.protocol) ? loc.origin + loc.pathname : `https://${cfg.user.toLowerCase()}.github.io/${cfg.repo}/`;
+  const derived = !!(loc && loc.hostname.toLowerCase() === cfg.user.toLowerCase() + '.github.io' && (loc.pathname.split('/')[1] || '').toLowerCase() === cfg.repo.toLowerCase() && cfg.branch === 'main');
+  return base + (derived ? '#phone' : '#phone=' + encodeURIComponent(`${cfg.user}/${cfg.repo}/${cfg.branch}`));
+}
+function _pdPhoneModal(body, foot) {
+  return _pdModal('pd-phone', `<div class="pd-mh"><h2>📱 Post from your phone</h2><button type="button" class="pd-x" aria-label="Close" onclick="pdCloseModal('pd-phone')">✕</button></div>
+    <div class="pd-mb">${body}</div><div class="pd-mf">${foot || '<button type="button" class="pd-btn pd-primary" onclick="pdCloseModal(\'pd-phone\')">Close</button>'}</div>`);
+}
+async function pdSendToPhone() {
+  const cfg = _pdGhCfg();
+  if (!cfg) return void _pdPhoneModal(`<p class="pd-note pd-warn">${_pdGhNeed()}</p>`);
+  const items = _ppTodayItems().filter(({ p }) => !_pdPostedLike(p) && !p.platformScheduled);
+  if (!items.length) return void showToast('Nothing left to post today.');
+  _pdPhoneModal(`<p class="pd-note">Sending today's ${items.length} post${items.length === 1 ? '' : 's'} to your phone… <b id="pd-ph-prog"></b></p>`, ' ');
+  const prog = (t) => { const e = document.getElementById('pd-ph-prog'); if (e) e.textContent = t; };
+  try {
+    const stamp = Date.now().toString(36), ws = getActiveWorkspace(), files = [], out = [];
+    for (let i = 0; i < items.length; i++) {
+      const { p, pl } = items[i];
+      prog(`${i + 1} of ${items.length}`);
+      let image = '';
+      if ((p.imageOriginal || p.image) && !p.isVideo) {
+        const j = await _pdJpeg(p.imageOriginal || p.image, 1600, 6e6);
+        image = `${stamp}-${i + 1}-${pl.id}.jpg`;
+        await _pdGhPut(cfg, `phone/${image}`, await _pdB64(j.blob), `PostPilot phone image ${image}`, true);
+        files.push(image);
+      }
+      out.push({ key: `${ws}|${pl.id}|${p.id}`, ws, pid: pl.id, id: String(p.id), name: pl.name, color: pl.color, date: p.scheduledDate, time: p.scheduledTime || '',
+        caption: _pdCaption(p, pl.id), title: pl.id === 'pinterest' ? (p.title || '') : '', link: _pdLink(p, pl.id), comment: _pdFirstComment(p, pl.id), alt: p.altText || '',
+        image, imageName: String(p.imageName || pl.id + '-post').replace(/\.(png|gif|webp|jpe?g)$/i, '') + '.jpg', open: PP_OPEN_URLS[pl.id] || '' });
+    }
+    prog('saving the list');
+    await _pdGhPut(cfg, 'phone/today.json', _pdUtf8B64(JSON.stringify({ v: 1, made: new Date().toISOString(), date: _pdDay(0), ws, brand: typeof _ppWsName === 'function' ? _ppWsName(ws) : '', items: out })), "PostPilot: today's posts for the phone");
+    try {
+      const l = await _pdGh(cfg, 'GET', 'phone');
+      const arr = l.ok ? await l.json() : [];
+      for (const f of (Array.isArray(arr) ? arr : [])) if (/\.jpg$/i.test(f.name) && !files.includes(f.name)) await _pdGh(cfg, 'DELETE', `phone/${f.name}`, { message: 'PostPilot: clear an old phone image', sha: f.sha, branch: cfg.branch });
+    } catch (e) {}
+    _pdSet(wsKey('postpilot_pd_phone_sent'), Date.now());
+    const link = _pdPhoneLink(cfg);
+    _pdPhoneModal(`<p class="pd-note pd-good">✅ Sent ${out.length} post${out.length === 1 ? '' : 's'}.</p>
+      <p class="pd-note">On your phone, open this link (bookmark it, or add it to your home screen, and it's always the latest you sent):</p>
+      <div class="pd-row"><input id="pd-ph-link" readonly value="${_pdE(link)}"/><button type="button" class="pd-btn" onclick="(async()=>{ if (await _ppCopy(document.getElementById('pd-ph-link').value)) this.textContent='✓ Copied'; })()">📋 Copy</button></div>
+      <p class="pd-note pd-small">Each post on your phone has 📋 Copy caption and ↗ Share (sends the image straight into the Instagram, TikTok or other app). When you mark posts there, they're marked here too within a couple of minutes, if you add your GitHub token on the phone once. The posts and images sit in your repository's <code>phone</code> folder, which is public like the rest of the repository; they're replaced each time you send.</p>`);
+  } catch (e) {
+    _pdPhoneModal(`<p class="pd-note pd-warn">Couldn't send: ${_pdE(e.message || String(e))}</p>`);
+  }
+}
+// What you marked on the phone shows up here (live links and ✓ Posted)
+async function _pdPhonePoll() {
+  const sent = _pdLS(wsKey('postpilot_pd_phone_sent'), 0), cfg = _pdGhCfg();
+  if (!sent || Date.now() - sent > 3 * 864e5 || !cfg || _pd.polling) return;
+  _pd.polling = true;
+  try {
+    const { data } = await _pdGhJson(cfg, 'phone/results.json');
+    if (!data || !data.items) return;
+    const ws = getActiveWorkspace(), ak = wsKey('postpilot_pd_phone_applied'), applied = _pdLS(ak, {}) || {};
+    let n = 0;
+    Object.values(data.items).forEach(it => {
+      if (!it || it.ws !== ws || !it.pid || it.id == null) return;
+      const p = _pdFind(it.pid, it.id);
+      if (!p) return;
+      const k = _pdK(it.pid, it.id), sig = `${it.liveUrl || ''}|${it.posted ? 1 : 0}`;
+      if (applied[k] === sig) return;
+      applied[k] = sig;
+      const url = _ppCleanUrl(it.liveUrl || '');
+      if (url && _ppLiveUrl(p) !== url) { if (pdSaveLive(it.pid, it.id, url).ok) n++; }
+      else if (it.posted && !_pdPostedLike(p)) {
+        state.posts = { ...state.posts, [it.pid]: (state.posts[it.pid] || []).map(x => String(x.id) === String(it.id) ? { ...x, publishStatus: 'published', publishedAt: new Date().toISOString() } : x) };
+        savePosts(state.posts);
+        n++;
+      }
+    });
+    _pdSet(ak, applied);
+    if (n) { render(); showToast(`📱 ${n} post${n === 1 ? '' : 's'} marked from your phone.`); }
+  } catch (e) {} finally { _pd.polling = false; }
+}
+
+// ── Start-up ──
+setInterval(() => { try { _pdReplyTick(); } catch (e) {} try { _pdNightTick(); } catch (e) {} }, 60e3);
+setInterval(() => { _pdPhonePoll(); }, 120e3);
+window.addEventListener('focus', () => { _pdPhonePoll(); });
+setTimeout(() => { try { _pdReplyScan(); _pdReplyTick(); _pdNightTick(); } catch (e) {} _pdPhonePoll(); }, 5000);
+window.pdOpen = pdOpen; window.pdEdit = pdEdit; window.pdSaveLive = pdSaveLive;
+(function _pdStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .pd-panel { border: 1px solid var(--border-light, #303859); border-top: 3px solid var(--pc); border-radius: 12px; background: var(--bg-elevated, #181d29); padding: 12px 14px 10px; margin: 0 0 16px; font-family: 'DM Sans', system-ui, sans-serif; }
+    .pd-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+    .pd-plat { display: inline-flex; align-items: center; gap: 7px; font-weight: 800; font-size: 14px; flex: 1; min-width: 200px; }
+    .pd-plat b { color: var(--text-primary, #e8ecf8); }
+    .pd-plat svg { flex-shrink: 0; }
+    .pd-ht { min-width: 0; }
+    .pd-inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; font-weight: 700; color: #c9cee3; }
+    .pd-inline select { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border-light, #303859); background: var(--bg-input, #1d2235); color: var(--text-primary, #e8ecf8); font: 13px 'DM Sans', system-ui, sans-serif; }
+    .pd-run { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: #c9cee3; background: rgba(255,255,255,.05); border: 1px solid var(--border-light, #303859); border-radius: 999px; padding: 3px 10px; }
+    .pd-msg { font-size: 12px; color: #b8bdd6; line-height: 1.5; margin: 2px 0 8px; }
+    .pd-msg a { color: #f5a623; font-weight: 700; }
+    .pd-status { color: #f5a623; }
+    .pd-go { display: block; width: 100%; margin: 4px 0 10px; padding: 11px 14px; border: none; border-radius: 10px; background: var(--pc); color: var(--ink, #fff); font: 800 14px 'DM Sans', system-ui, sans-serif; cursor: pointer; }
+    .pd-go:hover { filter: brightness(1.08); }
+    .pd-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .pd-step { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 9px; background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.05); }
+    .pd-n { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--pc); color: #fff; font: 800 11.5px 'DM Sans', system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
+    .pd-s-main { flex: 1; min-width: 0; }
+    .pd-s-t { font-weight: 700; font-size: 12.5px; color: var(--text-primary, #e8ecf8); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pd-sub { font-weight: 500; color: #8b8fa8; font-size: 11.5px; }
+    .pd-cc { font-weight: 600; font-size: 11px; color: #8b8fa8; }
+    .pd-cc.over { color: #f87171; font-weight: 800; }
+    .pd-prev { font-size: 12px; color: #b8bdd6; line-height: 1.45; margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 4.4em; overflow: hidden; }
+    .pd-prev a { color: #5a9fe0; }
+    .pd-none { color: #f5a623; font-style: italic; }
+    .pd-url { color: #8fb8ff; }
+    .pd-s-act { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; flex-shrink: 0; max-width: 52%; }
+    .pd-btn { border: 1px solid var(--border-light, #303859); background: var(--bg-card, #121620); color: var(--text-primary, #e8ecf8); border-radius: 8px; padding: 6px 11px; font: 700 12px 'DM Sans', system-ui, sans-serif; cursor: pointer; white-space: nowrap; }
+    .pd-btn:hover { border-color: #f5a623; }
+    .pd-btn.done { background: rgba(34,197,94,.14); border-color: rgba(34,197,94,.55); color: #4ade80; }
+    .pd-btn.pd-main, .pd-btn.pd-primary { background: var(--pc, #f5a623); border-color: var(--pc, #f5a623); color: var(--ink, #1a1206); }
+    .pd-btn.pd-primary { --pc: #f5a623; --ink: #1a1206; }
+    .pd-btn.pd-danger { color: #f87171; border-color: rgba(248,113,113,.4); background: transparent; }
+    .pd-btn.pd-ghost { background: transparent; }
+    .pd-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .pd-link { background: none; border: none; padding: 0; color: #f5a623; font: 700 12px 'DM Sans', system-ui, sans-serif; cursor: pointer; text-decoration: underline; }
+    .pd-imgrow { display: flex; align-items: center; gap: 8px; margin-top: 4px; min-width: 0; }
+    .pd-thumb { width: 54px; height: 54px; object-fit: cover; border-radius: 7px; border: 1px solid rgba(255,255,255,.1); flex-shrink: 0; }
+    .pd-fn { font-size: 11px; color: #8b8fa8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .pd-step.pd-live { border-color: rgba(245,166,35,.45); background: rgba(245,166,35,.06); flex-wrap: wrap; }
+    .pd-step.pd-live .pd-s-main { flex-basis: calc(100% - 40px); }
+    .pd-liverow { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .pd-liverow input { flex: 1 1 260px; min-width: 0; padding: 9px 11px; border-radius: 8px; border: 1px solid #f5a623; background: var(--bg-input, #1d2235); color: var(--text-primary, #e8ecf8); font: 13px 'DM Sans', system-ui, sans-serif; }
+    .pd-offer { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.45); font-size: 12px; color: #d8f5e2; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pd-alt { margin-top: 8px; font-size: 12px; color: #8b8fa8; }
+    .pd-tip { margin-top: 6px; font-size: 11.5px; color: #8b8fa8; }
+    .pd-err { margin-top: 6px; font-size: 12px; color: #f87171; }
+    .pd-ok { color: #22c55e; font-weight: 800; font-size: 12.5px; }
+    .pd-foot { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }
+    .pd-fold { margin: 2px 0 14px; }
+    .pd-fold-btn { width: 100%; text-align: left; padding: 9px 12px; border-radius: 9px; border: 1px dashed var(--border-light, #303859); background: transparent; color: #b8bdd6; font: 700 12.5px 'DM Sans', system-ui, sans-serif; cursor: pointer; }
+    .pd-fold-btn:hover { border-color: #f5a623; color: #f5a623; }
+    .pd-fold-body { display: none; padding-top: 12px; }
+    .pd-sched-open .pd-fold-body { display: block; }
+    .pd-posting .pd-live-orig, .pd-posting .pd-onplat-note { display: none !important; }
+    .pd-live-orig { padding: 10px 12px; border: 1px solid rgba(245,166,35,.45); border-radius: 10px; background: rgba(245,166,35,.06); }
+    .pd-live-orig input { border-color: rgba(245,166,35,.6) !important; }
+    .pd-live-hint { font-size: 11.5px; color: #b8bdd6; margin-top: 6px; }
+    .pd-onplat-note { margin: -6px 0 14px; padding: 8px 11px; border-radius: 9px; background: rgba(90,159,224,.1); border: 1px solid rgba(90,159,224,.4); font-size: 12px; color: #cfe2f6; }
+    .pd-chip { background: rgba(90,159,224,.15); color: #8fc1f0; border: 1px solid rgba(90,159,224,.4); }
+    .td-tools { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border, #272e44); margin-bottom: 2px; }
+    .td-go { border: none; border-radius: 8px; background: #f5a623; color: #1a1206; font: 800 12.5px 'DM Sans', system-ui, sans-serif; padding: 8px 13px; cursor: pointer; }
+    .td-go:hover { filter: brightness(1.06); }
+    .td-tool { border: 1px solid var(--border-light, #303859); border-radius: 8px; background: var(--bg-elevated, #181d29); color: var(--text-primary, #e8ecf8); font: 700 12px 'DM Sans', system-ui, sans-serif; padding: 7px 11px; cursor: pointer; }
+    .td-tool:hover { border-color: #f5a623; }
+    .td-tool.warn { border-color: rgba(245,166,35,.7); color: #f5c06a; }
+    .td-onplat { font: 700 11.5px 'DM Sans', system-ui, sans-serif; color: #8fc1f0; border: 1px solid rgba(90,159,224,.45); border-radius: 8px; padding: 6px 8px; white-space: nowrap; }
+    .td-row.onplat { background: rgba(90,159,224,.06); }
+    .td-foot { font-size: 11.5px; color: #8b8fa8; margin-top: 6px; }
+    .pd-ov { position: fixed; inset: 0; z-index: 900; background: rgba(0,0,0,.66); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
+    .pd-modal { width: min(560px, 100%); background: var(--bg-card, #121620); border: 1px solid var(--border-light, #303859); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.6); font-family: 'DM Sans', system-ui, sans-serif; color: var(--text-primary, #e8ecf8); }
+    .pd-modal.wide { width: min(740px, 100%); }
+    .pd-mh { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px 18px 10px; border-bottom: 1px solid var(--border, #272e44); }
+    .pd-mh h2 { margin: 0; font-size: 16px; font-weight: 800; }
+    .pd-x { background: none; border: 1px solid var(--border-light, #303859); color: #8b8fa8; border-radius: 8px; width: 30px; height: 30px; cursor: pointer; }
+    .pd-mb { padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; max-height: 70vh; overflow-y: auto; }
+    .pd-mf { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px 16px; border-top: 1px solid var(--border, #272e44); flex-wrap: wrap; }
+    .pd-note { font-size: 12.5px; color: #b8bdd6; line-height: 1.5; margin: 0; }
+    .pd-note a { color: #f5a623; }
+    .pd-note code { background: rgba(255,255,255,.07); padding: 1px 5px; border-radius: 4px; }
+    .pd-small { font-size: 11.5px; color: #8b8fa8; }
+    .pd-warn { color: #f5a623; }
+    .pd-good { color: #4ade80; font-weight: 700; }
+    .pd-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .pd-row label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 700; color: #c9cee3; flex: 1; min-width: 220px; }
+    .pd-row input, .pd-row select, .pd-mb textarea { padding: 9px 11px; border-radius: 8px; border: 1px solid var(--border-light, #303859); background: var(--bg-input, #1d2235); color: var(--text-primary, #e8ecf8); font: 13px 'DM Sans', system-ui, sans-serif; min-width: 0; }
+    .pd-row input { flex: 1; }
+    .pd-mb textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+    .pd-check { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: #c9cee3; cursor: pointer; }
+    .pd-plats { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pd-plat-cb { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border-light, #303859); font-size: 12px; font-weight: 700; cursor: pointer; color: var(--text-primary, #e8ecf8); }
+    .pd-plat-cb:has(input:checked) { border-color: var(--pc); background: rgba(255,255,255,.05); }
+    .pd-plat-cb svg { color: var(--pc); }
+    .pd-cnt { background: rgba(255,255,255,.08); border-radius: 999px; padding: 0 7px; font-size: 11px; }
+    .pd-sec { border-top: 1px solid var(--border, #272e44); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .pd-sec h3 { margin: 0; font-size: 13.5px; }
+    .pd-bulk-list, .pd-nb-list { display: flex; flex-direction: column; gap: 8px; }
+    .pd-bulk-row, .pd-nb-row { border-left: 3px solid; border-radius: 8px; background: rgba(255,255,255,.03); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+    .pd-bulk-url { font-size: 12px; color: #c9cee3; overflow-wrap: anywhere; }
+    .pd-bulk-note { font-size: 11.5px; color: #f5a623; }
+    .pd-bulk-row select { padding: 7px 9px; border-radius: 7px; border: 1px solid var(--border-light, #303859); background: var(--bg-input, #1d2235); color: var(--text-primary, #e8ecf8); font: 12px 'DM Sans', system-ui, sans-serif; max-width: 100%; }
+    .pd-nb-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
+    .pd-nb-top .pd-btn { margin-left: auto; }
+    .pd-nb-sum { color: #b8bdd6; }
+    .pd-nb-row ul { margin: 0; padding-left: 18px; font-size: 12px; color: #f5c06a; }
+    .pd-card .pp-rem-actions { flex-wrap: wrap; }
+    .pd-rl { display: flex; flex-direction: column; gap: 4px; margin: 0 0 8px; }
+    .pd-rl a { display: block; padding: 5px 8px; border-left: 3px solid; border-radius: 6px; background: rgba(255,255,255,.04); color: #dfe3f5; text-decoration: none; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pd-rl a:hover { background: rgba(255,255,255,.08); }
+    .pd-btn:focus-visible, .pd-link:focus-visible, .pd-go:focus-visible, .td-go:focus-visible, .td-tool:focus-visible, .pd-fold-btn:focus-visible, .pd-x:focus-visible, .pd-liverow input:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
+    @media (max-width: 640px) {
+      .pd-step { flex-wrap: wrap; }
+      .pd-s-main { flex-basis: calc(100% - 40px); }
+      .pd-s-act { max-width: none; width: 100%; justify-content: flex-start; padding-left: 32px; }
+      .pd-ov { padding: 12px; }
+    }`;
+  document.head.appendChild(st);
+})();
+
 </scr_PPESC_ipt>
 
   <!_PPESC_-- ── Floating action button (new post) ─────────────────────── -->
@@ -41610,6 +43127,235 @@ function renderAnalyticsView() {
 </body>
 </html>
 </script>
+    <script>
+      // ══════════════════════════════════════════
+      // PHONE POSTING (v110): open PostPilot Studio with #phone on your phone to post what the Scheduler sent
+      // (📋 Today → 📱 Send to phone). Copy the caption, share the image straight into Instagram, TikTok or any
+      // app, paste the live link. With your GitHub token saved on the phone, what you mark shows up on the computer.
+      // ══════════════════════════════════════════
+      (function () {
+        const PH = { src: null, pack: null, blobs: {}, urls: {}, open: {}, syncing: false, timer: null, err: "" };
+        const DONE_KEY = "pp_phone_done_v1", TOKEN_KEY = "pp_phone_token";
+        const ls = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+        const lset = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+        const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        const token = () => String(ls(TOKEN_KEY, "") || "").trim();
+        function wanted() { return /^#phone\b/i.test(location.hash); }
+        function source() {
+          const m = /^#phone=([^&]+)/i.exec(location.hash);
+          if (m) { const [o, r, b] = decodeURIComponent(m[1]).split("/"); if (o && r) return { o, r, b: b || "main" }; }
+          const h = location.hostname.toLowerCase(), r = location.pathname.split("/")[1];
+          if (/\.github\.io$/.test(h) && r) return { o: h.replace(/\.github\.io$/, ""), r, b: "main" };
+          return null;
+        }
+        const api = (path) => `https://api.github.com/repos/${PH.src.o}/${PH.src.r}/contents/${path}?ref=${encodeURIComponent(PH.src.b)}&t=${Date.now()}`;
+        const raw = (path) => `https://raw.githubusercontent.com/${PH.src.o}/${PH.src.r}/${PH.src.b}/${path}`;
+        function headers(rawBody) {
+          const h = { Accept: rawBody ? "application/vnd.github.raw+json" : "application/vnd.github+json" };
+          if (token()) h.Authorization = "Bearer " + token();
+          return h;
+        }
+        const ink = (c) => { const m = /^#?([0-9a-f]{6})$/i.exec(String(c || "")); if (!m) return "#fff"; const n = parseInt(m[1], 16), L = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; return L > 0.62 ? "#111" : "#fff"; };
+        const clock = (t) => { if (!t) return ""; const [h, m] = t.split(":").map(Number); const d = new Date(); d.setHours(h || 0, m || 0, 0, 0); return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); };
+        const done = () => ls(DONE_KEY, {}) || {};
+        function mark(key, patch) {
+          const d = done();
+          d[key] = Object.assign({}, d[key] || {}, patch, { at: new Date().toISOString() });
+          lset(DONE_KEY, d);
+          queueSync();
+          render();
+        }
+        async function copy(text) {
+          try { await navigator.clipboard.writeText(text); return true; } catch (e) {
+            try { const ta = document.createElement("textarea"); ta.value = text; ta.style.cssText = "position:fixed;left:-9999px;top:0"; document.body.appendChild(ta); ta.select(); const ok = document.execCommand("copy"); ta.remove(); return ok; } catch (e2) { return false; }
+          }
+        }
+        function cleanUrl(v) {
+          v = String(v || "").trim();
+          const m = v.match(/(?:https?:\/\/|www\.)[^\s<>"']+/i);
+          if (!m) return "";
+          let u = m[0].replace(/[.,;:!?)]+$/, "");
+          if (!/^https?:\/\//i.test(u)) u = "https://" + u;
+          try { return new URL(u).href; } catch (e) { return ""; }
+        }
+        // ── Loading what the computer sent ──
+        async function load() {
+          PH.err = "";
+          render();
+          try {
+            const res = await fetch(api("phone/today.json"), { headers: headers(true), cache: "no-store" });
+            if (res.status === 404) { PH.pack = null; PH.err = "nothing"; return render(); }
+            if (!res.ok) throw new Error(res.status === 403 ? "GitHub is limiting requests right now. Try again in a few minutes." : "GitHub said " + res.status);
+            PH.pack = await res.json();
+            render();
+            (PH.pack.items || []).forEach(loadImage);
+          } catch (e) { PH.err = e.message || String(e); render(); }
+        }
+        async function loadImage(it) {
+          if (!it.image || PH.blobs[it.key]) return;
+          let blob = null;
+          try { const r = await fetch(raw("phone/" + it.image)); if (r.ok) blob = await r.blob(); } catch (e) {}
+          if (!blob && token()) { try { const r = await fetch(api("phone/" + it.image), { headers: headers(true) }); if (r.ok) blob = await r.blob(); } catch (e) {} }
+          if (!blob) return;
+          PH.blobs[it.key] = new File([blob], it.imageName || it.pid + "-post.jpg", { type: "image/jpeg" });
+          PH.urls[it.key] = URL.createObjectURL(blob);
+          const img = document.querySelector(`.ph-card[data-k="${CSS.escape(it.key)}"] .ph-img`);
+          if (img) { img.src = PH.urls[it.key]; img.classList.add("on"); }
+          const sh = document.querySelector(`.ph-card[data-k="${CSS.escape(it.key)}"] [data-a="share"]`);
+          if (sh) sh.disabled = false;
+        }
+        // ── Sending what you marked back to the computer ──
+        function queueSync() { clearTimeout(PH.timer); if (token()) PH.timer = setTimeout(sync, 1200); }
+        async function sync() {
+          if (!token() || !PH.src || PH.syncing) return;
+          PH.syncing = true; setSync("Sending to your computer…");
+          try {
+            let sha = null, cur = { items: {} };
+            const g = await fetch(api("phone/results.json"), { headers: headers(false), cache: "no-store" });
+            if (g.ok) { const d = await g.json(); sha = d.sha; try { cur = JSON.parse(decodeURIComponent(escape(atob(String(d.content || "").replace(/\n/g, ""))))) || cur; } catch (e) {} }
+            else if (g.status === 401) throw new Error("GitHub turned the token down.");
+            cur.items = cur.items || {};
+            const d = done();
+            Object.keys(d).forEach(k => {
+              const [ws, pid, id] = k.split("|");
+              cur.items[k] = { key: k, ws, pid, id, liveUrl: d[k].liveUrl || "", posted: !!d[k].posted, at: d[k].at };
+            });
+            cur.updated = new Date().toISOString();
+            const body = { message: "PostPilot phone: posted", content: btoa(unescape(encodeURIComponent(JSON.stringify(cur)))), branch: PH.src.b };
+            if (sha) body.sha = sha;
+            const p = await fetch(`https://api.github.com/repos/${PH.src.o}/${PH.src.r}/contents/phone/results.json`, { method: "PUT", headers: Object.assign(headers(false), { "Content-Type": "application/json" }), body: JSON.stringify(body) });
+            if (!p.ok) throw new Error(p.status === 401 ? "GitHub turned the token down." : p.status === 409 ? "Try again" : "GitHub said " + p.status);
+            setSync("✓ Sent to your computer");
+          } catch (e) { setSync("Couldn't send: " + (e.message || e)); }
+          finally { PH.syncing = false; }
+        }
+        function setSync(t) { const el = document.getElementById("ph-sync"); if (el) el.textContent = t; }
+        // ── Drawing it ──
+        function card(it) {
+          const st = done()[it.key] || {};
+          const live = st.liveUrl, posted = live || st.posted;
+          const share = typeof navigator.canShare === "function";
+          return `<article class="ph-card${posted ? " done" : ""}" data-k="${esc(it.key)}" style="--pc:${esc(it.color || "#f5a623")};--ink:${ink(it.color || "#f5a623")}">
+            <div class="ph-h"><span class="ph-dot"></span><b>${esc(it.name)}</b><span class="ph-time">${esc(clock(it.time))}</span>${live ? '<span class="ph-st">✓ Live</span>' : st.posted ? '<span class="ph-st">✓ Posted</span>' : ""}</div>
+            ${it.image ? `<img class="ph-img${PH.urls[it.key] ? " on" : ""}" src="${esc(PH.urls[it.key] || "")}" alt="${esc(it.alt || "")}"/>` : ""}
+            ${it.title ? `<div class="ph-title">${esc(it.title)}</div>` : ""}
+            <div class="ph-cap${PH.open[it.key] ? " open" : ""}" data-a="more">${esc(it.caption || "No caption")}</div>
+            <div class="ph-acts">
+              ${it.caption ? '<button type="button" class="ph-b ph-main" data-a="caption">📋 Copy caption</button>' : ""}
+              ${it.image ? (share ? `<button type="button" class="ph-b ph-main" data-a="share"${PH.blobs[it.key] ? "" : " disabled"}>↗ Share image</button>` : `<button type="button" class="ph-b" data-a="save">⬇ Save image</button>`) : ""}
+              ${it.title ? '<button type="button" class="ph-b" data-a="title">📋 Copy title</button>' : ""}
+              ${it.comment ? '<button type="button" class="ph-b" data-a="comment">📋 Copy first comment</button>' : it.link && !(it.caption || "").includes(it.link) ? '<button type="button" class="ph-b" data-a="link">📋 Copy link</button>' : ""}
+              ${it.open ? `<a class="ph-b" href="${esc(it.open)}" target="_blank" rel="noopener">Open ${esc(it.name)} ↗</a>` : ""}
+            </div>
+            ${live ? `<div class="ph-livelink"><a href="${esc(live)}" target="_blank" rel="noopener">${esc(live.replace(/^https?:\/\/(www\.)?/, "").slice(0, 60))}</a> <button type="button" class="ph-l" data-a="unlink">Change</button></div>`
+              : `<div class="ph-live"><input type="url" inputmode="url" placeholder="Paste the live post's link" aria-label="Live link"/><button type="button" class="ph-b" data-a="paste">📋 Paste link</button><button type="button" class="ph-b" data-a="savelink">Save</button></div>
+                 <div class="ph-or">${st.posted ? '<button type="button" class="ph-l" data-a="unpost">Undo ✓ Posted</button>' : 'No link? <button type="button" class="ph-l" data-a="posted">✓ Mark as posted</button>'}</div>`}
+          </article>`;
+        }
+        function render() {
+          const list = document.getElementById("ph-list");
+          if (!list) return;
+          const sub = document.getElementById("ph-sub");
+          const p = PH.pack;
+          if (sub) sub.textContent = p ? ` · ${p.brand || ""}${p.brand ? " · " : ""}${new Date((p.date || "") + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}` : "";
+          if (!PH.src) { list.innerHTML = `<p class="ph-note">Open this from your PostPilot address (…github.io/PostPilot-Studio/#phone).</p>`; return; }
+          if (PH.err === "nothing") { list.innerHTML = `<p class="ph-note">Nothing has been sent yet. On your computer, open the Scheduler → 📋 Today → <b>📱 Send to phone</b>, then tap ⟳.</p>`; return; }
+          if (PH.err) { list.innerHTML = `<p class="ph-note ph-warn">${esc(PH.err)}</p>`; return; }
+          if (!p) { list.innerHTML = `<p class="ph-note">Loading today's posts…</p>`; return; }
+          const items = p.items || [], d = done();
+          const left = items.filter(it => !(d[it.key] && (d[it.key].liveUrl || d[it.key].posted))).length;
+          const today = new Date(), ds = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+          list.innerHTML = (p.date && p.date !== ds ? `<p class="ph-note ph-warn">These were sent for ${esc(new Date(p.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }))}. Send today's from your computer to update.</p>` : "")
+            + `<p class="ph-count">${left ? `${left} of ${items.length} left to post` : `🎉 All ${items.length} posted`}</p>` + items.map(card).join("");
+        }
+        async function act(a, it, cardEl, btn) {
+          const say = (t) => { if (btn) { const o = btn.textContent; btn.textContent = t; setTimeout(() => { btn.textContent = o; }, 1500); } };
+          if (a === "more") { PH.open[it.key] = !PH.open[it.key]; return render(); }
+          if (a === "caption") return say((await copy(it.caption)) ? "✓ Copied" : "Couldn't copy");
+          if (a === "title") return say((await copy(it.title)) ? "✓ Copied" : "Couldn't copy");
+          if (a === "link") return say((await copy(it.link)) ? "✓ Copied" : "Couldn't copy");
+          if (a === "comment") return say((await copy(it.comment)) ? "✓ Copied" : "Couldn't copy");
+          if (a === "share") {
+            const f = PH.blobs[it.key];
+            if (!f) return;
+            if (it.caption && navigator.clipboard) navigator.clipboard.writeText(it.caption).catch(() => {});
+            try { if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f] }); else return act("save", it, cardEl, btn); }
+            catch (e) { if (e && e.name !== "AbortError") say("Couldn't share"); }
+            return;
+          }
+          if (a === "save") {
+            const u = PH.urls[it.key];
+            if (!u) return;
+            const x = document.createElement("a"); x.href = u; x.download = it.imageName || "post.jpg"; document.body.appendChild(x); x.click(); x.remove();
+            return;
+          }
+          if (a === "paste") {
+            let t = "";
+            try { t = await navigator.clipboard.readText(); } catch (e) {}
+            const u = cleanUrl(t);
+            if (!u) return say("No link copied");
+            return mark(it.key, { liveUrl: u, posted: true });
+          }
+          if (a === "savelink") {
+            const i = cardEl.querySelector(".ph-live input"), u = cleanUrl(i && i.value);
+            if (!u) return say("Paste a link first");
+            return mark(it.key, { liveUrl: u, posted: true });
+          }
+          if (a === "posted") return mark(it.key, { posted: true });
+          if (a === "unpost" || a === "unlink") return mark(it.key, { posted: false, liveUrl: "" });
+        }
+        function start() {
+          PH.src = source();
+          document.body.classList.add("phone-mode", "unlocked");
+          let v = document.getElementById("ph-view");
+          if (!v) {
+            v = document.createElement("div");
+            v.id = "ph-view";
+            v.innerHTML = `<header class="ph-top"><div class="ph-brand">📱 PostPilot<span id="ph-sub"></span></div><button type="button" class="ph-ref" id="ph-ref" aria-label="Load the latest">⟳</button></header>
+              <main id="ph-list" aria-live="polite"></main>
+              <footer class="ph-foot">
+                <details${token() ? "" : " open"}><summary>${token() ? "✓ Marking posts on your computer" : "Mark posts on your computer too"}</summary>
+                  <p class="ph-note">Paste the same GitHub token PostPilot uses on your computer (⚙ Settings → GitHub Sync). It's saved on this phone only. Then what you mark here shows up in the Scheduler within a couple of minutes.</p>
+                  <div class="ph-live"><input id="ph-token" type="password" autocomplete="off" placeholder="GitHub token" value="${esc(token())}"/><button type="button" class="ph-b" id="ph-token-save">Save</button></div>
+                </details>
+                <p class="ph-note" id="ph-sync"></p>
+                <p class="ph-note"><a href="#" id="ph-full">Open the full PostPilot</a></p>
+              </footer>`;
+            document.body.appendChild(v);
+            v.addEventListener("click", (e) => {
+              const b = e.target.closest("[data-a]");
+              if (!b || b.disabled) return;
+              const c = b.closest(".ph-card"), it = c && PH.pack && (PH.pack.items || []).find(x => x.key === c.dataset.k);
+              if (it) act(b.dataset.a, it, c, b);
+            });
+            v.addEventListener("paste", (e) => {
+              const i = e.target;
+              if (!i || !i.closest || !i.closest(".ph-live")) return;
+              setTimeout(() => { const c = i.closest(".ph-card"), it = c && PH.pack && (PH.pack.items || []).find(x => x.key === c.dataset.k), u = cleanUrl(i.value); if (it && u) mark(it.key, { liveUrl: u, posted: true }); }, 0);
+            });
+            document.getElementById("ph-ref").onclick = () => { PH.blobs = {}; Object.values(PH.urls).forEach(u => URL.revokeObjectURL(u)); PH.urls = {}; PH.pack = null; load(); };
+            document.getElementById("ph-token-save").onclick = () => { lset(TOKEN_KEY, document.getElementById("ph-token").value.trim()); setSync(token() ? "Token saved." : "Token removed."); queueSync(); };
+            document.getElementById("ph-full").onclick = (e) => { e.preventDefault(); history.replaceState(null, "", location.pathname + location.search); location.reload(); };
+          }
+          render();
+          load();
+        }
+        // A phone opening the full PostPilot gets a pointer to the phone view
+        function hint() {
+          if (!window.matchMedia || !matchMedia("(max-width: 700px) and (pointer: coarse)").matches || sessionStorage.getItem("pp_phone_hint_off")) return;
+          const b = document.createElement("div");
+          b.id = "ph-hint";
+          b.innerHTML = `📱 Posting from your phone? <button type="button" id="ph-hint-go">Open the phone view</button><button type="button" id="ph-hint-x" aria-label="Dismiss">✕</button>`;
+          document.body.appendChild(b);
+          document.getElementById("ph-hint-go").onclick = () => { location.hash = "#phone"; location.reload(); };
+          document.getElementById("ph-hint-x").onclick = () => { sessionStorage.setItem("pp_phone_hint_off", "1"); b.remove(); };
+        }
+        window.addEventListener("hashchange", () => { if (wanted() !== document.body.classList.contains("phone-mode") && document.body.classList.contains("unlocked")) location.reload(); });
+        window.ppPhoneWanted = wanted;
+        window.ppPhoneStart = start;
+        window.ppPhoneHint = hint;
+      })();
+    </script>
     <script>
       // ══════════════════════════════════════════
       // POSTPILOT STUDIO SHELL
@@ -41654,6 +43400,9 @@ function renderAnalyticsView() {
         if (_studioStarted) return;
         _studioStarted = true;
         document.body.classList.add("unlocked");
+        // On a phone with #phone: just today's posts, ready to share (the full Studio doesn't load)
+        if (typeof ppPhoneWanted === "function" && ppPhoneWanted()) return ppPhoneStart();
+        if (typeof ppPhoneHint === "function") setTimeout(ppPhoneHint, 1500);
         _init(); // the Post Creator
         // Start the Scheduler in the background so posts you send land right away
         document.getElementById("sched-frame").srcdoc = _schedulerSource();
