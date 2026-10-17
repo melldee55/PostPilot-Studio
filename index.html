@@ -3385,7 +3385,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v111</span>
+              <span class="sb-version">v112</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -43691,6 +43691,112 @@ function ptOpenTagSettings() {
         window.ppPhoneWanted = wanted;
         window.ppPhoneStart = start;
         window.ppPhoneHint = hint;
+      })();
+    </script>
+    <script>
+      // ═══════════════════════════════════════════════════════════════
+      // BATCH PASTE: ONE CARD PER POST, WHATEVER THE HEADER LOOKS LIKE (v112)
+      // A batch document used to need "Post 1 of 10:" (or "Pin 1 of 10:") written exactly that way above each
+      // post. Without it ("**Post 1 of 10**", "POST 1", "Blog 1:", "1. Title", an emoji first, or no header at
+      // all) the whole paste was read as one post. Now each post is also found by its own top block
+      // (Image text / SEO headline / SEO summary), and a short line just above it is used as its name and number.
+      // ═══════════════════════════════════════════════════════════════
+      (function () {
+        if (typeof _pbParsePins !== "function") return;
+        const TOP = /^\s*[*_]*\s*(image\s*text|seo\s*headline|seo\s*summary)\s*[*_]*\s*:/i;
+        const SEP = /^\s*[─━—–\-_=*·•~]{3,}\s*$/;
+        const LABEL = /^\s*[*_]*\s*[A-Za-z][A-Za-z0-9 ()&/'-]{0,40}[*_]*\s*:(?!\/\/)/;
+        const HEAD = /^[^A-Za-z0-9]*(?:(?:pin|post|blog|article|item|tweet|reel|story|slide|graphic|image|day)\s*#?\s*(\d{1,3})|#?(\d{1,3})\s*[.):\-–—])/i;
+        const clean = (s) =>
+          String(s || "")
+            .replace(/[*_#>`]+/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        function split(text) {
+          const lines = String(text || "")
+            .replace(/\r/g, "")
+            .split("\n");
+          const starts = [];
+          let seen = null;
+          lines.forEach((ln, i) => {
+            const m = TOP.exec(ln);
+            if (!m) return;
+            const k = m[1].toLowerCase().replace(/\s+/g, " ");
+            if (!seen || seen.has(k)) {
+              starts.push(i);
+              seen = new Set();
+            }
+            seen.add(k);
+          });
+          if (starts.length < 2) return null;
+          // A post's own header: the nearest line above its top block (past blank lines and one divider)
+          const heads = starts.map((s, n) => {
+            const floor = n ? starts[n - 1] : -1;
+            let j = s - 1,
+              seps = 0;
+            while (j > floor && (!lines[j].trim() || (SEP.test(lines[j]) && seps++ < 1))) j--;
+            if (j <= floor || SEP.test(lines[j]) || TOP.test(lines[j])) return null;
+            const ln = lines[j];
+            const m = HEAD.exec(ln);
+            if (!m || ln.length > 160 || (LABEL.test(ln) && !m)) return null;
+            const num = +(m[1] || m[2]);
+            const name = clean(ln.slice(m.index + m[0].length).replace(/^\s*(?:of|\/)\s*\d{1,3}/i, "").replace(/^[\s:.)\-–—|]+/, ""));
+            return { line: j, num, name };
+          });
+          const nums = heads.map((h) => (h ? h.num : 0));
+          const useNums = nums.every((x) => x > 0) && new Set(nums).size === nums.length;
+          const field = (s, e, re) => {
+            for (let k = s; k < e; k++) {
+              const m = re.exec(lines[k]);
+              if (m) return clean(m[1]);
+            }
+            return "";
+          };
+          const out = [];
+          let from = 0;
+          starts.forEach((s, n) => {
+            const h = heads[n];
+            const begin = h ? h.line : s;
+            const end = n + 1 < starts.length ? (heads[n + 1] ? heads[n + 1].line : starts[n + 1]) : lines.length;
+            out.push(...lines.slice(from, begin)); // what came before (the intro, or the last post's divider)
+            const name =
+              (h && h.name) ||
+              field(s, end, /^\s*[*_]*\s*seo\s*headline\s*[*_]*\s*:\s*(.*)$/i) ||
+              field(s, end, /^\s*[*_]*\s*image\s*text\s*[*_]*\s*:\s*(.*)$/i) ||
+              "Post " + (n + 1);
+            out.push(`Post ${useNums ? h.num : n + 1} of ${starts.length}: ${name.slice(0, 90)}`);
+            out.push(...lines.slice(h ? h.line + 1 : s, end));
+            from = end;
+          });
+          return out.join("\n");
+        }
+        const _pbParseOrig = _pbParsePins;
+        _pbParsePins = function (text) {
+          const pins = _pbParseOrig.apply(this, arguments);
+          if (pins.length >= 2) return pins;
+          let t2 = null;
+          try {
+            t2 = split(text);
+          } catch (e) {}
+          if (!t2) return pins;
+          const p2 = _pbParseOrig.call(this, t2);
+          return p2.length >= 2 ? p2 : pins;
+        };
+        window._pbParsePins = _pbParsePins;
+        // "Instagram batch: …" above posts with no "Post 1 of 10:" lines still picks Instagram's batch
+        if (typeof _pbGuessPlatform === "function") {
+          const _pbGuessOrig = _pbGuessPlatform;
+          _pbGuessPlatform = function (text) {
+            const g = _pbGuessOrig.apply(this, arguments);
+            if (g || _pbParseOrig(text).length >= 2) return g;
+            let t2 = null;
+            try {
+              t2 = split(text);
+            } catch (e) {}
+            return t2 ? _pbGuessOrig.call(this, t2) : g;
+          };
+          window._pbGuessPlatform = _pbGuessPlatform;
+        }
       })();
     </script>
     <script>
