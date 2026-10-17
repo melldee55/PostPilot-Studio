@@ -3385,7 +3385,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v108</span>
+              <span class="sb-version">v111</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -28579,7 +28579,7 @@ function rebuildSettingsTagPills() {
   if (!container) return;
 
   container.innerHTML = POST_TAGS.map((tag, i) => {
-    const isDefault = DEFAULT_POST_TAGS.includes(tag);
+    const isDefault = false; // each brand's tags are its own
     return `<span
       data-tag-idx="${i}"
       draggable="true"
@@ -28640,9 +28640,10 @@ function rebuildTagFilterBar() {
   }).join('');
 
   // Rebuild just the pill buttons, leave the input form intact
-  const form = bar.querySelector('form');
+  const form = bar.querySelector('form'), edit = bar.querySelector('.pt-edit');
   bar.innerHTML = `<span class="tag-filter-label">🏷 Filter:</span>${filterHtml}`;
   if (form) bar.appendChild(form);
+  if (edit) bar.appendChild(edit);
   // Refocus the input
   const inp = bar.querySelector('input');
   if (inp) inp.focus();
@@ -32257,7 +32258,7 @@ function renderCalendarView() {
         var MONS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         var WDAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
         var ord=function(n){return n+(n%10===1&&n!==11?'st':n%10===2&&n!==12?'nd':n%10===3&&n!==13?'rd':'th');};
-        var CAT_COLORS={federal:'#ef4444',retail:'#eab308',awareness:'#22c55e',social:'#a855f7',cultural:'#fb923c',live:'#00A5D8'};
+        var CAT_COLORS={federal:'#ef4444',retail:'#eab308',awareness:'#22c55e',social:'#a855f7',cultural:'#fb923c',live:'#00A5D8',shop:'#ec4899',pos:'#14b8a6'};
         // Opacity steps: card 1 = full, card 5 = most dim
         var OPACITIES=[1, 0.72, 0.52, 0.38, 0.28];
 
@@ -32271,7 +32272,7 @@ function renderCalendarView() {
           var ds2=toDs(d);
           var evts=getHolidaysForDate(ds2).map(function(e){
             var fh=floatMap[ds2];
-            return {label:e.label,cat:e.cat,msg:(fh&&fh.label===e.label)?fh.msg:e.msg};
+            return {label:e.label,cat:e.cat,sales:e.sales,msg:(fh&&fh.label===e.label)?fh.msg:e.msg};
           });
           if(floatMap[ds2]){
             var fh2=floatMap[ds2];
@@ -32280,7 +32281,7 @@ function renderCalendarView() {
           }
           evts.forEach(function(e){
             if(items.length>=5) return;
-            var key=ds2+'|'+e.label;
+            var key=e.sales?e.label:ds2+'|'+e.label;
             if(!seen[key]){seen[key]=1;items.push({evt:e,date:d,offset:i});}
           });
         }
@@ -33147,6 +33148,7 @@ function render() {
             />
             <button type="submit" style="padding:3px 9px;border-radius:0 20px 20px 0;border:1px dashed var(--border-light);border-left:none;background:transparent;color:var(--text-muted);font-size:11px;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.background='#1a2d3d';this.style.color='#7aa3c8'" onmouseleave="this.style.background='transparent';this.style.color='var(--text-muted)'">Add</button>
           </form>
+          <button type="button" class="pt-edit" onclick="ptOpenTagSettings()" title="Make or change this brand's set of tags">✎ Edit tags</button>
         </div>` : ''}
 
         <!_PPESC_-- Queue Panel -->
@@ -34211,11 +34213,11 @@ function renderSettingsModal() {
             <div style="padding:16px;border-top:1px solid var(--border-light)">
 
               <!_PPESC_-- Tag Management -->
-              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:8px">🏷️ Tag Management</div>
-              <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:12px">Add or remove tags. <span style="opacity:.7">Drag to reorder.</span> Default tags (marked with •) cannot be deleted.</div>
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);margin-bottom:8px">🏷️ Tags for ${escapeHtml((getWorkspaceNames() || {})[getActiveWorkspace()] || 'this brand')}</div>
+              <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:12px">${typeof ptBrandNote === 'function' ? ptBrandNote() : 'Add or remove tags. Drag to reorder.'}</div>
               <div id="tag-mgmt-pills" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
                 ${POST_TAGS.map((tag, i) => {
-                  const isDefault = DEFAULT_POST_TAGS.includes(tag);
+                  const isDefault = false; // each brand's tags are its own
                   return `<span data-tag-idx="${i}" draggable="true"
                     style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;border:1px solid ${isDefault ? 'var(--border-light)' : '#5a3e6a'};background:${isDefault ? 'var(--bg-elevated)' : '#2a1a3a'};font-size:11.5px;color:${isDefault ? 'var(--text-secondary)' : '#c084fc'};cursor:grab;user-select:none">
                     <span style="opacity:.4;font-size:9px">⠿</span>
@@ -34233,6 +34235,7 @@ function renderSettingsModal() {
                 <button onclick="addTagFromSettings()" style="padding:7px 14px;border-radius:var(--radius-sm);border:1px solid #7e22ce;background:#3b0764;color:#d8b4fe;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s" onmouseenter="this.style.background='#4c0877'" onmouseleave="this.style.background='#3b0764'">+ Add Tag</button>
               </div>
               <div id="tag-mgmt-msg" style="font-size:11.5px;margin-top:6px;min-height:16px;color:var(--text-success)"></div>
+              ${typeof ptSetRow === 'function' ? ptSetRow() : ''}
 
               <!_PPESC_-- Hashtag Sets -->
               <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
@@ -41663,11 +41666,63 @@ function _pdLen(pid, t) {
   if (pid === 'bluesky') return _bsGraphemes(t);
   return t.length;
 }
+// The first comment: an SEO line with the blog link. Each brand has its own wording; {topic} becomes the
+// blog's subject ("pet insurance", "auto insurance"…, or just "insurance") and {link} the blog link.
+const PD_COMMENT_DEFAULT = 'Read about your {topic} coverage options here: {link}';
+const PD_COMMENT_OLD = '📖 Read the full article here: {link}';
+const PD_INS_HOST = /insur|legacyprotectors|farmersagent/i;
+const PD_TOPICS = [
+  [/\b(pets?|dogs?|cats?|puppy|puppies|kittens?|veterinar\w*)\b/, 'pet insurance'],
+  [/\bfood (truck|trucks|cart|carts)\b|\bcatering\b/, 'food truck insurance'],
+  [/\brestaurants?\b/, 'restaurant insurance'],
+  [/\bbarber/, 'barbershop insurance'],
+  [/\b(salons?|beauty|stylists?|spas?)\b/, 'salon insurance'],
+  [/\bmotorcycles?\b/, 'motorcycle insurance'],
+  [/\brenters?\b/, 'renters insurance'],
+  [/\bcondos?\b/, 'condo insurance'],
+  [/\blandlords?\b|\brental propert/, 'landlord insurance'],
+  [/\bworkers? comp/, 'workers comp insurance'],
+  [/\bumbrella\b/, 'umbrella insurance'],
+  [/\b(health|medicare|medi cal)\b/, 'health insurance'],
+  [/\b(auto(?! pay)|autos|cars?|vehicles?|drivers?|driving|dmv|smog)\b/, 'auto insurance'],
+  [/\b(life (insurance|coverage|policy|policies)|term life|whole life|iul|iuls|annuit\w*|final expense|long term care|retire\w*|funeral|burial|pass away|passes away|estate plan\w*)\b/, 'life insurance'],
+  [/\b(home|homes|homeowners?|house|houses|wildfires?|fair plan|roof|roofs|earthquakes?|floods?)\b/, 'home insurance'],
+  [/\b(business|businesses|commercial|contractors?|liability|llc|small biz)\b/, 'business insurance'],
+];
+function _pdTopic(link) {
+  let path = '', host = '';
+  try { const u = new URL(link); path = u.pathname; host = u.hostname; }
+  catch (e) { path = String(link || ''); host = /^[^/\s]+\.[a-z]{2,}(?=\/|$)/i.test(path) ? path.split('/')[0] : ''; }
+  // only an insurance brand's links get insurance wording
+  if (host && !PD_INS_HOST.test(host)) return '';
+  try { path = decodeURIComponent(path); } catch (e) {}
+  const segs = path.toLowerCase().split('/').filter(Boolean);
+  const b = segs.indexOf('blogs');
+  // the blog's own name first ("pet-insurance-advice"), then the article's address
+  const tries = b >= 0 ? [segs[b + 1] || '', segs.slice(b + 2).join(' ')] : [segs.join(' ')];
+  for (const t of tries) {
+    const words = ' ' + t.replace(/[^a-z0-9]+/g, ' ') + ' ';
+    const hit = PD_TOPICS.find(([re]) => re.test(words));
+    if (hit) return hit[1];
+  }
+  return 'insurance';
+}
+function _pdCommentTpl() {
+  const own = _pdLS(wsKey('postpilot_pd_comment_tpl'), null);
+  if (own) return String(own);
+  const old = _pdLS('postpilot_pd_comment_tpl', null); // the one wording from before brands had their own
+  return old && old !== PD_COMMENT_OLD ? String(old) : PD_COMMENT_DEFAULT;
+}
 function _pdFirstComment(src, pid) {
   if (!PD_COMMENT_PLATS.has(pid)) return '';
   const link = _pdLink(src, pid);
   if (!link || _pdCaption(src, pid).includes(link)) return '';
-  return String(_pdLS('postpilot_pd_comment_tpl', '📖 Read the full article here: {link}') || '').replace('{link}', link);
+  return _pdCommentFor(link);
+}
+// The comment with the link written as shown (Bluesky shows a shortened link that still opens the full one)
+function _pdCommentFor(link, shown) {
+  const tpl = _pdCommentTpl(), topic = _pdTopic(link);
+  return (tpl.includes('{topic}') && !topic ? 'Read the full article here: {link}' : tpl).split('{topic}').join(topic).split('{link}').join(shown || link);
 }
 const _pdPostedLike = (p) => !!(p && (p.publishStatus === 'published' || _ppLiveUrl(p)));
 const _pdOnPlat = (p) => !!(p && p.platformScheduled && !_pdPostedLike(p));
@@ -41880,9 +41935,9 @@ function _pdPanelHtml() {
   let n = 0, rows = '';
   // Caption
   rows += _pdRow(++n, `Caption ${lim ? `<span class="pd-cc${len > lim ? ' over' : ''}">${len.toLocaleString()} / ${lim.toLocaleString()}</span>` : ''}`,
-    cap ? `<div class="pd-prev">${_pdE(cap.slice(0, 220))}${cap.length > 220 ? '…' : ''}</div>` : `<div class="pd-prev pd-none">No caption yet: write it under ${_pdE(name)} details below.</div>`,
+    cap ? `<div class="pd-prev pd-full" tabindex="0" aria-label="The whole caption">${_pdE(cap)}</div>` : `<div class="pd-prev pd-none">No caption yet: write it under ${_pdE(name)} details below.</div>`,
     cap ? _pdBtn('caption', '📋 Copy caption') : '');
-  if (pid === 'pinterest') rows += _pdRow(++n, 'Pin title', f.title ? `<div class="pd-prev">${_pdE(f.title)}</div>` : `<div class="pd-prev pd-none">No title yet.</div>`, f.title ? _pdBtn('title', '📋 Copy title') : '');
+  if (pid === 'pinterest') rows += _pdRow(++n, 'Pin title', f.title ? `<div class="pd-prev pd-full">${_pdE(f.title)}</div>` : `<div class="pd-prev pd-none">No title yet.</div>`, f.title ? _pdBtn('title', '📋 Copy title') : '');
   // Image
   if (img) {
     const share = typeof navigator.canShare === 'function' ? `<button type="button" class="pd-btn" data-pd="share">↗ Share</button>` : '';
@@ -41890,7 +41945,7 @@ function _pdPanelHtml() {
       `${f.isVideo ? '' : _pdBtn('image', '🖼 Copy image')}<button type="button" class="pd-btn" data-pd="save">⬇ Save</button>${share}`);
   }
   // The blog link: in the post's own link field (Pinterest, Google's button, Bluesky…) or the first comment
-  if (fc) rows += _pdRow(++n, 'First comment <span class="pd-sub">(the blog link goes in the comments)</span>', `<div class="pd-prev">${_pdE(fc)}</div>`,
+  if (fc) rows += _pdRow(++n, 'First comment <span class="pd-sub">(the blog link goes in the comments)</span>', `<div class="pd-prev pd-full">${_pdE(fc)}</div>`,
     `${_pdBtn('comment', '📋 Copy first comment')}<button type="button" class="pd-btn pd-ghost" data-pd="tpl" title="Change the wording of first comments">✎</button>`);
   else if (link && !cap.includes(link)) rows += _pdRow(++n, pid === 'google' ? 'Button link' : 'Link', `<div class="pd-prev pd-url">${_pdE(link)}</div>`, _pdBtn('link', '📋 Copy link'));
   // The live link (or "scheduled on the platform")
@@ -42123,10 +42178,12 @@ async function _pdShareImg() {
   } catch (e) { if (!e || e.name !== 'AbortError') { _pd.status = "Couldn't share the image. Use ⬇ Save instead."; _pdRefreshPanel(); } }
 }
 function _pdEditTemplate() {
-  const cur = _pdLS('postpilot_pd_comment_tpl', '📖 Read the full article here: {link}');
-  const v = prompt('Wording for first comments. {link} becomes the blog link.', cur);
+  const brand = (getWorkspaceNames() || {})[getActiveWorkspace()] || 'this brand';
+  const v = prompt(`First comment wording for ${brand} (each brand has its own).\n{topic} becomes the blog's subject, like "pet insurance". {link} becomes the blog link.\nLeave it empty to go back to: ${PD_COMMENT_DEFAULT}`, _pdCommentTpl());
   if (v == null) return;
-  _pdSet('postpilot_pd_comment_tpl', v.includes('{link}') ? v : (v.trim() + ' {link}').trim());
+  const t = v.trim();
+  if (!t) _pdSet(wsKey('postpilot_pd_comment_tpl'), PD_COMMENT_DEFAULT);
+  else _pdSet(wsKey('postpilot_pd_comment_tpl'), t.includes('{link}') ? t : t + ' {link}');
   _pdRefreshPanel();
 }
 async function _pdFromClipboard() {
@@ -42580,6 +42637,8 @@ function pdAheadStart() {
   pdOpen(pid, id, 'ahead');
 }
 // Pinterest's bulk spreadsheet: Title, Media URL, Pinterest board, Thumbnail, Description, Link, Publish date, Keywords
+// Shorten without splitting an emoji in half
+const _pdCut = (t, n) => { t = String(t || ''); if (t.length <= n) return t; let s = t.slice(0, n); if (/[\uD800-\uDBFF]$/.test(s)) s = s.slice(0, -1); return s.replace(/\u200D$/, ''); };
 const _pdCsvCell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
 function _pdUtc(date, time) { const d = new Date(date + 'T' + (time || '09:00')); return d.toISOString().slice(0, 19); }
 const _pdImgSig = (p) => { const s = String(p.imageOriginal || p.image || ''); return s.length + ':' + s.slice(-48); };
@@ -42618,8 +42677,8 @@ async function pdPinterestCsv() {
         up++;
       }
       const kw = String(p.hashtags || '').split(/[\s,]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean).slice(0, 10).join(', ');
-      const desc = _pdCaption(p, 'pinterest'), title = String(p.title || '').trim() || (String(desc).split(/(?<=[.!?])\s/)[0] || '').slice(0, 100);
-      rows.push([title.slice(0, 100), url, String(p.board || '').trim() || board, '', desc.slice(0, 500), p.destinationUrl || '', _pdUtc(p.scheduledDate, p.scheduledTime), kw]);
+      const desc = _pdCaption(p, 'pinterest'), title = String(p.title || '').trim() || _pdCut(String(desc).split(/(?<=[.!?])\s/)[0] || '', 100);
+      rows.push([_pdCut(title, 100), url, String(p.board || '').trim() || board, '', _pdCut(desc, 500), p.destinationUrl || '', _pdUtc(p.scheduledDate, p.scheduledTime), kw]);
     }
     if (up) savePosts(state.posts);
     const csv = rows.map(r => r.map(_pdCsvCell).join(',')).join('\r\n');
@@ -42734,7 +42793,7 @@ async function _bsPublish(post) {
   const made = await _bsAuthed('com.atproto.repo.createRecord', { json: { repo: s.did, collection: 'app.bsky.feed.post', record } });
   const rkey = String(made.uri || '').split('/').pop();
   if (replyLink) {
-    const rt = `📖 Read the full article: ${_bsShort(replyLink)}`, i = rt.indexOf(_bsShort(replyLink));
+    const shown = _bsShort(replyLink), rt = _pdCommentFor(replyLink, shown), i = rt.indexOf(shown);
     const reply = { $type: 'app.bsky.feed.post', text: rt, createdAt: new Date().toISOString(), langs: ['en'], facets: _bsFacets(rt, [{ start: i, len: _bsShort(replyLink).length, uri: replyLink }]),
       reply: { root: { uri: made.uri, cid: made.cid }, parent: { uri: made.uri, cid: made.cid } } };
     try { await _bsAuthed('com.atproto.repo.createRecord', { json: { repo: s.did, collection: 'app.bsky.feed.post', record: reply } }); } catch (e) {}
@@ -43014,6 +43073,8 @@ window.pdOpen = pdOpen; window.pdEdit = pdEdit; window.pdSaveLive = pdSaveLive;
     .pd-cc.over { color: #f87171; font-weight: 800; }
     .pd-prev { font-size: 12px; color: #b8bdd6; line-height: 1.45; margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 4.4em; overflow: hidden; }
     .pd-prev a { color: #5a9fe0; }
+    .pd-prev.pd-full { max-height: 18em; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+    .td-row .td-text { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }
     .pd-none { color: #f5a623; font-style: italic; }
     .pd-url { color: #8fb8ff; }
     .pd-s-act { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; flex-shrink: 0; max-width: 52%; }
@@ -43106,6 +43167,282 @@ window.pdOpen = pdOpen; window.pdEdit = pdEdit; window.pdSaveLive = pdSaveLive;
       .pd-s-act { max-width: none; width: 100%; justify-content: flex-start; padding-left: 32px; }
       .pd-ov { padding: 12px; }
     }`;
+  document.head.appendChild(st);
+})();
+
+// ═════════════════════════════════════════════════════════════════
+// SALES DAYS ON THE CALENDAR (v111)
+// When people shop the most: online sale kickoffs and peaks (pink), in-store card reader rushes (teal),
+// the big conventions, and the weeks before Christmas shaded. Each brand can turn them on or off.
+// ═════════════════════════════════════════════════════════════════
+const PS_KEY = () => wsKey('postpilot_sales_days');
+const psOn = () => _pdLS(PS_KEY(), true) !== false;
+function psToggle() { _pdSet(PS_KEY(), !psOn()); render(); }
+
+const _psAt = (y, m, d) => new Date(y, m - 1, d);
+const _psAdd = (x, n) => { const r = new Date(x.getFullYear(), x.getMonth(), x.getDate()); r.setDate(r.getDate() + n); return r; };
+// The nth weekday (0 = Sunday) of a month; n = -1 for the last one
+function _psNth(y, m, dow, n) {
+  if (n > 0) { const first = _psAt(y, m, 1); return _psAt(y, m, 1 + ((dow - first.getDay() + 7) % 7) + 7 * (n - 1)); }
+  const last = new Date(y, m, 0);
+  return _psAt(y, m, last.getDate() - ((last.getDay() - dow + 7) % 7));
+}
+const _psThanksgiving = (y) => _psNth(y, 11, 4, 4);
+const _psRushStart = (y) => _psAdd(_psThanksgiving(y), 1); // Black Friday
+const _psRushEnd = (y) => _psAt(y, 12, 24);
+
+// Labels already on the calendar that are really sales days get the sales colors and a sales note
+const PS_RECAT = {
+  'black friday': ['shop', 'The biggest shopping day of the year, online and in stores.'],
+  'cyber monday': ['shop', 'The biggest online shopping day of the year.'],
+  'new year sale': ['shop', 'New Year sales and gift card spending start the year.'],
+  'back to school': ['shop', 'Back-to-school shopping peaks in early August.'],
+  'halloween': ['shop', 'Costumes, candy and decor: one of the biggest seasonal shopping events, online and in stores.'],
+  'day after christmas': ['shop', 'After-Christmas sales, returns and gift card spending.'],
+  "valentine's day": ['pos', 'Restaurants, florists and gift shops have one of their busiest days.'],
+  "st. patrick's day": ['pos', 'A big day for bars and restaurants.'],
+  'cinco de mayo': ['pos', 'Restaurants and bars have one of their busiest days.'],
+  "mother's day": ['pos', 'The busiest restaurant day of the year, plus flowers and gifts.'],
+  "father's day": ['pos', 'Restaurants, grills, tools and gifts.'],
+  '4th of july sale': ['pos', 'Long weekend sales, cookouts and fireworks stands.'],
+  'christmas eve': ['pos', 'Last-minute shopping fills stores today.'],
+  "new year's eve": ['pos', 'Bars, restaurants and party stores are packed.'],
+};
+const _psNorm = (l) => String(l || '').replace(/[’‘]/g, "'").replace(/^[^A-Za-z0-9]+/, '').trim().toLowerCase();
+const _psSame = (a, b) => { a = _psNorm(a); b = _psNorm(b); return !!a && !!b && (a === b || a.startsWith(b) || b.startsWith(a)); };
+
+// Every sales day of one year: { 'YYYY-MM-DD': [{ label, cat, msg }] }
+function _psBuild(y) {
+  const map = {};
+  const add = (d, label, cat, msg, guess) => {
+    const ds = _ppDayStr(d);
+    (map[ds] = map[ds] || []).push({ label, cat, msg: msg + (guess ? ' Expected dates: check the official site.' : ''), sales: true });
+  };
+  const span = (d, n, label, cat, msg, guess) => { for (let i = 0; i < n; i++) add(_psAdd(d, i), label, cat, msg, guess); };
+  const CON = 'Fan merch and art sales spike around con weekends, online and on the show floor. Good timing for creator drops and con posts.';
+  const T = _psThanksgiving(y);
+  const xmas = _psAt(y, 12, 25);
+
+  // ── Online: when sales start and peak ──
+  add(_psAt(y, 1, 1), '🛍️ New Year sales', 'shop', 'New Year sales and gift card spending start the year.');
+  add(_psAt(y, 2, 1), "💘 Valentine's shopping starts", 'shop', "Gift shopping for Valentine's Day ramps up about two weeks out. Post gift ideas and order-by dates.");
+  add(_psAt(y, 2, 15), '💵 Tax refund season', 'shop', 'Tax refunds land from mid February into March: one of the biggest spending bumps of the year, online and in stores.');
+  const mom = _psNth(y, 5, 0, 2);
+  add(_psAdd(mom, -6), "💐 Mother's Day shopping week", 'shop', "The week before Mother's Day is a top week for gifts, flowers and restaurant bookings.");
+  add(_psAt(y, 7, 15), '🎒 Back-to-school shopping starts', 'shop', 'Back-to-school shopping starts in July and peaks in early August.');
+  add(_psAt(y, 8, 1), '🎒 Back to School', 'shop', 'Back-to-school shopping peaks in early August.');
+  add(_psAt(y, 9, 1), '🎃 Halloween shopping starts', 'shop', 'Costume, candy and decor shopping starts in September. Most people buy by mid October.');
+  add(_psAt(y, 10, 31), '🎃 Halloween', 'shop', PS_RECAT.halloween[1]);
+  add(_psAt(y, 11, 1), '🎁 Holiday shopping season starts', 'shop', 'Big retailers start early Black Friday deals in early November. Gift guides and holiday promos start landing now.');
+  add(_psAt(y, 11, 11), "🛒 Singles' Day sales", 'shop', "11/11 is the world's biggest online shopping day, and more US shops run sales on it every year.");
+  add(_psAdd(T, 1), '🛍️ Black Friday', 'shop', 'The biggest shopping day of the year, online and in stores.');
+  add(_psAdd(T, 4), '💻 Cyber Monday', 'shop', 'The biggest online shopping day of the year.');
+  add(_psNth(y, 12, 1, 2), '💚 Green Monday', 'shop', "One of December's biggest online shopping days, when last-minute gift orders pile in.");
+  add(_psAt(y, 12, 14), '📦 Free Shipping Day', 'shop', 'Hundreds of online stores offer free shipping with delivery by Christmas Eve (usually mid December).');
+  if (y === 2026) { // USPS send-by dates for Christmas delivery, 2026
+    add(_psAt(y, 12, 17), '📦 Last day to ship: Ground', 'shop', 'USPS Ground Advantage and First-Class Mail send-by date for delivery by Christmas.');
+    add(_psAt(y, 12, 18), '📦 Last day to ship: Priority', 'shop', 'USPS Priority Mail send-by date for delivery by Christmas.');
+    add(_psAt(y, 12, 19), '📦 Last chance: Priority Express', 'shop', 'USPS Priority Mail Express send-by date for delivery by Christmas.');
+  } else {
+    add(_psAt(y, 12, 17), '📦 Last days to ship for Christmas', 'shop', 'Ground shipping cutoffs for Christmas delivery usually land around December 17, express a day or two later. Check usps.com/holiday for this year.');
+  }
+  add(_psAt(y, 12, 26), '🏷️ After-Christmas sales', 'shop', 'Returns, gift card spending and clearance sales start today.');
+  // Amazon's sales pull shoppers online everywhere (dates are announced a few weeks ahead)
+  if (y === 2026) {
+    span(_psAt(2026, 6, 23), 4, '📦 Amazon Prime Day', 'shop', 'Shoppers are online looking for deals, and other stores run sales the same days.');
+    span(_psAt(2026, 10, 6), 2, '📦 Prime Big Deal Days', 'shop', "Amazon's fall sale unofficially starts holiday shopping.");
+  }
+
+  // ── The weeks before Christmas: a countdown every Monday (the days are shaded too) ──
+  for (let d = _psRushStart(y); d < xmas; d = _psAdd(d, 1)) {
+    if (d.getDay() !== 1) continue;
+    const left = Math.round((xmas - d) / 864e5);
+    add(d, `🎄 ${left} day${left === 1 ? '' : 's'} to Christmas`, 'shop', 'Peak holiday shopping. Gift guides, order-by reminders and last-minute deals work best now.');
+  }
+
+  // ── In stores: the busiest days for card readers ──
+  add(_psAt(y, 2, 14), "💘 Valentine's Day", 'pos', PS_RECAT["valentine's day"][1]);
+  add(_psAt(y, 3, 17), "☘️ St. Patrick's Day", 'pos', PS_RECAT["st. patrick's day"][1]);
+  add(_psAt(y, 5, 5), '🎉 Cinco de Mayo', 'pos', PS_RECAT['cinco de mayo'][1]);
+  add(mom, "💐 Mother's Day", 'pos', PS_RECAT["mother's day"][1]);
+  add(_psNth(y, 6, 0, 3), "👔 Father's Day", 'pos', PS_RECAT["father's day"][1]);
+  add(_psAt(y, 7, 4), '🎆 4th of July sales', 'pos', PS_RECAT['4th of july sale'][1]);
+  add(_psAt(y, 12, 24), '🎁 Christmas Eve', 'pos', PS_RECAT['christmas eve'][1]);
+  add(_psAt(y, 12, 31), "🥂 New Year's Eve", 'pos', PS_RECAT["new year's eve"][1]);
+  add(_psNth(y, 2, 0, 2), '🏈 Super Bowl Sunday', 'pos', 'Bars, restaurants, food delivery and TV sales all spike.' + (y === 2027 ? ' Super Bowl LXI is at SoFi Stadium in Inglewood, so SoCal gets the crowds too.' : ''));
+  add(_psAdd(_psNth(y, 5, 1, -1), -3), '🏷️ Memorial Day weekend sales', 'pos', 'Long weekend sales: furniture, mattresses, appliances and cookouts.');
+  add(_psAdd(_psNth(y, 9, 1, 1), -3), '🏷️ Labor Day weekend sales', 'pos', 'Long weekend sales and the last summer cookouts.');
+  add(_psAdd(T, -1), '🍻 Thanksgiving Eve', 'pos', 'One of the busiest bar nights of the year, plus last-minute grocery runs.');
+  add(_psAdd(T, 2), '🏪 Small Business Saturday', 'pos', 'Shoppers make a point of buying local and in person. A big day for local shops and card readers.');
+  add(_psAdd(xmas, -(((xmas.getDay() + 1) % 7) || 7)), '🛍️ Super Saturday', 'pos', 'The last Saturday before Christmas: one of the busiest in-store shopping days of the year.');
+
+  // ── Conventions (merch and art sales) ──
+  span(_psNth(y, 3, 5, -1), 3, '🦸 WonderCon (Anaheim)', 'shop', CON, y > 2027);
+  const july4 = _psAt(y, 7, 4);
+  span(_psAdd(july4, -((july4.getDay() + 3) % 7)), 4, '🎌 Anime Expo (LA)', 'shop', CON, true);
+  const sdcc = _psNth(y, 7, 4, 4);
+  add(_psAdd(sdcc, -1), '🦸 Comic-Con Preview Night', 'shop', CON, y > 2027);
+  span(sdcc, 4, '🦸 San Diego Comic-Con', 'shop', CON, y > 2027);
+  const oct7 = _psAt(y, 10, 7);
+  span(_psAdd(oct7, (4 - oct7.getDay() + 7) % 7), 4, '🦸 New York Comic Con', 'shop', CON, true);
+  if (y === 2026) span(_psAt(2026, 10, 30), 3, '🦸 LA Comic Con', 'shop', CON);
+  return map;
+}
+const _psCache = {};
+const _psYear = (y) => (_psCache[y] = _psCache[y] || _psBuild(y));
+function _psRush(ds) {
+  const y = +ds.slice(0, 4), d = new Date(ds + 'T12:00:00');
+  return d >= _psRushStart(y) && d <= _psAdd(_psRushEnd(y), 1);
+}
+
+// Every calendar view asks this for each day's events
+const _psOrigHolidays = getHolidaysForDate;
+getHolidaysForDate = function (ds) {
+  const base = _psOrigHolidays.apply(this, arguments) || [];
+  if (!psOn() || !/^\d{4}-\d\d-\d\d$/.test(String(ds))) return base;
+  const out = base.map(h => {
+    const rc = PS_RECAT[_psNorm(h.label)];
+    return rc ? Object.assign({}, h, { cat: rc[0], msg: rc[1] + (h.msg ? ' ' + h.msg : ''), sales: true }) : h;
+  });
+  (_psYear(+ds.slice(0, 4))[ds] || []).forEach(e => { if (!out.some(h => _psSame(h.label, e.label))) out.push(e); });
+  return out;
+};
+
+// The month view: the on/off switch and color key in its header, and the weeks before Christmas shaded
+const _psOrigCalendar = renderCalendarView;
+renderCalendarView = function () {
+  let html = _psOrigCalendar.apply(this, arguments);
+  try {
+    const on = psOn();
+    const key = `<div class="ps-key" role="group" aria-label="Sales days">
+      <button type="button" class="ps-tog${on ? ' on' : ''}" aria-pressed="${on}" onclick="psToggle()" title="${on ? 'Hide' : 'Show'} shopping and sales days on the calendar">🛍️ Sales days</button>
+      ${on ? '<span class="ps-k ps-k-shop" title="Online sales and when they start">Online sales</span><span class="ps-k ps-k-pos" title="The busiest days for in-store card readers (POS)">In-store rush</span><span class="ps-k ps-k-rush" title="Black Friday to Christmas Eve">Holiday rush</span>' : ''}
+    </div>`;
+    html = html.replace('<div class="cal-nav-btns">', key + '<div class="cal-nav-btns">');
+    if (on) html = html.replace(/<div class="(cal-cell[^"]*)"(\s+ondragover="calCellDragOver\(event,'(\d{4}-\d\d-\d\d)'\)")/g,
+      (m, cls, rest, ds) => (_psRush(ds) && !/\bother-month\b/.test(cls) ? `<div class="${cls} ps-rush"${rest}` : m));
+  } catch (e) {}
+  return html;
+};
+(function _psStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .cal-holiday-chip.cat-shop { background: rgba(236,72,153,0.15); border-left: 2px solid #ec4899; color: #f9a8d4; }
+    .cal-holiday-chip.cat-pos { background: rgba(20,184,166,0.15); border-left: 2px solid #14b8a6; color: #5eead4; }
+    .cal-cell.ps-rush { border-top: 2px solid rgba(236,72,153,.75); }
+    .cal-cell.ps-rush:not(.today):not(.viewing-day):not(.wknd-off) { background-color: rgba(236,72,153,.06); }
+    .ps-key { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .ps-tog { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border-light, #303859); background: transparent; color: var(--text-secondary, #b8bdd6); font: 600 11.5px 'DM Sans', system-ui, sans-serif; cursor: pointer; }
+    .ps-tog.on { border-color: #ec4899; color: #fbcfe8; background: rgba(236,72,153,.12); }
+    .ps-tog:focus-visible { outline: 2px solid #ec4899; outline-offset: 2px; }
+    .ps-k { display: inline-flex; align-items: center; gap: 5px; font: 500 11px 'DM Sans', system-ui, sans-serif; color: var(--text-muted, #8b93b0); white-space: nowrap; }
+    .ps-k::before { content: ''; width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+    .ps-k-shop::before { background: #ec4899; }
+    .ps-k-pos::before { background: #14b8a6; }
+    .ps-k-rush::before { background: rgba(236,72,153,.18); box-shadow: inset 0 2px 0 #ec4899; }`;
+  document.head.appendChild(st);
+})();
+
+// ═════════════════════════════════════════════════════════════════
+// EACH BRAND HAS ITS OWN TAGS (v111)
+// Switching brands loads that brand's tags and hashtag sets. Any tag can be removed, and a brand can start
+// a new set from scratch, from a starter set, or from another brand's tags.
+// ═════════════════════════════════════════════════════════════════
+const PT_PRESETS = [
+  ['general', 'Starter tags (Info, Promo, Update…)', DEFAULT_POST_TAGS.slice()],
+  ['insurance', 'Insurance agency', ['Auto', 'Home', 'Life', 'Pet', 'Renters', 'Commercial', 'Workers Comp', 'IUL', 'Tips', 'Promo', 'Review', 'Holiday', 'Community', 'Blog']],
+  ['merchant', 'Merchant services and POS', ['POS Tips', 'Tap to Pay', 'Fees and Savings', 'Merchant Spotlight', 'Small Business', 'Promo', 'Product', 'Testimonial', 'Holiday Rush', 'Event', 'Blog']],
+  ['creator', 'Artist and creator', ['Art', 'WIP', 'Character', 'Lore', 'Stream', 'Merch', 'Commission', 'Behind the Scenes', 'Collab', 'Event', 'Giveaway']],
+  ['empty', 'Empty: start from scratch', []],
+];
+const _ptBrand = (ws) => (getWorkspaceNames() || {})[ws || getActiveWorkspace()] || 'this brand';
+function _ptSaved(ws) {
+  try { const v = localStorage.getItem(ws + '_postflow_custom_tags'); const a = v ? JSON.parse(v) : null; return Array.isArray(a) ? a : null; } catch (e) { return null; }
+}
+// This brand's tags (and hashtag sets), read fresh from its own storage
+function _ptLoadBrand() {
+  POST_TAGS = _ptSaved(getActiveWorkspace()) || DEFAULT_POST_TAGS.slice();
+  state.hashtagSets = [];
+  try { loadHashtagSets(); } catch (e) {}
+  state.activeTagFilter = [];
+  state.tagSearchMode = false;
+}
+const _ptOrigSwitch = switchWorkspace;
+switchWorkspace = async function (wsId) {
+  const before = getActiveWorkspace();
+  const r = await _ptOrigSwitch.apply(this, arguments);
+  if (getActiveWorkspace() !== before) { _ptLoadBrand(); render(); }
+  return r;
+};
+window.switchWorkspace = switchWorkspace;
+
+// Any tag can go now (the safe way, from Settings, still checks that no post uses it)
+deleteCustomTag = function (tag) {
+  POST_TAGS = POST_TAGS.filter(t => t !== tag);
+  savePostTags();
+  state.activeTagFilter = state.activeTagFilter.filter(t => t !== tag);
+  state.tagSearchMode = state.activeTagFilter.length > 0;
+  render();
+  showToast('Tag "' + tag + '" removed.');
+};
+
+// Tags this brand's posts and drafts already use
+function _ptInUse() {
+  const used = new Set();
+  [state.posts, state.drafts].forEach(group => Object.values(group || {}).forEach(arr => (arr || []).forEach(p => (p.tags || []).forEach(t => used.add(t)))));
+  return used;
+}
+// Settings → Tags: whose tags these are, and "Start a new set"
+function ptBrandNote() {
+  return `These are <b>${escapeHtml(_ptBrand())}</b>'s tags. Each brand keeps its own set. Drag to reorder; × removes a tag no post is using.`;
+}
+function ptSetRow() {
+  const me = getActiveWorkspace();
+  const others = WS_IDS.filter(ws => ws !== me && _ptSaved(ws));
+  const opts = PT_PRESETS.map(([id, label]) => `<option value="${id}">${escapeHtml(label)}</option>`).join('')
+    + others.map(ws => `<option value="ws:${ws}">Copy ${escapeHtml(_ptBrand(ws))}'s tags</option>`).join('');
+  return `<div class="pt-new">
+    <label for="pt-preset">Start a new set for <b>${escapeHtml(_ptBrand())}</b></label>
+    <div class="pt-new-row"><select id="pt-preset">${opts}</select><button type="button" class="pt-btn" onclick="ptUseSet()">Use this set</button></div>
+    <div class="pt-hint">Replaces this brand's tags. Tags your posts already use stay, so nothing loses its tag. Other brands aren't changed.</div>
+  </div>`;
+}
+function ptUseSet() {
+  const v = (document.getElementById('pt-preset') || {}).value || '';
+  const list = v.startsWith('ws:') ? (_ptSaved(v.slice(3)) || []) : ((PT_PRESETS.find(p => p[0] === v) || [])[2]);
+  if (!list) return;
+  const used = [..._ptInUse()].filter(t => !list.some(x => x.toLowerCase() === String(t).toLowerCase()));
+  const name = _ptBrand();
+  if (!confirm(`Replace ${name}'s ${POST_TAGS.length} tags with this set?` + (used.length ? `\n\nThese stay because posts use them: ${used.join(', ')}` : ''))) return;
+  const seen = new Set();
+  POST_TAGS = list.concat(used).filter(t => { const k = String(t).trim().toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; });
+  savePostTags();
+  state.activeTagFilter = [];
+  state.tagSearchMode = false;
+  render();
+  showToast(`🏷 ${name} now has ${POST_TAGS.length ? 'its new set of ' + POST_TAGS.length + ' tags' : 'no tags yet: add your own'}.`);
+  setTimeout(() => { const i = document.getElementById('new-tag-input'); if (i && !POST_TAGS.length) i.focus(); }, 80);
+}
+// "✎ Edit tags" by the tag filter: straight to this brand's tags in Settings
+function ptOpenTagSettings() {
+  openSettings();
+  setTimeout(() => {
+    const d = [...document.querySelectorAll('details')].find(x => /Tags & Hashtag Sets/.test(((x.querySelector('summary') || {}).textContent) || ''));
+    if (d) { d.open = true; d.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+  }, 120);
+}
+(function _ptStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .pt-new { margin-top: 12px; padding: 12px; border: 1px dashed var(--border-light, #303859); border-radius: 10px; }
+    .pt-new label { display: block; font-size: 12px; color: var(--text-secondary, #b8bdd6); margin-bottom: 8px; }
+    .pt-new-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pt-new select { flex: 1; min-width: 180px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border-light, #303859); background: var(--bg-input, #1d2235); color: var(--text-primary, #e8ecf8); font: 12.5px 'DM Sans', system-ui, sans-serif; }
+    .pt-btn { padding: 7px 14px; border-radius: 8px; border: 1px solid #7e22ce; background: #3b0764; color: #d8b4fe; font: 600 12.5px 'DM Sans', system-ui, sans-serif; cursor: pointer; }
+    .pt-btn:hover { background: #4c0d82; }
+    .pt-hint { font-size: 11px; color: var(--text-muted, #8b93b0); margin-top: 6px; line-height: 1.45; }
+    .pt-edit { padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border-light, #303859); background: transparent; color: var(--text-secondary, #b8bdd6); font: 11px 'DM Sans', system-ui, sans-serif; cursor: pointer; margin-left: 4px; }
+    .pt-edit:hover, .pt-edit:focus-visible { color: var(--text-primary, #e8ecf8); border-color: #a855f7; }`;
   document.head.appendChild(st);
 })();
 
