@@ -3385,7 +3385,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v112</span>
+              <span class="sb-version">v114</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -34479,9 +34479,13 @@ function renderSettingsModal() {
             </div>
             <div id="storage-stats" style="color:var(--text-muted);font-size:11.5px">Click Refresh to check storage usage</div>
             <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-              <button onclick="imgGarbageCollect().then(()=>checkStorageUsage())"
+              <button onclick="imgGarbageCollect({ manual: true }).then(()=>checkStorageUsage())"
                 style="padding:5px 12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-card);color:var(--text-secondary);font-size:11.5px;cursor:pointer;font-family:inherit">
-                🧹 Run GC (free orphaned images)
+                🧹 Clean up unused pictures
+              </button>
+              <button onclick="pdRestoreOpen()"
+                style="padding:5px 12px;border-radius:6px;border:1px solid #1a5c35;background:#0d2a1a;color:#34d399;font-size:11.5px;cursor:pointer;font-family:inherit;font-weight:600">
+                ♻️ Restore missing pictures
               </button>
               <button onclick="clearAllImageCache()"
                 style="padding:5px 12px;border-radius:6px;border:1px solid #7c1a1a;background:#2a0d0d;color:#f87171;font-size:11.5px;cursor:pointer;font-family:inherit">
@@ -34576,7 +34580,7 @@ async function checkStorageUsage() {
 }
 
 async function clearAllImageCache() {
-  if (!confirm('Delete ALL stored images from IndexedDB? Posts and drafts will lose their images. This cannot be undone.')) return;
+  if (!confirm('Delete ALL stored pictures, for every brand (A, B and C)? Every post and draft in all three brands loses its picture. This cannot be undone.')) return;
   try {
     const db = await openImageDb();
     await new Promise((res, rej) => {
@@ -43446,6 +43450,243 @@ function ptOpenTagSettings() {
   document.head.appendChild(st);
 })();
 
+// ═════════════════════════════════════════════════════════════════
+// KEEPING YOUR PICTURES SAFE (v113)
+// All three brands share one picture store. The old clean-up, which ran 3 seconds after every start, deleted
+// every picture the brand that was open didn't use, so opening PostPilot on one brand erased the pictures of
+// the other brands' posts. Now:
+//  • nothing is cleaned up on its own, and a picture is only ever deleted when no post or draft in any brand
+//    still points to it,
+//  • a post whose picture didn't load keeps its link to the picture when it's saved,
+//  • ♻️ Restore pictures puts missing pictures back from your PostPilot folder or files you pick, by file name.
+// ═════════════════════════════════════════════════════════════════
+const PI_ID_RE = /img_\d{9,}_[a-z0-9]{2,10}/g;
+// Every picture something in this browser still points to: all brands' posts, drafts, archives and autosaves
+function _piUsedIds() {
+  const used = new Set();
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const v = localStorage.getItem(localStorage.key(i));
+      if (v && v.indexOf('img_') >= 0) (v.match(PI_ID_RE) || []).forEach(id => used.add(id));
+    }
+  } catch (e) { return null; } // can't tell: keep everything
+  const add = (o) => { if (o) ['imageId', 'imageOriginalId', 'imageFullId', 'imageThumbId'].forEach(k => { if (o[k]) used.add(String(o[k])); }); };
+  [state.posts, state.drafts].forEach(g => Object.values(g || {}).forEach(a => (a || []).forEach(add)));
+  add(state.form);
+  if (_ppDelUndo && _ppDelUndo.post) add(_ppDelUndo.post);
+  return used;
+}
+// A delete waits a few seconds (until the post is really gone) and skips a picture another post still uses
+const _piOrigDelete = imgDelete;
+imgDelete = async function (id) {
+  if (!id || String(id).startsWith('data:')) return;
+  await new Promise(r => setTimeout(r, 3000));
+  const used = _piUsedIds();
+  if (!used || used.has(String(id))) return;
+  return _piOrigDelete.call(this, id);
+};
+// The clean-up never runs by itself; from Settings it removes only pictures no brand uses
+imgGarbageCollect = async function (opts) {
+  if (!opts || !opts.manual) return 0;
+  const used = _piUsedIds();
+  if (!used) return 0;
+  let all = [];
+  try {
+    const db = await openImageDb();
+    all = await new Promise((res, rej) => { const q = db.transaction(IMG_STORE, 'readonly').objectStore(IMG_STORE).getAllKeys(); q.onsuccess = e => res(e.target.result || []); q.onerror = rej; });
+  } catch (e) { return 0; }
+  const extra = all.filter(id => !used.has(String(id)));
+  if (!extra.length) { showToast('Nothing to clean up: every stored picture belongs to a post or draft.'); return 0; }
+  if (!confirm(`Remove ${extra.length} stored picture${extra.length === 1 ? '' : 's'} that no post or draft uses, in any of your brands? This can't be undone.`)) return 0;
+  for (const id of extra) await _piOrigDelete(id);
+  showToast(`Removed ${extra.length} unused picture${extra.length === 1 ? '' : 's'}.`);
+  return extra.length;
+};
+// A post whose picture didn't load keeps the link to it when saved
+const _piOrigPersist = persistPostImages;
+persistPostImages = async function (post) {
+  const src = post && (post.imageOriginal || post.image);
+  if (!src && post && (post.imageId || post.imageOriginalId)) return stripPostImages({ ...post });
+  return _piOrigPersist.apply(this, arguments);
+};
+// One post whose picture can't be read doesn't stop the rest from loading
+const _piOrigRehydrate = rehydratePost;
+rehydratePost = async function (post) { try { return await _piOrigRehydrate.apply(this, arguments); } catch (e) { return { ...post }; } };
+const _piOrigRehydrateDraft = rehydrateDraft;
+rehydrateDraft = async function (d) { try { return await _piOrigRehydrateDraft.apply(this, arguments); } catch (e) { return { ...d }; } };
+
+// ── Which posts and drafts are missing their pictures ──
+const _piPostMissing = (p) => !!p && !p.image && !p.imageOriginal && !p.imagePurged && !!(p.imageId || p.imageOriginalId || (p.imageName && !p.manualUpload));
+const _piDraftMissing = (d) => !!d && !d.imageFull && !d.imageThumb && !!(d.imageFullId || d.imageThumbId || d.imageName);
+function _piMissing() {
+  const posts = [], drafts = [];
+  Object.entries(state.posts || {}).forEach(([pid, arr]) => (arr || []).forEach(p => { if (_piPostMissing(p)) posts.push({ pid, p }); }));
+  Object.entries(state.drafts || {}).forEach(([pid, arr]) => (arr || []).forEach(d => { if (_piDraftMissing(d)) drafts.push({ pid, d }); }));
+  return { posts, drafts, n: posts.length + drafts.length };
+}
+async function _piFind() {
+  const m = _piMissing();
+  let healed = 0;
+  const has = async (ids) => { for (const id of ids) { if (!id) continue; try { const u = await imgLoad(id); if (u) return u; } catch (e) {} } return null; };
+  const posts = [], drafts = [];
+  for (const x of m.posts) { const u = await has([x.p.imageOriginalId, x.p.imageId]); if (u) { x.p.imageOriginal = x.p.imageOriginal || u; x.p.image = x.p.image || u; healed++; } else posts.push(x); }
+  for (const x of m.drafts) { const u = await has([x.d.imageFullId, x.d.imageThumbId]); if (u) { x.d.imageFull = x.d.imageFull || u; x.d.imageThumb = x.d.imageThumb || u; healed++; } else drafts.push(x); }
+  if (healed) _piOrigRender();
+  return { posts, drafts, n: posts.length + drafts.length };
+}
+// "Pet-carrier_0001_pinterest (2).PNG" and "pet carrier 0001 pinterest.png" are the same picture
+const _piKey = (n) => String(n || '').toLowerCase().replace(/\.[a-z0-9]{2,5}$/, '').replace(/\s*\(\d+\)$/, '').replace(/[\s_\-]+/g, '-').replace(/^-+|-+$/g, '');
+const _piIsPic = (name, type) => /^(image|video)\//.test(type || '') || /\.(png|jpe?g|gif|webp|mp4|mov|webm)$/i.test(name || '');
+const _piRead = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(file); });
+
+// Put pictures back: files = [{ name, lastModified, get: () => Promise<File> }]
+async function _piRestore(files) {
+  const byKey = new Map(), dupes = new Map();
+  files.forEach(f => { if (!_piIsPic(f.name, f.type)) return; const k = _piKey(f.name), cur = byKey.get(k); if (!k) return; dupes.set(k, (dupes.get(k) || 0) + 1); if (!cur || (f.lastModified || 0) > (cur.lastModified || 0)) byKey.set(k, f); });
+  const miss = await _piFind(), postFix = {}, draftFix = {}, left = [], check = [];
+  let n = 0;
+  for (const { pid, p } of miss.posts) {
+    const f = byKey.get(_piKey(p.imageName));
+    if (!f) { left.push({ pid, when: p.scheduledDate, name: p.imageName, kind: 'post' }); continue; }
+    try { const url = await _piRead(await f.get()); (postFix[pid] = postFix[pid] || {})[String(p.id)] = url; n++; if (dupes.get(_piKey(p.imageName)) > 1) check.push({ pid, when: p.scheduledDate, name: p.imageName }); }
+    catch (e) { left.push({ pid, when: p.scheduledDate, name: p.imageName, kind: 'post' }); }
+  }
+  for (const { pid, d } of miss.drafts) {
+    const f = byKey.get(_piKey(d.imageName));
+    if (!f) { left.push({ pid, when: '', name: d.imageName, kind: 'draft' }); continue; }
+    try { const url = await _piRead(await f.get()); (draftFix[pid] = draftFix[pid] || {})[String(d.id)] = url; n++; }
+    catch (e) { left.push({ pid, when: '', name: d.imageName, kind: 'draft' }); }
+  }
+  if (Object.keys(postFix).length) {
+    const posts = { ...state.posts };
+    Object.keys(postFix).forEach(pid => { posts[pid] = (posts[pid] || []).map(p => { const u = postFix[pid][String(p.id)]; return u ? { ...p, image: u, imageOriginal: u, imageId: null, imageOriginalId: null } : p; }); });
+    state.posts = posts;
+    await savePosts(state.posts);
+  }
+  if (Object.keys(draftFix).length) {
+    const drafts = { ...state.drafts };
+    Object.keys(draftFix).forEach(pid => { drafts[pid] = (drafts[pid] || []).map(d => { const u = draftFix[pid][String(d.id)]; return u ? { ...d, imageFull: u, imageThumb: u, imageFullId: null, imageThumbId: null } : d; }); });
+    state.drafts = drafts;
+    await saveDrafts(state.drafts);
+  }
+  if (state.form && state.editingPostId != null) {
+    const pid = state.activePlatform, u = postFix[pid] && postFix[pid][String(state.editingPostId)];
+    if (u) state.form = { ...state.form, image: u, imageOriginal: u, imageId: null, imageOriginalId: null };
+  }
+  render();
+  return { n, left, check, files: byKey.size };
+}
+
+// ── The window ──
+async function _piSavedFolder() {
+  try { if (window.parent && window.parent !== window && typeof window.parent._xfLoadDir === 'function') { const h = await window.parent._xfLoadDir(); if (h) return h; } } catch (e) {}
+  try {
+    const db = await new Promise((res, rej) => { const r = indexedDB.open('bpc_fs', 1); r.onupgradeneeded = () => r.result.createObjectStore('handles'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+    return await new Promise(res => { const q = db.transaction('handles', 'readonly').objectStore('handles').get('saveDir'); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); });
+  } catch (e) { return null; }
+}
+function _piSay(html) { const el = document.getElementById('pi-out'); if (el) el.innerHTML = html; }
+function _piReport(r, src) {
+  const left = r.left.slice(0, 40).map(x => `<li><b style="color:${_pdColor(x.pid)}">${_pdE(_pdName(x.pid))}</b>${x.when ? ' · ' + _pdE(_ppNiceDay(x.when)) : ' · draft'} · <span class="pi-fn">${_pdE(x.name || 'no file name saved')}</span></li>`).join('');
+  _piSay(`<p class="pd-note ${r.n ? 'pd-good' : 'pd-warn'}">${r.n ? `✅ ${src === 'batch' ? 'Rebuilt' : 'Put back'} ${r.n} picture${r.n === 1 ? '' : 's'}${src === 'batch' ? ' from your saved batches' : ''}.` : `None of the ${r.files} picture file${r.files === 1 ? '' : 's'} matched a missing picture by name.`}</p>`
+    + (r.check && r.check.length ? `<p class="pd-note pd-warn">${r.check.length} of them had more than one file with the same name (like "name (2).png"), so PostPilot used the newest. Give ${r.check.length === 1 ? 'it' : 'them'} a quick look: ${_pdE(r.check.slice(0, 6).map(x => _pdName(x.pid) + (x.when ? ' ' + _ppNiceDay(x.when) : '')).join(', '))}${r.check.length > 6 ? '…' : ''}.</p>` : '')
+    + (r.left.length ? `<p class="pd-note">Still missing (${r.left.length})${src === 'batch' ? ": these weren't in your latest batches. If you have their files, pick them with 🖼 Pick pictures; otherwise they need remaking." : ': look for these file names, then pick them with 🖼 Pick pictures.'}</p><ul class="pi-left">${left}</ul>${r.left.length > 40 ? '<p class="pd-note">…and more.</p>' : ''}` : '<p class="pd-note">Every post and draft in this brand has its picture again.</p>'));
+  _piCount();
+}
+async function piFromFolder() {
+  const h = await _piSavedFolder();
+  if (!h) return _piSay('<p class="pd-note pd-warn">No PostPilot folder is set up in this browser. Use 📂 Pick a folder instead.</p>');
+  try {
+    let st = await h.queryPermission({ mode: 'read' });
+    if (st !== 'granted') st = await h.requestPermission({ mode: 'read' });
+    if (st !== 'granted') return _piSay('<p class="pd-note pd-warn">PostPilot needs your OK to look in that folder. Click the button again and choose Allow.</p>');
+    _piSay('<p class="pd-note">Looking through your folder…</p>');
+    const files = [];
+    const walk = async (dir, depth) => {
+      for await (const [name, e] of dir.entries()) {
+        if (e.kind === 'file' && _piIsPic(name)) files.push({ name, get: () => e.getFile() });
+        else if (e.kind === 'directory' && depth < 2) await walk(e, depth + 1);
+      }
+    };
+    await walk(h, 0);
+    _piReport(await _piRestore(files));
+  } catch (e) { _piSay(`<p class="pd-note pd-warn">Couldn't read that folder (${_pdE(e.message || String(e))}). Use 📂 Pick a folder instead.</p>`); }
+}
+async function piFromBatches(btn) {
+  const m = await _piFind();
+  const names = [...new Set(m.posts.map(x => x.p.imageName).concat(m.drafts.map(x => x.d.imageName)).filter(Boolean))];
+  if (!names.length) return _piSay('<p class="pd-note">None of the missing pictures have a file name PostPilot can rebuild from.</p>');
+  const P = window.parent;
+  if (!P || P === window || typeof P.ppRebuildPictures !== 'function') return _piSay('<p class="pd-note pd-warn">Open PostPilot Studio (with the Batch) to rebuild from your saved batches.</p>');
+  if (btn) btn.disabled = true;
+  _piSay('<p class="pd-note">Looking through your saved batches…</p>');
+  try {
+    const got = await P.ppRebuildPictures(names, (i, n) => _piSay(`<p class="pd-note">${n ? `Rebuilding picture ${Math.min(i + 1, n)} of ${n}…` : 'Looking through your saved batches…'}</p>`));
+    if (!got.length) return _piSay(`<p class="pd-note pd-warn">None of the ${m.n} missing picture${m.n === 1 ? ' is' : 's are'} in your saved batches (each platform keeps only its latest batch). If you have the picture files, use 🖼 Pick pictures.</p>`);
+    _piReport(await _piRestore(got.map(g => ({ name: g.name, type: 'image/png', lastModified: Date.now(), get: async () => g.blob }))), 'batch');
+  } catch (e) { _piSay(`<p class="pd-note pd-warn">Couldn't rebuild: ${_pdE(e.message || String(e))}</p>`); }
+  finally { if (btn) btn.disabled = false; }
+}
+async function piFromFiles(input) {
+  const list = [...(input.files || [])].map(f => ({ name: f.name, type: f.type, lastModified: f.lastModified, get: async () => f }));
+  input.value = '';
+  if (!list.length) return;
+  _piSay('<p class="pd-note">Matching your pictures…</p>');
+  _piReport(await _piRestore(list));
+}
+async function pdRestoreOpen() {
+  const m = await _piFind(), brand = (getWorkspaceNames() || {})[getActiveWorkspace()] || 'this brand';
+  const h = await _piSavedFolder();
+  _pdModal('pi-restore', `<div class="pd-mh"><h2>♻️ Restore missing pictures</h2><button type="button" class="pd-x" aria-label="Close" onclick="pdCloseModal('pi-restore')">✕</button></div>
+    <div class="pd-mb">
+      <p class="pd-note">${m.n ? `<b>${m.posts.length}</b> post${m.posts.length === 1 ? '' : 's'}${m.drafts.length ? ` and <b>${m.drafts.length}</b> draft${m.drafts.length === 1 ? '' : 's'}` : ''} in <b>${_pdE(brand)}</b> ${m.n === 1 ? 'is' : 'are'} missing ${m.n === 1 ? 'its picture' : 'their pictures'}.` : `Every post and draft in <b>${_pdE(brand)}</b> has its picture.`}
+      </p>
+      <p class="pd-note"><b>Rebuild from your saved batches:</b> each platform keeps its latest batch (text, layout and photo), so posts that came from those batches can be drawn again exactly as they were.</p>
+      <div class="pi-btns"><button type="button" class="pd-btn pd-primary" onclick="piFromBatches(this)">🔁 Rebuild from your saved batches</button></div>
+      <p class="pd-note"><b>Or from picture files</b> on your computer, matched by file name (for example <i>Pet-carrier_0001_pinterest.png</i>):</p>
+      <div class="pi-btns">
+        ${h ? `<button type="button" class="pd-btn" onclick="piFromFolder()">📁 Look in your PostPilot folder (${_pdE(h.name || 'saved folder')})</button>` : ''}
+        <label class="pd-btn">📂 Pick a folder<input type="file" webkitdirectory multiple hidden onchange="piFromFiles(this)"/></label>
+        <label class="pd-btn">🖼 Pick pictures<input type="file" accept="image/*,video/*" multiple hidden onchange="piFromFiles(this)"/></label>
+      </div>
+      <div id="pi-out" role="status" aria-live="polite"></div>
+      <p class="pd-note pi-small">For another brand, switch to it: this window is also under ⚙ Settings, at the bottom by 💾 Storage Usage.</p>
+    </div>
+    <div class="pd-mf"><button type="button" class="pd-btn" onclick="pdCloseModal('pi-restore')">Close</button></div>`, true);
+}
+// A heads-up when this brand has posts without their pictures (once per visit, unless the number changes)
+let _piBusy = false;
+async function _piCount() {
+  if (_piBusy) return;
+  if (!_piMissing().n) { const c = document.getElementById('pdc-imgmiss'); if (c) c.remove(); return; }
+  _piBusy = true;
+  let n = 0;
+  try { n = (await _piFind()).n; } catch (e) {} finally { _piBusy = false; }
+  const ws = getActiveWorkspace(), k = 'pi_seen_' + ws;
+  const card = document.getElementById('pdc-imgmiss');
+  if (!n) { if (card) card.remove(); return; }
+  let seen = '';
+  try { seen = sessionStorage.getItem(k) || ''; } catch (e) {}
+  if (seen === String(n) || card) return;
+  _pdCard('imgmiss', `<div class="pp-rem-title">🖼 ${n} post${n === 1 ? ' is' : 's are'} missing ${n === 1 ? 'its picture' : 'their pictures'}</div><div class="pp-rem-text">PostPilot can rebuild the ones from your saved batches, or put them back from picture files.</div>`,
+    [['♻️ Restore pictures', (e, c) => { c.remove(); pdRestoreOpen(); }, true], ['Later', (e, c) => { try { sessionStorage.setItem(k, String(n)); } catch (x) {} c.remove(); }]], '#ef4444',
+    () => { try { sessionStorage.setItem(k, String(n)); } catch (x) {} });
+}
+let _piT = 0;
+const _piOrigRender = render;
+render = function () { const r = _piOrigRender.apply(this, arguments); clearTimeout(_piT); _piT = setTimeout(() => { try { _piCount(); } catch (e) {} }, 1200); return r; };
+(function _piStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .pi-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+    .pi-btns label.pd-btn { cursor: pointer; display: inline-flex; align-items: center; }
+    .pi-btns label.pd-btn:focus-within { outline: 2px solid #f5a623; outline-offset: 2px; }
+    .pi-left { margin: 6px 0 0; padding-left: 18px; max-height: 220px; overflow: auto; font-size: 12px; color: var(--text-secondary, #b8bdd6); line-height: 1.6; }
+    .pi-fn { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; color: var(--text-primary, #e8ecf8); overflow-wrap: anywhere; }
+    .pi-small { font-size: 11.5px; opacity: .85; }`;
+  document.head.appendChild(st);
+})();
+
 </scr_PPESC_ipt>
 
   <!_PPESC_-- ── Floating action button (new post) ─────────────────────── -->
@@ -43798,6 +44039,76 @@ function ptOpenTagSettings() {
           window._pbGuessPlatform = _pbGuessPlatform;
         }
       })();
+      // ═══════════════════════════════════════════════════════════════
+      // REBUILD PICTURES FROM YOUR SAVED BATCHES (v114)
+      // Each platform's latest batch is kept (text, layout, photo), apart from the Scheduler's pictures. A post
+      // sent from a batch is named after its batch post ("Headline_0012_pinterest.png"), so the same picture
+      // can be drawn again and handed back to the Scheduler.
+      // ═══════════════════════════════════════════════════════════════
+      const _rbKey = (n) =>
+        String(n || "")
+          .toLowerCase()
+          .replace(/\.[a-z0-9]{2,5}$/, "")
+          .replace(/\s*\(\d+\)$/, "")
+          .replace(/[\s_\-]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+      // names: the file names the Scheduler is missing. onStep(done, total, name). Returns [{ name, blob }].
+      async function ppRebuildPictures(names, onStep) {
+        const want = new Map();
+        (names || []).forEach((n) => {
+          const k = _rbKey(n);
+          if (k) want.set(k, n);
+        });
+        const out = [];
+        if (!want.size || typeof _pbLoad !== "function" || typeof _mpBlob !== "function") return out;
+        while (_pb.busy) await new Promise((r) => setTimeout(r, 400));
+        // Which batch posts match a missing picture
+        const jobs = [];
+        for (const pid of PB_ORDER) {
+          let raw = null;
+          try {
+            raw = localStorage.getItem(_pbKey(pid));
+          } catch (e) {}
+          if (!raw) continue;
+          await _pbLoad(pid);
+          const prev = _pb.pid;
+          _pb.pid = pid;
+          try {
+            (_pb.byPid[pid] || []).forEach((s) => {
+              if (!_pbFilled(s) || !Number.isInteger(s.layout) || !templates[s.layout]) return;
+              const k = _rbKey(_pbWithSync(s, () => _mpFileName(s.layout, pid)));
+              if (want.has(k) && !jobs.some((j) => j.k === k)) jobs.push({ pid, s, k, name: want.get(k) });
+            });
+          } finally {
+            _pb.pid = prev;
+          }
+        }
+        // Draw them, one at a time
+        for (let i = 0; i < jobs.length; i++) {
+          const { pid, s, name } = jobs[i];
+          if (onStep) {
+            try {
+              onStep(i, jobs.length, name);
+            } catch (e) {}
+          }
+          const prev = _pb.pid;
+          _pb.pid = pid;
+          try {
+            const blob = await _pbWith(s, () => _mpBlob(s.layout, pid));
+            if (blob) out.push({ name, blob });
+          } catch (e) {
+            console.warn("Couldn't rebuild " + name, e);
+          } finally {
+            _pb.pid = prev;
+          }
+        }
+        if (onStep) {
+          try {
+            onStep(jobs.length, jobs.length, "");
+          } catch (e) {}
+        }
+        return out;
+      }
     </script>
     <script>
       // ══════════════════════════════════════════
