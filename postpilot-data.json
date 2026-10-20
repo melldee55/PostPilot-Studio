@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-10-20T01:45:01.575Z",
+  "lastSaved": "2026-10-20T01:49:02.614Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -5210,7 +5210,25 @@
         "ytLiveUrl": "",
         "tags": [],
         "liveUrl": "",
-        "fromBrandCreator": true
+        "fromBrandCreator": true,
+        "_imageDims": "1080×1080",
+        "unsplash": {
+          "id": "HBcOK_gq2Z0",
+          "name": "Tyler Clemmensen",
+          "user": "tyler_clemmensen",
+          "link": "https://unsplash.com/@tyler_clemmensen",
+          "page": "https://unsplash.com/photos/blue-car-on-road-during-daytime-HBcOK_gq2Z0",
+          "url": "https://images.unsplash.com/photo-1610213728302-9528164e663e?ixid=M3wxMDY4MTEyfDB8MXxzZWFyY2h8MXx8Y2FyJTIwb24lMjB0aGUlMjByb2FkfGVufDF8Mnx8fDE3OTI0NjA3Mjh8MA&ixlib=rb-4.1.0&w=1080&h=1080&fit=crop&crop=entropy&q=85&fm=jpg",
+          "dl": "https://api.unsplash.com/photos/HBcOK_gq2Z0/download?ixid=M3wxMDY4MTEyfDB8MXxzZWFyY2h8MXx8Y2FyJTIwb24lMjB0aGUlMjByb2FkfGVufDF8Mnx8fDE3OTI0NjA3Mjh8MA",
+          "q": "car on the road",
+          "w": 1080,
+          "h": 1080,
+          "fmt": "png",
+          "at": 1792460736277,
+          "fp": "1dxem-uap78v"
+        },
+        "isVideo": false,
+        "isGif": false
       },
       {
         "id": 1791339517494.7358,
@@ -11286,9 +11304,9 @@
       "missedDayPending": null
     },
     "instagram": {
-      "count": 0,
-      "lastDate": "",
-      "lastMilestone": 0,
+      "count": 1,
+      "lastDate": "2026-10-16",
+      "lastMilestone": 1,
       "freezeTokens": 0,
       "trophies": 0,
       "frozenDates": [],
