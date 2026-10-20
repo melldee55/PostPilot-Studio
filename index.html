@@ -3385,7 +3385,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v116</span>
+              <span class="sb-version">v117</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -9134,9 +9134,19 @@ Your message, caption, or call to action goes right here.</textarea
         const refresh = () => {
           if (changed && !_us.editKey && document.getElementById("us-keyrow")) _usRenderKeyRow();
         };
+        // Keys whose answer couldn't be read (Unsplash's "limit reached" can come back unreadable to a web page)
+        const unread = [];
+        let netErr = null;
         for (const key of keys) {
           if (_usResting(key)) continue;
-          const res = await fetch(url, Object.assign({}, opts || {}, { headers: Object.assign({ Authorization: "Client-ID " + key, "Accept-Version": "v1" }, (opts && opts.headers) || {}) }));
+          let res;
+          try {
+            res = await fetch(url, Object.assign({}, opts || {}, { headers: Object.assign({ Authorization: "Client-ID " + key, "Accept-Version": "v1" }, (opts && opts.headers) || {}) }));
+          } catch (err) {
+            unread.push(key);
+            netErr = err;
+            continue;
+          }
           if (res.status === 401) {
             _usRestKey(key, 24 * 3600e3, "rejected");
             last = 401;
@@ -9149,6 +9159,11 @@ Your message, caption, or call to action goes right here.</textarea
             changed = true;
             continue;
           }
+          // This key answered, so the keys before it that couldn't be read are used up for the hour
+          if (unread.length) {
+            unread.forEach((k) => _usRestKey(k, 3600e3, "used"));
+            changed = true;
+          }
           const left = res.headers && res.headers.get("X-Ratelimit-Remaining");
           if (left !== null && left !== undefined && left !== "" && +left <= 0) {
             _usRestKey(key, 3600e3, "used");
@@ -9156,6 +9171,21 @@ Your message, caption, or call to action goes right here.</textarea
           }
           refresh();
           return res;
+        }
+        // No key's answer could be read: if Unsplash itself can be reached, those keys are used up; if not, the connection is down
+        if (unread.length) {
+          let online = false;
+          try {
+            await fetch("https://api.unsplash.com/", { mode: "no-cors", cache: "no-store" });
+            online = true;
+          } catch (e) {}
+          if (!online) {
+            refresh();
+            throw netErr;
+          }
+          unread.forEach((k) => _usRestKey(k, 3600e3, "used"));
+          changed = true;
+          last = 429;
         }
         refresh();
         if (!last) last = keys.some((k) => (_usResting(k) || {}).why === "used") ? 429 : 401;
@@ -43755,6 +43785,18 @@ const _ufOrient = (w, h) => { const r = w / h; return r < 0.9 ? 'portrait' : r >
 // Unsplash goes through the Post Creator's keys (up to five, each resting for the hour when it's used up)
 function _ufP() { try { const P = window.parent; return P && P !== window && typeof P.usFetch === 'function' ? P : null; } catch (e) { return null; } }
 function _ufHasKey() { const P = _ufP(); try { return !!(P && typeof P._usKeys === 'function' && P._usKeys().some(Boolean)); } catch (e) { return false; } }
+const _ufKeyCount = () => { const P = _ufP(); try { return P && typeof P._usKeys === 'function' ? P._usKeys().filter(Boolean).length : 0; } catch (e) { return 0; } };
+// Which key is working right now (each key has its own hourly limit; when one is used up the next takes over)
+function _ufKeyNote() {
+  const P = _ufP();
+  try {
+    const keys = P._usKeys().filter(Boolean);
+    if (keys.length < 2) return '';
+    const cur = keys.indexOf(P._usKey()), used = keys.filter(k => P._usResting(k)).length;
+    return cur >= 0 ? `🔑 Using Unsplash key ${cur + 1} of ${keys.length}${used ? ` (${used} used up for this hour)` : ''}` : '';
+  } catch (e) { return ''; }
+}
+const _ufAllUsedText = () => { const n = _ufKeyCount(); return n > 1 ? `All ${n} of your Unsplash keys are used up for this hour` : 'Your Unsplash key is used up for this hour'; };
 // Unsplash asks for these referral tags on every link back to them
 const _ufRef = (u) => u + (String(u).includes('?') ? '&' : '?') + 'utm_source=postpilot_studio&utm_medium=referral';
 // A short fingerprint of a picture: its length and 512 characters taken from all through it
@@ -44032,7 +44074,7 @@ function _ufErrText(e) {
   if (!e) return 'Something went wrong.';
   if (e.message === 'studio') return 'Open the Scheduler inside PostPilot Studio to use Unsplash.';
   if (_ufIsKey(e)) return 'Unsplash didn’t accept your key. Check it in the 🔍 Unsplash window of the Post Creator, or paste a new one here.';
-  if (_ufIsLimit(e)) return `Your Unsplash keys are used up for this hour (Unsplash’s limit). They work again at ${_ufClock(_ufRestEnd())}.`;
+  if (_ufIsLimit(e)) return `${_ufAllUsedText()} (Unsplash’s limit). The first one works again at ${_ufClock(_ufRestEnd())}.`;
   return 'Couldn’t reach Unsplash (' + (e.message || e) + ').';
 }
 
@@ -44215,7 +44257,8 @@ async function ufAutoFill(resumed, preset) {
       it.x = cur; it.ws = ws;
       _uf.prog = { k: k + 1, n: todo.length };
       _ufSideSync();
-      _ufSay(`🌄 Finding a photo for ${_pdE(_pdName(it.pid))}${it.date ? ' · ' + _pdE(_ppNiceDay(it.date)) : it.kind === 'draft' ? ' · draft' : ''} (${k + 1} of ${todo.length})…`);
+      const kn = _ufKeyNote();
+      _ufSay(`🌄 Finding a photo for ${_pdE(_pdName(it.pid))}${it.date ? ' · ' + _pdE(_ppNiceDay(it.date)) : it.kind === 'draft' ? ' · draft' : ''} (${k + 1} of ${todo.length})…${kn ? `<br><span class="uf-kn">${_pdE(kn)}</span>` : ''}`);
       _ufRow(it, 'busy');
       try {
         if (await _ufFillOne(it, used, groupPick)) { filled++; fails = 0; _ufRow(it, 'done'); _ufSoon(); }
@@ -44243,7 +44286,7 @@ async function ufAutoFill(resumed, preset) {
   bits.push(`🌄 ${filled} new Unsplash photo${filled === 1 ? '' : 's'}`);
   let msg = `✅ Done: ${bits.join(', ')}.`;
   if (problem === 'limit') {
-    msg = `${bits.join(', ')}. Your Unsplash keys are used up for this hour (Unsplash’s limit). ${left} still need${left === 1 ? 's' : ''} a photo.`;
+    msg = `${bits.join(', ')}. ${_ufAllUsedText()} (Unsplash’s limit). ${left} still need${left === 1 ? 's' : ''} a photo.`;
     if (o.resume && left) { _ufScheduleResume(); msg += ` PostPilot carries on by itself at <b>${_pdE(_ufClock(_uf.resumeAt))}</b> while it stays open.`; }
     else msg += ` Press 🌄 Fill again after ${_pdE(_ufClock(_ufRestEnd()))}.`;
   } else if (problem === 'key') msg = _pdE(_ufErrText({ status: 401 }));
@@ -44297,7 +44340,7 @@ function _ufScheduleResume() {
   const at = _ufRestEnd() + 60e3;
   _uf.resumeAt = at;
   _uf.resumeT = setTimeout(() => { _uf.resumeAt = 0; const c = document.getElementById('pdc-ufresume'); if (c) c.remove(); if (!_uf.busy) ufAutoFill(true); }, Math.max(5e3, at - Date.now()));
-  _pdCard('ufresume', `<div class="pp-rem-title">🌄 More Unsplash photos at ${_pdE(_ufClock(at))}</div><div class="pp-rem-text">Unsplash’s hourly limit was reached. PostPilot fills the rest by itself at ${_pdE(_ufClock(at))}, as long as it stays open.</div>`,
+  _pdCard('ufresume', `<div class="pp-rem-title">🌄 More Unsplash photos at ${_pdE(_ufClock(at))}</div><div class="pp-rem-text">${_pdE(_ufAllUsedText())}. PostPilot fills the rest by itself at ${_pdE(_ufClock(at))}, when the first one works again, as long as it stays open.</div>`,
     [['Don’t carry on', (e, c) => { clearTimeout(_uf.resumeT); _uf.resumeAt = 0; c.remove(); }]], '#f5a623');
 }
 // 🔄 Another photo for one post
@@ -44382,7 +44425,7 @@ async function _ufDraw() {
       <p class="pd-note">Get one at <a href="https://unsplash.com/developers" target="_blank" rel="noopener">unsplash.com/developers</a> (Your apps → New Application, then copy its <b>Access Key</b>). Paste it in this box and press <b>Save key</b>:</p>
       <div class="uf-krow"><input id="uf-key" type="text" placeholder="Paste your Unsplash Access Key here" autocomplete="off" spellcheck="false" aria-label="Your Unsplash Access Key"/><button type="button" class="pd-btn pd-primary" onclick="ufSaveKey()">Save key</button></div></div>`;
   body.innerHTML = `<p class="pd-note">${what} in <b>${_pdE(brand)}</b> ${fill.length === 1 ? 'has an empty photo slot' : 'have empty photo slots'}. PostPilot finds an Unsplash photo that fits each one (from its headline, caption and blog link), cropped to its platform's size, starting with today's posts (<b>${_pdE(_ppNiceDay(_pdDay(0)))}</b>) and then the days after. Every photo credits its photographer, with their name linked to their Unsplash profile.</p>
-    ${keyRow}
+    ${keyRow}${_ufKeyCount() ? `<p class="pd-note">🔑 ${_ufKeyCount()} Unsplash key${_ufKeyCount() === 1 ? '' : 's'} saved${_ufKeyCount() > 1 ? ': when one is used up for the hour, PostPilot moves on to the next by itself, until all of them are used up' : ' (each key has its own hourly limit: add more keys in the 🔍 Unsplash window of the Post Creator, and PostPilot moves on to the next when one is used up)'}.</p>` : ''}
     <div class="uf-opts">
       ${nEarlier ? `<label><input type="checkbox" id="uf-o-earlier" ${o.earlier ? 'checked' : ''}/> <span>The ${nEarlier} earlier post${nEarlier === 1 ? '' : 's'} that didn’t go out</span></label>` : ''}
       ${nd ? `<label><input type="checkbox" id="uf-o-drafts" ${o.drafts ? 'checked' : ''}/> <span>The ${nd} draft${nd === 1 ? '' : 's'}</span></label>` : ''}
@@ -45150,6 +45193,7 @@ function _ufBackupReminder() {
     .uf-sum { font-size: 12.5px; color: var(--text-primary, #e8ecf8); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin: 2px 0; }
     .uf-q { font-size: 11.5px; color: #8b8fa8; }
     .uf-st { font-size: 11.5px; }
+    .uf-kn { font-size: 11.5px; color: #8b8fa8; }
     .uf-act { display: flex; flex-direction: column; gap: 6px; }
     .uf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
     .uf-tile { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
