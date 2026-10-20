@@ -3385,7 +3385,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v114</span>
+              <span class="sb-version">v115</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -33319,6 +33319,7 @@ function render() {
                   ${post.tags && post.tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">${post.tags.map(t => `<span class="post-tag-pill" onclick="event.stopPropagation();toggleTagFilter('${escapeHtml(t)}')" style="cursor:pointer" title="Filter by ${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
                   ${post.publishedAt ? `<div style="margin-top:4px;font-size:11px;color:var(--text-muted)">Published ${new Date(post.publishedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>` : ''}
                   ${post.publishStatus==='failed' ? `<div style="margin-top:4px;font-size:11px;color:var(--text-danger)" title="${escapeHtml(post.publishError||'')}">Error: ${escapeHtml((post.publishError||'Unknown error').substring(0,50))}</div>` : ''}
+                  ${typeof ufCreditLine === 'function' ? ufCreditLine(post) : ''}
                   ${post.igLink && platform.id === 'instagram' ? `<div style="margin-top:4px"><a href="${escapeHtml(post.igLink)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="pp-blog-link" title="${escapeHtml(post.igLink)}">🔗 Blog link: ${escapeHtml(post.igLink.replace(/^https?:\/\//, ''))}</a></div>` : ''}
                   ${post.liveUrl ? `
                     <div style="margin-top:5px">
@@ -33538,6 +33539,7 @@ function renderComposerModal(platform) {
               `}
             </label>
             <input type="file" id="f-image" accept="image/*,video/mp4,video/mov,video/webm,video/quicktime" style="display:none" onchange="handleImageUpload(event)"/>
+            ${typeof ufComposerRow === 'function' ? ufComposerRow(form) : ''}
           </div>
 
           <!_PPESC_-- Platform-specific fields -->
@@ -34487,6 +34489,10 @@ function renderSettingsModal() {
                 style="padding:5px 12px;border-radius:6px;border:1px solid #1a5c35;background:#0d2a1a;color:#34d399;font-size:11.5px;cursor:pointer;font-family:inherit;font-weight:600">
                 ♻️ Restore missing pictures
               </button>
+              <button onclick="ppSavePicturesToComputer()"
+                style="padding:5px 12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-card);color:var(--text-secondary);font-size:11.5px;cursor:pointer;font-family:inherit">
+                💾 Save a copy of all pictures
+              </button>
               <button onclick="clearAllImageCache()"
                 style="padding:5px 12px;border-radius:6px;border:1px solid #7c1a1a;background:#2a0d0d;color:#f87171;font-size:11.5px;cursor:pointer;font-family:inherit">
                 ⚠️ Clear ALL images
@@ -34580,7 +34586,7 @@ async function checkStorageUsage() {
 }
 
 async function clearAllImageCache() {
-  if (!confirm('Delete ALL stored pictures, for every brand (A, B and C)? Every post and draft in all three brands loses its picture. This cannot be undone.')) return;
+  if (!confirm('Clear the picture store for every brand (A, B and C)? Your posts and drafts keep their pictures: PostPilot puts them back from its safety copies. To free up space, delete the posts or drafts you no longer need, then use 🧹 Clean up unused pictures.')) return;
   try {
     const db = await openImageDb();
     await new Promise((res, rej) => {
@@ -41945,11 +41951,11 @@ function _pdPanelHtml() {
   // Image
   if (img) {
     const share = typeof navigator.canShare === 'function' ? `<button type="button" class="pd-btn" data-pd="share">↗ Share</button>` : '';
-    rows += _pdRow(++n, 'Image', `<div class="pd-imgrow">${f.isVideo ? `<video class="pd-thumb" src="${_pdE(img)}" muted></video>` : `<img class="pd-thumb" src="${_pdE(img)}" alt=""/>`}<span class="pd-fn">${_pdE(f.imageName || '')}</span></div>`,
+    rows += _pdRow(++n, 'Image', `<div class="pd-imgrow">${f.isVideo ? `<video class="pd-thumb" src="${_pdE(img)}" muted></video>` : `<img class="pd-thumb" src="${_pdE(img)}" alt=""/>`}<span class="pd-fn">${_pdE(f.imageName || '')}</span></div>${typeof ufPanelCredit === 'function' ? ufPanelCredit(f, pid) : ''}`,
       `${f.isVideo ? '' : _pdBtn('image', '🖼 Copy image')}<button type="button" class="pd-btn" data-pd="save">⬇ Save</button>${share}`);
   }
   // The blog link: in the post's own link field (Pinterest, Google's button, Bluesky…) or the first comment
-  if (fc) rows += _pdRow(++n, 'First comment <span class="pd-sub">(the blog link goes in the comments)</span>', `<div class="pd-prev pd-full">${_pdE(fc)}</div>`,
+  if (fc) rows += _pdRow(++n, 'First comment' + (link && fc.includes(link) ? ' <span class="pd-sub">(the blog link goes in the comments)</span>' : ''), `<div class="pd-prev pd-full">${_pdE(fc)}</div>`,
     `${_pdBtn('comment', '📋 Copy first comment')}<button type="button" class="pd-btn pd-ghost" data-pd="tpl" title="Change the wording of first comments">✎</button>`);
   else if (link && !cap.includes(link)) rows += _pdRow(++n, pid === 'google' ? 'Button link' : 'Link', `<div class="pd-prev pd-url">${_pdE(link)}</div>`, _pdBtn('link', '📋 Copy link'));
   // The live link (or "scheduled on the platform")
@@ -42772,6 +42778,26 @@ function _bsFacets(text, extra) {
   return out.sort((a, b) => a.index.byteStart - b.index.byteStart);
 }
 const _bsShort = (u) => { const s = String(u).replace(/^https?:\/\/(www\.)?/, ''); return s.length > 38 ? s.slice(0, 35) + '…' : s; };
+// The reply under a post: the blog link (when it didn't fit in the post) and the photo credit, with the
+// photographer's name linked to their Unsplash profile
+function _bsReplyFor(post, replyLink) {
+  let text = '';
+  const extra = [];
+  if (replyLink) {
+    const shown = _bsShort(replyLink);
+    text = _pdCommentFor(replyLink, shown);
+    const i = text.indexOf(shown);
+    if (i >= 0) extra.push({ start: i, len: shown.length, uri: replyLink });
+  }
+  const c = typeof _ufCredit === 'function' && _ufCommentOn() ? _ufCredit(post) : null;
+  if (c) {
+    const pre = text ? text + '\n\n' : '', head = '📷 Photo by ';
+    text = pre + head + c.name + ' on Unsplash';
+    extra.push({ start: pre.length + head.length, len: c.name.length, uri: _ufRef(_ufProfile(c)) });
+    extra.push({ start: text.length - 8, len: 8, uri: _ufRef('https://unsplash.com/') });
+  }
+  return text ? { text, extra } : null;
+}
 async function _bsPublish(post) {
   const text0 = String(post.bskyText || _ppPostText(post, 'bluesky') || '').trim();
   const link = String(post.bskyUrl || '').trim();
@@ -42796,9 +42822,9 @@ async function _bsPublish(post) {
   }
   const made = await _bsAuthed('com.atproto.repo.createRecord', { json: { repo: s.did, collection: 'app.bsky.feed.post', record } });
   const rkey = String(made.uri || '').split('/').pop();
-  if (replyLink) {
-    const shown = _bsShort(replyLink), rt = _pdCommentFor(replyLink, shown), i = rt.indexOf(shown);
-    const reply = { $type: 'app.bsky.feed.post', text: rt, createdAt: new Date().toISOString(), langs: ['en'], facets: _bsFacets(rt, [{ start: i, len: _bsShort(replyLink).length, uri: replyLink }]),
+  const rp = _bsReplyFor(post, replyLink);
+  if (rp) {
+    const reply = { $type: 'app.bsky.feed.post', text: rp.text, createdAt: new Date().toISOString(), langs: ['en'], facets: _bsFacets(rp.text, rp.extra),
       reply: { root: { uri: made.uri, cid: made.cid }, parent: { uri: made.uri, cid: made.cid } } };
     try { await _bsAuthed('com.atproto.repo.createRecord', { json: { repo: s.did, collection: 'app.bsky.feed.post', record: reply } }); } catch (e) {}
   }
@@ -43585,12 +43611,12 @@ async function _piSavedFolder() {
     return await new Promise(res => { const q = db.transaction('handles', 'readonly').objectStore('handles').get('saveDir'); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); });
   } catch (e) { return null; }
 }
-function _piSay(html) { const el = document.getElementById('pi-out'); if (el) el.innerHTML = html; }
+function _piSay(html) { const el = document.getElementById('pi-out'); if (el) { el.innerHTML = html; try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {} } }
 function _piReport(r, src) {
   const left = r.left.slice(0, 40).map(x => `<li><b style="color:${_pdColor(x.pid)}">${_pdE(_pdName(x.pid))}</b>${x.when ? ' · ' + _pdE(_ppNiceDay(x.when)) : ' · draft'} · <span class="pi-fn">${_pdE(x.name || 'no file name saved')}</span></li>`).join('');
-  _piSay(`<p class="pd-note ${r.n ? 'pd-good' : 'pd-warn'}">${r.n ? `✅ ${src === 'batch' ? 'Rebuilt' : 'Put back'} ${r.n} picture${r.n === 1 ? '' : 's'}${src === 'batch' ? ' from your saved batches' : ''}.` : `None of the ${r.files} picture file${r.files === 1 ? '' : 's'} matched a missing picture by name.`}</p>`
+  _piSay(`<p class="pd-note ${r.n ? 'pd-good' : 'pd-warn'}">${r.n ? `✅ ${src === 'batch' ? 'Rebuilt' : 'Put back'} ${r.n} picture${r.n === 1 ? '' : 's'}${src === 'batch' ? ' from your saved batches' : src === 'backup' ? ' from your backup file (every brand)' : ''}.` : src === 'backup' ? 'None of the pictures in that backup file were missing.' : `None of the ${r.files} picture file${r.files === 1 ? '' : 's'} matched a missing picture by name.`}</p>`
     + (r.check && r.check.length ? `<p class="pd-note pd-warn">${r.check.length} of them had more than one file with the same name (like "name (2).png"), so PostPilot used the newest. Give ${r.check.length === 1 ? 'it' : 'them'} a quick look: ${_pdE(r.check.slice(0, 6).map(x => _pdName(x.pid) + (x.when ? ' ' + _ppNiceDay(x.when) : '')).join(', '))}${r.check.length > 6 ? '…' : ''}.</p>` : '')
-    + (r.left.length ? `<p class="pd-note">Still missing (${r.left.length})${src === 'batch' ? ": these weren't in your latest batches. If you have their files, pick them with 🖼 Pick pictures; otherwise they need remaking." : ': look for these file names, then pick them with 🖼 Pick pictures.'}</p><ul class="pi-left">${left}</ul>${r.left.length > 40 ? '<p class="pd-note">…and more.</p>' : ''}` : '<p class="pd-note">Every post and draft in this brand has its picture again.</p>'));
+    + (r.left.length ? `<p class="pd-note">Still missing (${r.left.length})${src === 'batch' ? ": these weren't in your latest batches. If you have their files, pick them with 🖼 Pick pictures; otherwise fill them with 🌄 Fill from Unsplash." : ': look for these file names and pick them with 🖼 Pick pictures, or fill them with 🌄 Fill from Unsplash.'}</p><ul class="pi-left">${left}</ul>${r.left.length > 40 ? '<p class="pd-note">…and more.</p>' : ''}` : '<p class="pd-note">Every post and draft in this brand has its picture again.</p>'));
   _piCount();
 }
 async function piFromFolder() {
@@ -43641,18 +43667,25 @@ async function pdRestoreOpen() {
     <div class="pd-mb">
       <p class="pd-note">${m.n ? `<b>${m.posts.length}</b> post${m.posts.length === 1 ? '' : 's'}${m.drafts.length ? ` and <b>${m.drafts.length}</b> draft${m.drafts.length === 1 ? '' : 's'}` : ''} in <b>${_pdE(brand)}</b> ${m.n === 1 ? 'is' : 'are'} missing ${m.n === 1 ? 'its picture' : 'their pictures'}.` : `Every post and draft in <b>${_pdE(brand)}</b> has its picture.`}
       </p>
-      <p class="pd-note"><b>Rebuild from your saved batches:</b> each platform keeps its latest batch (text, layout and photo), so posts that came from those batches can be drawn again exactly as they were.</p>
-      <div class="pi-btns"><button type="button" class="pd-btn pd-primary" onclick="piFromBatches(this)">🔁 Rebuild from your saved batches</button></div>
-      <p class="pd-note"><b>Or from picture files</b> on your computer, matched by file name (for example <i>Pet-carrier_0001_pinterest.png</i>):</p>
+      <p class="pd-note" id="pi-safe">🛡 Checking your safety copies…</p>
+      ${m.n ? `<p class="pi-h">Get them back</p>
+      <p class="pd-note"><b>🌄 Fill from Unsplash:</b> a photo that fits each post (from its headline, caption and blog link), starting with today's posts, with its photographer credited. It can rebuild the ones in your saved batches first.</p>
+      <p class="pd-note"><b>🔁 Rebuild from your saved batches:</b> each platform keeps its latest batch (text, layout and photo), so posts that came from those batches can be drawn again exactly as they were.</p>
+      <div class="pi-btns"><button type="button" class="pd-btn pd-primary" onclick="pdCloseModal('pi-restore'); pdUnsplashOpen()">🌄 Fill from Unsplash</button><button type="button" class="pd-btn" onclick="piFromBatches(this)">🔁 Rebuild from your saved batches</button></div>` : ''}
+      <p class="pd-note"><b>From files on your computer:</b> picture files matched by file name (for example <i>Pet-carrier_0001_pinterest.png</i>), or a backup file PostPilot saved:</p>
       <div class="pi-btns">
         ${h ? `<button type="button" class="pd-btn" onclick="piFromFolder()">📁 Look in your PostPilot folder (${_pdE(h.name || 'saved folder')})</button>` : ''}
         <label class="pd-btn">📂 Pick a folder<input type="file" webkitdirectory multiple hidden onchange="piFromFiles(this)"/></label>
         <label class="pd-btn">🖼 Pick pictures<input type="file" accept="image/*,video/*" multiple hidden onchange="piFromFiles(this)"/></label>
+        <label class="pd-btn">📦 Restore from a backup file<input type="file" accept=".zip,application/zip" hidden onchange="piFromBackupFile(this)"/></label>
       </div>
+      <p class="pi-h">Keep them safe</p>
+      <div class="pi-btns"><button type="button" class="pd-btn" onclick="ppSavePicturesToComputer()">💾 Save a copy to this computer</button><button type="button" class="pd-btn" onclick="ufCopiesOpen()">🗂 See all safety copies</button></div>
       <div id="pi-out" role="status" aria-live="polite"></div>
-      <p class="pd-note pi-small">For another brand, switch to it: this window is also under ⚙ Settings, at the bottom by 💾 Storage Usage.</p>
+      <p class="pd-note pi-small">The copy to this computer is one .zip file with every brand's pictures; 📦 Restore from a backup file puts them all back. For another brand's missing pictures, switch to it: this window is also under ⚙ Settings, at the bottom by 💾 Storage Usage.</p>
     </div>
     <div class="pd-mf"><button type="button" class="pd-btn" onclick="pdCloseModal('pi-restore')">Close</button></div>`, true);
+  if (typeof _ufSafetyHtml === 'function') _ufSafetyHtml().then(x => { const el = document.getElementById('pi-safe'); if (el) el.innerHTML = x; }).catch(() => {});
 }
 // A heads-up when this brand has posts without their pictures (once per visit, unless the number changes)
 let _piBusy = false;
@@ -43660,16 +43693,19 @@ async function _piCount() {
   if (_piBusy) return;
   if (!_piMissing().n) { const c = document.getElementById('pdc-imgmiss'); if (c) c.remove(); return; }
   _piBusy = true;
-  let n = 0;
-  try { n = (await _piFind()).n; } catch (e) {} finally { _piBusy = false; }
+  let n = 0, vids = 0;
+  try { const m = await _piFind(); n = m.n; vids = m.posts.filter(x => x.p.isVideo || x.p.isGif || /\.(mp4|mov|webm|gif)$/i.test(String(x.p.imageName || ''))).length + m.drafts.filter(x => x.d.isVideo || x.d.isGif || /\.(mp4|mov|webm|gif)$/i.test(String(x.d.imageName || ''))).length; } catch (e) {} finally { _piBusy = false; }
   const ws = getActiveWorkspace(), k = 'pi_seen_' + ws;
   const card = document.getElementById('pdc-imgmiss');
   if (!n) { if (card) card.remove(); return; }
   let seen = '';
   try { seen = sessionStorage.getItem(k) || ''; } catch (e) {}
   if (seen === String(n) || card) return;
-  _pdCard('imgmiss', `<div class="pp-rem-title">🖼 ${n} post${n === 1 ? ' is' : 's are'} missing ${n === 1 ? 'its picture' : 'their pictures'}</div><div class="pp-rem-text">PostPilot can rebuild the ones from your saved batches, or put them back from picture files.</div>`,
-    [['♻️ Restore pictures', (e, c) => { c.remove(); pdRestoreOpen(); }, true], ['Later', (e, c) => { try { sessionStorage.setItem(k, String(n)); } catch (x) {} c.remove(); }]], '#ef4444',
+  const later = ['Later', (e, c) => { try { sessionStorage.setItem(k, String(n)); } catch (x) {} c.remove(); }];
+  if (vids && vids === n) _pdCard('imgmiss', `<div class="pp-rem-title">🎬 ${n} post${n === 1 ? ' is' : 's are'} missing ${n === 1 ? 'its video or GIF' : 'their videos or GIFs'}</div><div class="pp-rem-text">${n === 1 ? 'It needs' : 'They need'} re-uploading in ${n === 1 ? 'its' : 'their'} editor, or put back from files.</div>`,
+    [['♻️ Restore', (e, c) => { c.remove(); pdRestoreOpen(); }, true], later], '#ef4444', () => { try { sessionStorage.setItem(k, String(n)); } catch (x) {} });
+  else _pdCard('imgmiss', `<div class="pp-rem-title">🖼 ${n} post${n === 1 ? ' is' : 's are'} missing ${n === 1 ? 'its picture' : 'their pictures'}</div><div class="pp-rem-text">Fill them with Unsplash photos that fit each post (today's first), rebuild the ones from your saved batches, or put them back from files.</div>`,
+    [['🌄 Fill from Unsplash', (e, c) => { c.remove(); pdUnsplashOpen(); }, true], ['♻️ Restore', (e, c) => { c.remove(); pdRestoreOpen(); }], later], '#ef4444',
     () => { try { sessionStorage.setItem(k, String(n)); } catch (x) {} });
 }
 let _piT = 0;
@@ -43684,6 +43720,1405 @@ render = function () { const r = _piOrigRender.apply(this, arguments); clearTime
     .pi-left { margin: 6px 0 0; padding-left: 18px; max-height: 220px; overflow: auto; font-size: 12px; color: var(--text-secondary, #b8bdd6); line-height: 1.6; }
     .pi-fn { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; color: var(--text-primary, #e8ecf8); overflow-wrap: anywhere; }
     .pi-small { font-size: 11.5px; opacity: .85; }`;
+  document.head.appendChild(st);
+})();
+
+// ═════════════════════════════════════════════════════════════════
+// UNSPLASH PHOTOS FOR POSTS + THE PICTURE SAFETY NET (v115)
+// 🌄 Fill from Unsplash: every post (or draft) that lost its picture gets a photo that fits it, found on Unsplash
+// from its headline, caption and blog link and cropped to its platform's size. Today's posts go first, then the
+// days after. Each photo credits its photographer, with their name linked to their Unsplash profile: on the post,
+// in its editor, in the posting panel, in the first comment (and as a real link in Bluesky replies).
+// The safety net, so a picture can always be got back:
+//  • every picture gets a safety copy in a second store PostPilot never clears by itself (earlier versions too),
+//    and a missing picture is put back from it on its own,
+//  • an Unsplash photo keeps its Unsplash address on the post, so it can always be downloaded again,
+//  • 💾 Save a copy to this computer: every brand's pictures in one backup file, and 📦 Restore from that file,
+//  • 🗂 Safety copies: every picture PostPilot has kept, ready to save as a file,
+//  • the browser is asked to keep PostPilot's storage when the computer runs low on space.
+// ═════════════════════════════════════════════════════════════════
+const _uf = { busy: false, stop: false, cache: new Map(), items: [], opts: null, seen: {}, tried: new Set(), reg: null, prev: null, pick: null,
+  resumeT: 0, resumeAt: 0, zipBusy: false, blobUrls: [], copies: [], copiesShown: 0, renderT: 0, startDone: false, q: {}, healed: 0, needSave: false };
+// The size each platform's pictures are made at (the Post Creator's sizes when it's there)
+const UF_SIZES = { instagram: [1080, 1440], pinterest: [1000, 1500], google: [1200, 900], linkedin: [1080, 1350], facebook: [1080, 1350], twitter: [1600, 900], threads: [1080, 1350],
+  tiktok: [1080, 1920], youtube: [1280, 720], bluesky: [1080, 1080], shopify: [1200, 1200], tumblr: [1280, 1920], kofi: [1200, 630], alignable: [1200, 750], patreon: [1600, 400] };
+function _ufSize(pid) {
+  try { const P = window.parent; if (P && P !== window && typeof P.ppPlatSize === 'function') { const s = P.ppPlatSize(pid); if (s && s.w > 0 && s.h > 0) return [s.w, s.h]; } } catch (e) {}
+  return UF_SIZES[pid] || [1080, 1080];
+}
+const _ufOrient = (w, h) => { const r = w / h; return r < 0.9 ? 'portrait' : r > 1.15 ? 'landscape' : 'squarish'; };
+// Unsplash goes through the Post Creator's keys (up to five, each resting for the hour when it's used up)
+function _ufP() { try { const P = window.parent; return P && P !== window && typeof P.usFetch === 'function' ? P : null; } catch (e) { return null; } }
+function _ufHasKey() { const P = _ufP(); try { return !!(P && typeof P._usKeys === 'function' && P._usKeys().some(Boolean)); } catch (e) { return false; } }
+// Unsplash asks for these referral tags on every link back to them
+const _ufRef = (u) => u + (String(u).includes('?') ? '&' : '?') + 'utm_source=postpilot_studio&utm_medium=referral';
+// A short fingerprint of a picture: its length and 512 characters taken from all through it
+function _ufFp(s) {
+  s = String(s || '');
+  if (!s) return '';
+  let h = 0x811c9dc5;
+  const n = s.length, step = Math.max(1, Math.floor(n / 512));
+  for (let i = 0; i < n; i += step) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  h ^= s.charCodeAt(n - 1); h = Math.imul(h, 0x01000193);
+  return n.toString(36) + '-' + (h >>> 0).toString(36);
+}
+const _ufSrc = (x) => (x && (x.imageOriginal || x.image || x.imageFull || x.imageThumb)) || '';
+const _ufDom = (k) => String(k).replace(/[^a-z0-9]/gi, '_');
+
+// ── Photo credits ──
+// Each Unsplash photo's credit is also kept by its picture's fingerprint, so copies of a post (to another
+// platform, from a draft) carry the credit too.
+const UF_REG = 'postpilot_unsplash_credits';
+function _ufReg() {
+  if (!_uf.reg) { const r = _pdLS(UF_REG, {}); _uf.reg = r && typeof r === 'object' ? r : {}; }
+  return _uf.reg;
+}
+function _ufRegPut(fp, c) {
+  if (!fp || !c) return;
+  const r = _ufReg();
+  r[fp] = { id: c.id, name: c.name, user: c.user, link: c.link, page: c.page, url: c.url, w: c.w, h: c.h, fmt: c.fmt, fp, at: c.at || Date.now() };
+  const keys = Object.keys(r);
+  if (keys.length > 600) keys.sort((a, b) => (r[a].at || 0) - (r[b].at || 0)).slice(0, keys.length - 600).forEach(k => { delete r[k]; });
+  _pdSet(UF_REG, r);
+}
+// The Unsplash photo a post or draft shows (only while its picture is still that photo)
+function _ufCredit(x) {
+  if (!x) return null;
+  const src = _ufSrc(x);
+  if (!src) return null;
+  const fp = _ufFp(src), own = x.unsplash && x.unsplash.name ? x.unsplash : null;
+  if (own && (!own.fp || own.fp === fp)) return own;
+  const r = _ufReg()[fp];
+  return r && r.name ? r : null;
+}
+const _ufProfile = (c) => (c && c.link) || (c && c.user ? 'https://unsplash.com/@' + c.user : 'https://unsplash.com/');
+function ufCreditHtml(c) {
+  if (!c || !c.name) return '';
+  return `📷 Photo by <a href="${_pdE(_ufRef(_ufProfile(c)))}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="${_pdE(c.name)} on Unsplash">${_pdE(c.name)}</a> on <a href="${_pdE(_ufRef('https://unsplash.com/'))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Unsplash</a>`;
+}
+// Under a post in the list
+function ufCreditLine(post) { const c = _ufCredit(post); return c ? `<div class="uf-credit uf-card">${ufCreditHtml(c)}</div>` : ''; }
+// The words that go in a first comment (Instagram doesn't link names, so the profile goes after it)
+function _ufCreditText(c) {
+  const u = c.user || (String(c.link || '').match(/unsplash\.com\/@([^/?#\s]+)/) || [])[1] || '';
+  return `📷 Photo by ${c.name} on Unsplash` + (u ? `: unsplash.com/@${u}` : '');
+}
+const _ufCommentOn = () => _pdLS(wsKey('postpilot_uf_credit_comment'), true) !== false;
+// The first comment carries the photo credit (Instagram, Facebook and LinkedIn)
+const _ufOrigFirstComment = _pdFirstComment;
+_pdFirstComment = function (src, pid) {
+  const fc = _ufOrigFirstComment.apply(this, arguments);
+  if (!PD_COMMENT_PLATS.has(pid) || !_ufCommentOn()) return fc;
+  const c = _ufCredit(src);
+  if (!c) return fc;
+  return (fc ? fc + '\n\n' : '') + _ufCreditText(c);
+};
+// In the posting panel, under the picture
+function ufPanelCredit(f, pid) {
+  const c = _ufCredit(f);
+  if (!c) return '';
+  const inC = PD_COMMENT_PLATS.has(pid) || pid === 'bluesky', on = _ufCommentOn(), where = pid === 'bluesky' ? 'a reply under the post' : 'the first comment';
+  return `<div class="uf-credit uf-pd"><div>${ufCreditHtml(c)}</div><div class="uf-pd-act">${inC ? (on ? `✓ In ${where} · <button type="button" class="pd-link" data-uf="cc-off">Leave it out</button> · ` : `<button type="button" class="pd-link" data-uf="cc-on">Add it to ${where}</button> · `) : ''}<button type="button" class="pd-link" data-uf="cc-copy">📋 Copy credit</button></div></div>`;
+}
+// In the post's editor, under its image
+function ufComposerRow(form) {
+  if (!form || form.isVideo) return '';
+  const c = _ufCredit(form);
+  const k = String(state.editingPostId) + '|' + state.activePlatform;
+  const back = _uf.prev && _uf.prev.key === k;
+  return `<div class="uf-crow">${c ? `<span class="uf-credit">${ufCreditHtml(c)}</span>` : ''}<button type="button" class="uf-cbtn" onclick="event.preventDefault(); ufPickOpen({ form: true })">🌄 ${c ? 'Another Unsplash photo' : form.image ? 'Use an Unsplash photo instead' : 'Find a photo on Unsplash'}</button>${back ? `<button type="button" class="uf-cbtn" onclick="event.preventDefault(); ufPutBackPrev()">↩ Put back the picture it had</button>` : ''}</div>`;
+}
+
+// ── What each post is about, as words to search Unsplash for ──
+const UF_PLAT_TOKENS = new Set(Object.keys(UF_SIZES).concat(['pin', 'ig', 'fb', 'li', 'x', 'gbp', 'gmb', 'yt', 'tt', 'bsky']));
+const UF_STOP = new Set(('a an the and or but for to of in on at by with from into your you our we us my me it its is are was be been this that these those how what why when where who which ' +
+  'tips tip ways things guide best top new now get got more about can do does should will need know before after during every all any some here there just make sure keep stay start youre dont cant isnt vs').split(' '));
+const UF_JARGON = new Set('insurance insured insurer coverage covered cover policy policies quote quotes agent agents agency farmers young douglas legacy protectors brandpost brand post posts pin pins blog read learn click link bio draft image photo picture png jpg'.split(' '));
+const UF_RULES = [
+  // Holidays and seasons, with what the post is about
+  [/halloween|trick or treat|trunk or treat/, /\b(pets?|dogs?|cats?|pupp(y|ies)|kittens?)\b/, 'dog halloween costume'],
+  [/halloween|trick or treat|trunk or treat/, /\b(driv\w*|cars?|roads?|streets?|pedestrians?|crosswalks?)\b/, 'trick or treaters street'],
+  [/halloween|trick or treat|trunk or treat/, /\b(home|house|porch|decorations?|decor|candles?|fires?)\b/, 'halloween porch decorations'],
+  [/halloween|trick or treat|trunk or treat|jack o lantern/, null, 'halloween pumpkins'],
+  [/thanksgiving|friendsgiving|turkey day/, /\b(fry|fryer|fires?|kitchen|cook\w*|oven|grease)\b/, 'thanksgiving turkey kitchen'],
+  [/thanksgiving|friendsgiving|turkey day/, /\b(travel\w*|roads?|driv\w*|trips?)\b/, 'autumn road trip'],
+  [/thanksgiving|friendsgiving|turkey day/, null, 'thanksgiving family dinner'],
+  [/black friday|cyber monday|small business saturday|holiday shopping|shopping season|green monday|prime day|singles day|free shipping day/, null, 'holiday shopping bags'],
+  [/christmas|holiday season|the holidays|hanukkah|kwanzaa|santa/, /\b(trees?|lights?|candles?|fires?|decorations?|decor)\b/, 'christmas tree lights'],
+  [/christmas|holiday season|the holidays|hanukkah|santa/, /\b(packages?|porch pirates?|deliver\w*|gifts?|presents?)\b/, 'christmas gifts'],
+  [/christmas|holiday season|the holidays|hanukkah|santa/, /\b(travel\w*|roads?|driv\w*|trips?|flights?)\b/, 'holiday road trip'],
+  [/christmas|santa/, null, 'christmas family'],
+  [/new year|resolutions?/, null, 'new year celebration'],
+  [/valentine/, null, 'valentines day'],
+  [/st patricks|saint patricks/, null, 'st patricks day'],
+  [/easter/, null, 'easter spring'],
+  [/mothers day/, null, 'mother and child'],
+  [/fathers day/, null, 'father and child'],
+  [/fourth of july|4th of july|independence day|fireworks?/, null, 'fourth of july fireworks'],
+  [/memorial day|labor day|veterans day/, null, 'american flag'],
+  [/back to school|school year|school bus|school zones?/, null, 'back to school'],
+  [/super bowl|game day|tailgat\w*/, null, 'football watch party'],
+  [/tax (season|refunds?|day|returns?)|\btaxes\b/, null, 'tax paperwork'],
+  [/spring cleaning/, null, 'spring cleaning home'],
+  [/slip and fall|trip and fall/, null, 'wet floor sign'],
+  // Pets
+  [/\b(pets?|dogs?|cats?|pupp(y|ies)|kittens?)\b/, /\b(vets?|veterinar\w*|surgery|illness|sick|emergency|accidents?|injur\w*)\b/, 'veterinarian with dog'],
+  [/\b(pets?|dogs?|cats?|pupp(y|ies)|kittens?)\b/, /\b(travel\w*|road trips?|car rides?|vacation)\b/, 'dog car ride'],
+  [/\b(cats?|kittens?)\b/, null, 'cat at home'],
+  [/\b(pets?|dogs?|pupp(y|ies))\b/, null, 'happy dog'],
+  // Cars and driving
+  [/teen drivers?|new drivers?|learners permit|driving test|first car|student drivers?/, null, 'teen driver'],
+  [/\b(motorcycles?|motorbikes?)\b/, null, 'motorcycle rider'],
+  [/\b(rideshare|uber|lyft|doordash|delivery drivers?)\b/, null, 'rideshare driver'],
+  [/electric (cars?|vehicles?)|\bevs?\b|charging stations?/, null, 'electric car charging'],
+  [/\b(car|auto|vehicle) (theft|thieves|break ins?)|catalytic converters?|stolen (cars?|vehicles?)/, null, 'parked car at night'],
+  [/\b(accidents?|crash\w*|collisions?|fender benders?|hit and run)\b/, /\b(cars?|auto|driv\w*|vehicles?|roads?)\b/, 'car accident'],
+  [/\b(rain\w*|wet roads?|fog\w*|hydroplan\w*|storms?)\b/, /\b(driv\w*|roads?|cars?)\b/, 'driving in rain'],
+  [/\b(winter|snow\w*|ice|icy)\b/, /\b(driv\w*|roads?|cars?)\b/, 'winter road'],
+  [/road trips?|\bvacation\b|\btravel\w*/, /\b(cars?|driv\w*|roads?)\b/, 'road trip car'],
+  [/\b(auto|autos|cars?|vehicles?|drivers?|driving|commut\w*|dmv|smog)\b/, null, 'car on the road'],
+  // Home
+  [/earthquakes?/, null, 'emergency preparedness kit'],
+  [/wildfires?|fire season|brush fires?|red flag warning|defensible space/, null, 'wildfire smoke hills'],
+  [/\bfloods?\b|flooding|atmospheric river/, null, 'flooded street'],
+  [/smoke (alarms?|detectors?)|fire extinguishers?|fire safety|kitchen fires?|house fires?/, null, 'fire extinguisher'],
+  [/\b(burglar\w*|break ins?|home security|doorbell cameras?|security cameras?|porch pirates?)\b/, null, 'home security camera'],
+  [/water damage|\bleak\w*|burst pipes?|plumbing|water heaters?/, null, 'leaking pipe'],
+  [/\broof\w*/, null, 'house roof'],
+  [/\b(pools?|swimming|trampolines?)\b/, null, 'backyard pool'],
+  [/power outages?|blackouts?|generators?/, null, 'power outage'],
+  [/heat waves?|extreme heat|air condition\w*/, null, 'summer heat'],
+  [/\b(renters?|renting|apartments?|tenants?)\b/, null, 'cozy apartment'],
+  [/\bcondos?\b/, null, 'condo building'],
+  [/\b(landlords?|rental propert\w*|airbnb|vacation rentals?)\b/, null, 'rental house'],
+  [/first home|new home|home ?buyers?|buying a home|\bmoving\b|move in|closing day/, null, 'new home keys'],
+  [/\b(home|homes|homeowners?|house|houses|household)\b/, null, 'cozy family home'],
+  // Life, health and family
+  [/\b(retire\w*|annuit\w*|pensions?|401k)\b/, null, 'retired couple'],
+  [/final expense|funeral|burial|end of life|estate plan\w*/, null, 'senior couple'],
+  [/new baby|newborn|expecting|new parents?/, null, 'new parents with baby'],
+  [/life insurance|term life|whole life|\biul\b|protect your family|loved ones/, null, 'happy family'],
+  [/medicare|open enrollment|health (insurance|plans?|coverage)|\bdoctors?\b|\bdental\b|medical/, null, 'doctor with patient'],
+  // Business
+  [/food trucks?/, null, 'food truck'],
+  [/\b(restaurants?|cafes?|bakery|bakeries|catering)\b/, null, 'restaurant kitchen'],
+  [/barber\w*/, null, 'barbershop'],
+  [/\b(salons?|stylists?|beauty|spas?|nails?)\b/, null, 'hair salon'],
+  [/\b(contractors?|construction|builders?|handyman|plumbers?|electricians?)\b/, null, 'construction worker'],
+  [/workers comp|workplace (injur\w*|safety)/, null, 'workplace safety'],
+  [/cyber|data breach\w*|phishing|\bscams?\b|fraud|identity theft|\bhack\w*/, null, 'cyber security'],
+  [/\b(trucking|fleet|commercial auto|semi trucks?)\b/, null, 'truck on highway'],
+  [/small business\w*|business owners?|\bllc\b|entrepreneur\w*|storefront|shop owners?|commercial|liability/, null, 'small business owner'],
+  // Money and coverage
+  [/\b(savings|saving money|discounts?|bundl\w*|budget\w*|lower your (rate|premium)s?)\b/, null, 'family budget'],
+  [/umbrella/, null, 'umbrella in rain'],
+  [/policy review|coverage review|review your (policy|coverage)|annual review|check ?up/, null, 'meeting with advisor'],
+  // The agency, and the time of year
+  [/\b(hiring|careers?|join our team|were hiring)\b/, null, 'friendly office team'],
+  [/\b(thank you|thanks|grateful|gratitude|appreciat\w*)\b/, null, 'thank you'],
+  [/\b(reviews?|testimonials?|5 stars?|five stars?)\b/, null, 'happy customer'],
+  [/\b(events?|webinars?|workshops?|seminars?|open house)\b/, null, 'community event'],
+  [/\b(community|neighbors?|neighborhoods?|ontario|inland empire|southern california|california)\b/, null, 'california neighborhood'],
+  [/\b(fall|autumn)\b/, null, 'autumn leaves'],
+  [/\bsummer\b/, null, 'summer family'],
+  [/\bwinter\b/, null, 'cozy winter'],
+  [/\bspring\b/, null, 'spring flowers'],
+  [/\b(team|agents?|office|staff)\b/, null, 'friendly office team'],
+  [/\b(families|family|kids|children|parents?)\b/, null, 'happy family'],
+];
+// The headline the picture was made from ("Halloween-Pet-Safety_0012_pinterest.png" → "Halloween Pet Safety")
+function _ufHead(x) {
+  if (x.srcHeader) return String(x.srcHeader);
+  const parts = String(x.imageName || '').replace(/\.[a-z0-9]{2,5}$/i, '').split('_');
+  while (parts.length > 1 && (/^\d+$/.test(parts[parts.length - 1]) || UF_PLAT_TOKENS.has(parts[parts.length - 1].toLowerCase()))) parts.pop();
+  const h = parts.join(' ').replace(/[-_]+/g, ' ').trim();
+  return /^(brandpost|draft|image|post|untitled|pinterest|instagram)( \d+)?$/i.test(h) ? '' : h;
+}
+// Lowercase words only; #HalloweenSafety → "halloween safety"
+function _ufWords(s) {
+  return ' ' + String(s || '').replace(/#([A-Za-z0-9]+)/g, (m, t) => ' ' + t.replace(/([a-z])([A-Z])/g, '$1 $2') + ' ')
+    .toLowerCase().replace(/['’]/g, '').replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+}
+function _ufSlug(x, pid) {
+  const l = _pdLink(x, pid) || x.srcLink || '';
+  try { return decodeURIComponent(new URL(l).pathname); } catch (e) { return String(l); }
+}
+function _ufQuery(x, pid) {
+  x = x || {};
+  const snap = x.formSnapshot || {};
+  const strong = _ufWords([_ufHead(x), x.title, x.srcPinTitle, x.eventTitle, snap.title].filter(Boolean).join(' '));
+  let text = '';
+  try { text = _ppPostText(x, pid) || _ppPostText(snap, pid) || ''; } catch (e) {}
+  const all = strong + _ufWords([text, x.notes, x.srcContent, _ufSlug(x, pid)].filter(Boolean).join(' '));
+  for (const t of [strong, all]) {
+    if (t.trim().length < 2) continue;
+    for (const [a, b, q] of UF_RULES) if (a.test(t) && (!b || b.test(t))) return q;
+  }
+  const words = strong.trim().split(' ').filter(w => w.length > 2 && !UF_STOP.has(w) && !UF_JARGON.has(w) && !/^\d+$/.test(w));
+  return words.length ? words.slice(0, 3).join(' ') : 'happy family home';
+}
+
+// ── Unsplash: search, download (cropped to size) and the download ping Unsplash asks for ──
+async function _ufSearch(q, orient, page) {
+  const key = q + '|' + orient + '|' + (page || 1);
+  if (_uf.cache.has(key)) return _uf.cache.get(key);
+  const P = _ufP();
+  if (!P) { const e = new Error('studio'); e.status = 0; throw e; }
+  const res = await P.usFetch('https://api.unsplash.com/search/photos?query=' + encodeURIComponent(q) + '&per_page=20&page=' + (page || 1) + '&content_filter=high&orientation=' + orient);
+  if (!res.ok) { const e = new Error('Unsplash answered ' + res.status); e.status = res.status; throw e; }
+  const data = await res.json();
+  const out = { results: (data.results || []).filter(p => p && p.id && p.urls && p.urls.raw), pages: Math.max(1, data.total_pages || 1) };
+  _uf.cache.set(key, out);
+  return out;
+}
+// The first photo for these words that no other post uses (fewer words if nothing comes up)
+async function _ufFind(q, orient, used, skip) {
+  const w = String(q).split(' ').filter(Boolean), tries = [w.join(' ')];
+  if (w.length > 2) tries.push(w.slice(0, 2).join(' '));
+  if (w.length > 1) tries.push(w[0]);
+  for (const t of tries) {
+    for (let page = 1; page <= 3; page++) {
+      const r = await _ufSearch(t, orient, page);
+      const ph = r.results.find(p => !used.has(p.id) && !(skip && skip.has(p.id)));
+      if (ph) return { ph, q: t };
+      if (page >= r.pages || !r.results.length) break;
+    }
+  }
+  return null;
+}
+function _ufCreditFrom(ph, q, w, h, fmt) {
+  const u = ph.user || {};
+  const url = ph.urls.raw + (ph.urls.raw.includes('?') ? '&' : '?') + `w=${w}&h=${h}&fit=crop&crop=entropy&q=85&fm=jpg`;
+  return { id: ph.id, name: u.name || u.username || 'Unsplash photographer', user: u.username || '', link: (u.links && u.links.html) || (u.username ? 'https://unsplash.com/@' + u.username : ''),
+    page: (ph.links && ph.links.html) || '', url, dl: (ph.links && ph.links.download_location) || '', q, w, h, fmt, at: Date.now() };
+}
+// Same file type as the picture had ("….png" stays a PNG)
+const _ufFmt = (x) => /\.jpe?g$/i.test(String((x && x.imageName) || '')) ? 'jpg' : 'png';
+async function _ufDownload(url, w, h, fmt) {
+  const r = await fetch(url, { mode: 'cors', credentials: 'omit' });
+  if (!r.ok) throw new Error('the photo didn’t download (' + r.status + ')');
+  const blob = await r.blob();
+  let img, done = () => {};
+  if (typeof createImageBitmap === 'function') { img = await createImageBitmap(blob); done = () => { try { img.close(); } catch (e) {} }; }
+  else {
+    const u = URL.createObjectURL(blob);
+    img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('the photo couldn’t be read')); i.src = u; });
+    done = () => URL.revokeObjectURL(u);
+  }
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  const iw = img.width || img.naturalWidth, ih = img.height || img.naturalHeight;
+  const s = Math.max(w / iw, h / ih), dw = iw * s, dh = ih * s;
+  g.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+  done();
+  return fmt === 'jpg' ? c.toDataURL('image/jpeg', 0.92) : c.toDataURL('image/png');
+}
+function _ufPing(c) { const P = _ufP(); if (P && c && c.dl) { try { P.usFetch(c.dl).catch(() => {}); } catch (e) {} } }
+function _ufRestEnd() {
+  let t = 0;
+  try { const r = JSON.parse(localStorage.getItem('bpc_unsplash_rest') || '{}') || {}; Object.values(r).forEach(v => { if (v && v.until > Date.now() && v.why !== 'rejected') t = t ? Math.min(t, v.until) : v.until; }); } catch (e) {}
+  return t || Date.now() + 3600e3;
+}
+const _ufClock = (t) => new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+const _ufIsLimit = (e) => !!e && (e.status === 429 || e.status === 403 || e.message === 'limit');
+const _ufIsKey = (e) => !!e && (e.status === 401 || e.message === 'key');
+function _ufErrText(e) {
+  if (!e) return 'Something went wrong.';
+  if (e.message === 'studio') return 'Open the Scheduler inside PostPilot Studio to use Unsplash.';
+  if (_ufIsKey(e)) return 'Unsplash didn’t accept your key. Check it in the 🔍 Unsplash window of the Post Creator, or paste a new one here.';
+  if (_ufIsLimit(e)) return `Your Unsplash keys are used up for this hour (Unsplash’s limit). They work again at ${_ufClock(_ufRestEnd())}.`;
+  return 'Couldn’t reach Unsplash (' + (e.message || e) + ').';
+}
+
+// ── The posts and drafts that lost their pictures, today's first ──
+const _ufIsVid = (x) => !!(x && (x.isVideo || /\.(mp4|mov|webm)$/i.test(String(x.imageName || ''))));
+const _ufIsGif = (x) => !!(x && (x.isGif || /\.gif$/i.test(String(x.imageName || ''))));
+// Posts made from the same batch post share one photo ("Pet-Safety_0012_pinterest" and "…_instagram")
+function _ufGroup(x) {
+  const m = String((x && x.imageName) || '').toLowerCase().match(/^(.+?)_(\d{3,4})((?:_[a-z]+)+)\.(png|jpe?g|webp)$/);
+  if (!m || m[1].length < 3 || /^(brandpost|draft|image|post|pasted-image|untitled|download|screenshot)$/.test(m[1])) return '';
+  return m[1] + '_' + m[2];
+}
+async function _ufItems() {
+  const m = await _piFind();
+  const today = _pdDay(0), out = [];
+  m.posts.forEach(({ pid, p }) => {
+    const d = p.scheduledDate || '';
+    out.push({ kind: 'post', pid, id: String(p.id), x: p, date: d, time: p.scheduledTime || '', band: !d ? 2 : d === today ? 0 : d > today ? 1 : 3,
+      key: 'post|' + pid + '|' + p.id, skip: _ufIsVid(p) ? 'video' : _ufIsGif(p) ? 'gif' : '' });
+  });
+  m.drafts.forEach(({ pid, d }) => out.push({ kind: 'draft', pid, id: String(d.id), x: d, date: '', time: '', band: 4, key: 'draft|' + pid + '|' + d.id, skip: _ufIsVid(d) ? 'video' : _ufIsGif(d) ? 'gif' : '' }));
+  out.sort((a, b) => a.band - b.band || (a.band === 3 ? (b.date + b.time).localeCompare(a.date + a.time) : (a.date + a.time).localeCompare(b.date + b.time)));
+  return out;
+}
+function _ufCur(it) {
+  const g = it.kind === 'post' ? state.posts : state.drafts;
+  return ((g && g[it.pid]) || []).find(r => String(r.id) === it.id) || null;
+}
+function _ufUsedIds() {
+  const s = new Set();
+  [state.posts, state.drafts].forEach(g => Object.values(g || {}).forEach(a => (a || []).forEach(x => { const c = x && _ufCredit(x); if (c && c.id) s.add(c.id); })));
+  return s;
+}
+const _ufGroupItems = (it) => { const g = _ufGroup(it.x); return g ? _uf.items.filter(o => o !== it && !o.skip && _ufGroup(o.x) === g) : []; };
+
+// ── Putting a photo on a post (saved at once, with a safety copy) ──
+async function _ufPersistOne(ws, kind, pid, rec) {
+  const key = ws + '_' + (kind === 'post' ? _STORAGE_KEY_BASE : _DRAFTS_STORAGE_KEY_BASE);
+  const stripped = kind === 'post' ? await persistPostImages(rec) : await persistDraftImages(rec);
+  ['imageId', 'imageOriginalId', 'imageFullId', 'imageThumbId'].forEach(k => { if (stripped && k in stripped) rec[k] = stripped[k]; });
+  let all = null;
+  try { all = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) {}
+  if (!all || !Array.isArray(all[pid])) return false;
+  const i = all[pid].findIndex(r => r && String(r.id) === String(rec.id));
+  if (i < 0) return false;
+  all[pid][i] = stripped;
+  try { localStorage.setItem(key, JSON.stringify(all)); return true; } catch (e) { return false; }
+}
+async function _ufApply(it, data, credit) {
+  const ws = getActiveWorkspace();
+  if ((it.ws && it.ws !== ws) || _uf.switching) { const e = new Error('brand'); e.brand = true; throw e; }
+  const fp = _ufFp(data), c = Object.assign({}, credit, { fp }), dims = c.w + '×' + c.h;
+  _ufRegPut(fp, c);
+  let rec = null;
+  if (it.kind === 'post') {
+    const arr = (state.posts[it.pid] || []).slice(), i = arr.findIndex(p => String(p.id) === it.id);
+    if (i < 0) return false;
+    rec = { ...arr[i], image: data, imageOriginal: data, imageId: null, imageOriginalId: null, _imageDims: dims, unsplash: c };
+    arr[i] = rec;
+    state.posts = { ...state.posts, [it.pid]: arr };
+    if (state.showComposer && state.form && String(state.editingPostId) === it.id && state.activePlatform === it.pid) {
+      try { syncFormFromDOM(); } catch (e) {}
+      state.form = { ...state.form, image: data, imageOriginal: data, imageId: null, imageOriginalId: null, _imageDims: dims, unsplash: c };
+    }
+  } else {
+    const arr = (state.drafts[it.pid] || []).slice(), i = arr.findIndex(d => String(d.id) === it.id);
+    if (i < 0) return false;
+    rec = { ...arr[i], imageFull: data, imageThumb: data, imageFullId: null, imageThumbId: null, unsplash: c };
+    arr[i] = rec;
+    state.drafts = { ...state.drafts, [it.pid]: arr };
+  }
+  it.x = rec;
+  if (!(await _ufPersistOne(ws, it.kind, it.pid, rec))) { if (it.kind === 'post') await savePosts(state.posts); else await saveDrafts(state.drafts); }
+  return true;
+}
+function _ufSoon() { clearTimeout(_uf.renderT); _uf.renderT = setTimeout(() => { try { render(); } catch (e) {} }, 1500); }
+// After a photo is picked by hand: everything saved again a moment later (whatever else was saving meanwhile)
+function _ufSaveSoon() {
+  clearTimeout(_uf.saveT);
+  const ws = getActiveWorkspace();
+  _uf.saveT = setTimeout(() => { if (getActiveWorkspace() !== ws || _uf.busy) return; try { savePosts(state.posts); saveDrafts(state.drafts); } catch (e) {} }, 2500);
+}
+// A photo for one post: its group's photo, or the first one for its words that nothing else uses
+async function _ufFillOne(it, used, groupPick) {
+  const [w, h] = _ufSize(it.pid), fmt = _ufFmt(it.x), g = _ufGroup(it.x);
+  let q = _uf.q[it.key] || _ufQuery(it.x, it.pid), ph = g && groupPick ? groupPick.get(g) : null;
+  if (!ph) {
+    const f = await _ufFind(q, _ufOrient(w, h), used, _uf.seen[it.key]);
+    if (!f) return false;
+    ph = f.ph; q = f.q;
+  }
+  const c = _ufCreditFrom(ph, q, w, h, fmt);
+  const data = await _ufDownload(c.url, w, h, fmt);
+  if (!(await _ufApply(it, data, c))) return false;
+  used.add(ph.id);
+  if (g && groupPick) groupPick.set(g, ph);
+  (_uf.seen[it.key] = _uf.seen[it.key] || new Set()).add(ph.id);
+  _ufPing(c);
+  return true;
+}
+
+// ── ✨ Auto-fill ──
+function _ufOpts() {
+  const o = Object.assign({ rebuild: true, earlier: true, drafts: true, resume: true, ws: getActiveWorkspace() }, _uf.opts || {});
+  const chk = (id, k) => { const el = document.getElementById(id); if (el) o[k] = !!el.checked; };
+  chk('uf-o-rebuild', 'rebuild'); chk('uf-o-earlier', 'earlier'); chk('uf-o-drafts', 'drafts'); chk('uf-o-resume', 'resume');
+  const rb = document.getElementById('uf-o-rebuild-l');
+  if (rb && rb.hidden) o.rebuild = false;
+  return o;
+}
+function _ufWanted(items, o) { return items.filter(it => !it.skip && (it.band <= 2 || (it.band === 3 && o.earlier) || (it.band === 4 && o.drafts))); }
+function _ufSay(html, warn) { const el = document.getElementById('uf-stat'); if (el) { el.innerHTML = html; el.classList.toggle('pd-warn', !!warn); } }
+function _ufLock(on) {
+  const run = document.getElementById('uf-run'), stop = document.getElementById('uf-stop');
+  if (run) run.disabled = on;
+  if (stop) stop.hidden = !on;
+  document.querySelectorAll('#uf-win .uf-opts input').forEach(i => { i.disabled = on; });
+}
+function ufStop() { _uf.stop = true; _ufSay('Stopping after this one…'); }
+async function ufAutoFill(resumed) {
+  if (_uf.busy) return;
+  const P = _ufP();
+  if (!P) return _ufSay('Open the Scheduler inside PostPilot Studio to use Unsplash.', true);
+  const o = resumed === true && _uf.opts ? _uf.opts : _ufOpts();
+  if (!_ufHasKey() && !o.rebuild) { _ufSay('🔑 Paste your Unsplash key in the box above first.', true); const k = document.getElementById('uf-key'); if (k) k.focus(); return; }
+  if (resumed === true && o.ws !== getActiveWorkspace()) {
+    _pdCard('ufresume', `<div class="pp-rem-title">🌄 Unsplash photos are waiting</div><div class="pp-rem-text">Switch back to <b>${_pdE((getWorkspaceNames() || {})[o.ws] || 'that brand')}</b> and open 🌄 Fill from Unsplash to carry on.</div>`, [], '#f5a623');
+    return;
+  }
+  _uf.opts = Object.assign({}, o, { ws: getActiveWorkspace() });
+  clearTimeout(_uf.resumeT); _uf.resumeAt = 0;
+  { const c = document.getElementById('pdc-ufresume'); if (c) c.remove(); }
+  _uf.busy = true; _uf.stop = false; _ufLock(true);
+  const ws = getActiveWorkspace();
+  let filled = 0, rebuilt = 0, failed = 0, problem = null, fails = 0, total = 0;
+  try {
+    // 1. The posts in the saved batches come back exactly as they were
+    if (o.rebuild && resumed !== true && typeof P.ppRebuildPictures === 'function') {
+      const m = await _piFind();
+      const names = [...new Set(m.posts.map(x => x.p.imageName).concat(m.drafts.map(x => x.d.imageName)).filter(Boolean))];
+      if (names.length) {
+        _ufSay('♻️ Looking through your saved batches…');
+        const got = await P.ppRebuildPictures(names, (i, n) => _ufSay(n ? `♻️ Rebuilding ${Math.min(i + 1, n)} of ${n} from your saved batches…` : '♻️ Looking through your saved batches…'));
+        if (got.length) rebuilt = (await _piRestore(got.map(g => ({ name: g.name, type: 'image/png', lastModified: Date.now(), get: async () => g.blob })))).n;
+      }
+    }
+    // 2. Unsplash for the rest: today, then the days after
+    const items = await _ufItems();
+    _uf.items = items;
+    if (document.getElementById('uf-list')) document.getElementById('uf-list').innerHTML = _ufListHtml(items);
+    const todo = _ufWanted(items, o);
+    total = todo.length;
+    if (todo.length && !_ufHasKey()) { problem = 'nokey'; todo.length = 0; }
+    const used = _ufUsedIds(), groupPick = new Map();
+    for (let k = 0; k < todo.length; k++) {
+      const it = todo[k];
+      if (_uf.stop) { problem = 'stopped'; break; }
+      if (getActiveWorkspace() !== ws) { problem = 'brand'; break; }
+      const cur = _ufCur(it);
+      if (!cur || _ufSrc(cur)) continue; // it has a picture again
+      it.x = cur; it.ws = ws;
+      _ufSay(`🌄 Finding a photo for ${_pdE(_pdName(it.pid))}${it.date ? ' · ' + _pdE(_ppNiceDay(it.date)) : it.kind === 'draft' ? ' · draft' : ''} (${k + 1} of ${todo.length})…`);
+      _ufRow(it, 'busy');
+      try {
+        if (await _ufFillOne(it, used, groupPick)) { filled++; fails = 0; _ufRow(it, 'done'); _ufSoon(); }
+        else { failed++; _ufRow(it, 'none'); }
+      } catch (e) {
+        if (_ufIsKey(e)) { problem = 'key'; _ufRow(it, ''); break; }
+        if (_ufIsLimit(e)) { problem = 'limit'; _ufRow(it, ''); break; }
+        if (e.message === 'studio' || e.brand) { problem = e.brand ? 'brand' : 'studio'; _ufRow(it, ''); break; }
+        failed++; fails++;
+        _ufRow(it, 'err', e.message);
+        if (fails >= 4) { problem = 'net'; break; }
+      }
+    }
+  } catch (e) {
+    problem = _ufIsLimit(e) ? 'limit' : _ufIsKey(e) ? 'key' : 'net';
+  } finally {
+    if (filled) { try { await savePosts(state.posts); await saveDrafts(state.drafts); } catch (e) {} }
+    _uf.busy = false; _ufLock(false);
+    try { render(); } catch (e) {}
+  }
+  const after = await _ufItems(), left = _ufWanted(after, o).length, vids = after.filter(it => it.skip).length;
+  const bits = [];
+  if (rebuilt) bits.push(`♻️ rebuilt ${rebuilt} from your saved batches`);
+  bits.push(`🌄 ${filled} new Unsplash photo${filled === 1 ? '' : 's'}`);
+  let msg = `✅ Done: ${bits.join(', ')}.`;
+  if (problem === 'limit') {
+    msg = `${bits.join(', ')}. Your Unsplash keys are used up for this hour (Unsplash’s limit). ${left} still need${left === 1 ? 's' : ''} a photo.`;
+    if (o.resume && left) { _ufScheduleResume(); msg += ` PostPilot carries on by itself at <b>${_pdE(_ufClock(_uf.resumeAt))}</b> while it stays open.`; }
+    else msg += ` Press ✨ Auto-fill again after ${_pdE(_ufClock(_ufRestEnd()))}.`;
+  } else if (problem === 'key') msg = _pdE(_ufErrText({ status: 401 }));
+  else if (problem === 'nokey') { msg = `${rebuilt ? `♻️ Rebuilt ${rebuilt} from your saved batches. ` : ''}🔑 Paste your Unsplash key in the box above, then press ✨ Auto-fill for the other ${left}.`; const k = document.getElementById('uf-key'); if (k) k.focus(); }
+  else if (problem === 'stopped') msg = `Stopped: ${bits.join(', ')}. ${left} still need${left === 1 ? 's' : ''} a photo.`;
+  else if (problem === 'brand') msg = 'Stopped because you switched brands. Open this window again to carry on.';
+  else if (problem === 'studio') msg = _pdE(_ufErrText({ message: 'studio' }));
+  else if (problem === 'net') msg = `${bits.join(', ')}. Unsplash’s photos didn’t download (is the internet connected?). Press ✨ Auto-fill to try again.`;
+  else if (failed) msg += ` ${failed} didn’t find a photo: use 🔍 Choose on ${failed === 1 ? 'it' : 'those'}.`;
+  if (!problem && !left) msg += vids ? ` Every post that takes a photo has one again (${vids === 1 ? 'the video or GIF needs' : `the ${vids} videos and GIFs need`} re-uploading in ${vids === 1 ? 'its' : 'their'} editor).` : ' Every post in this brand has its picture again.';
+  _ufSay(msg, !!problem && problem !== 'stopped');
+  if (!document.getElementById('uf-win') && (filled || rebuilt))
+    _pdCard('ufdone', `<div class="pp-rem-title">🌄 ${filled + rebuilt} picture${filled + rebuilt === 1 ? '' : 's'} filled</div><div class="pp-rem-text">${msg}</div>`, [['Open the list', (e, c) => { c.remove(); pdUnsplashOpen(); }, true]], '#22c55e');
+  if (document.getElementById('uf-win')) _ufCountRun();
+  return { filled, rebuilt, failed, problem, total };
+}
+function _ufScheduleResume() {
+  clearTimeout(_uf.resumeT);
+  const at = _ufRestEnd() + 60e3;
+  _uf.resumeAt = at;
+  _uf.resumeT = setTimeout(() => { _uf.resumeAt = 0; const c = document.getElementById('pdc-ufresume'); if (c) c.remove(); if (!_uf.busy) ufAutoFill(true); }, Math.max(5e3, at - Date.now()));
+  _pdCard('ufresume', `<div class="pp-rem-title">🌄 More Unsplash photos at ${_pdE(_ufClock(at))}</div><div class="pp-rem-text">Unsplash’s hourly limit was reached. PostPilot fills the rest by itself at ${_pdE(_ufClock(at))}, as long as it stays open.</div>`,
+    [['Don’t carry on', (e, c) => { clearTimeout(_uf.resumeT); _uf.resumeAt = 0; c.remove(); }]], '#f5a623');
+}
+// 🔄 Another photo for one post
+async function _ufAnother(it, btn) {
+  if (_uf.busy) return;
+  const cur = _ufCur(it);
+  if (!cur) return;
+  it.x = cur; it.ws = getActiveWorkspace();
+  const c0 = _ufCredit(cur);
+  const seen = _uf.seen[it.key] = _uf.seen[it.key] || new Set();
+  if (c0 && c0.id) seen.add(c0.id);
+  if (btn) btn.disabled = true;
+  _ufRow(it, 'busy');
+  try {
+    if (await _ufFillOne(it, _ufUsedIds(), null)) { _ufRow(it, 'done'); _ufSoon(); _ufSaveSoon(); }
+    else _ufRow(it, 'none');
+  } catch (e) { _ufRow(it, 'err', _ufErrText(e)); }
+}
+
+// ── The window ──
+function _ufRowHtml(it) {
+  const x = _ufCur(it) || it.x, src = _ufSrc(x), c = src ? _ufCredit(x) : null;
+  const sum = String((it.kind === 'post' ? getPostSummary(x) : (x.srcHeader || x.notes || _ufHead(x) || x.imageName || 'Draft')) || '').slice(0, 110);
+  const when = it.kind === 'draft' ? 'Draft' : it.time ? _ppClock(it.time) : 'No time set';
+  const q = it.skip ? '' : (_uf.q[it.key] || _ufQuery(x, it.pid));
+  return `<div class="uf-row${src ? ' uf-has' : ''}" id="uf-r-${_ufDom(it.key)}" data-k="${_pdE(it.key)}">
+    <div class="uf-th">${src ? `<img src="${_pdE(src)}" alt=""/>` : `<span class="uf-ic" style="color:${_pdColor(it.pid)}">${_pdIcon(it.pid, 20)}</span>`}</div>
+    <div class="uf-mid"><div class="uf-meta"><b style="color:${_pdColor(it.pid)}">${_pdE(_pdName(it.pid))}</b> · ${_pdE(when)}${src ? ' · <span class="pd-good">✓ has its picture</span>' : ''}${it.skip ? ` · <span class="pd-warn">${it.skip === 'video' ? 'a video' : 'a GIF'}: re-upload it in its editor</span>` : ''}</div>
+      <div class="uf-sum">${_pdE(sum)}</div>
+      ${c ? `<div class="uf-credit">${ufCreditHtml(c)}</div>` : q && !src ? `<div class="uf-q" title="What PostPilot searches Unsplash for">🔎 ${_pdE(q)}</div>` : ''}
+      <div class="uf-st" aria-live="polite"></div></div>
+    <div class="uf-act">${it.skip ? '' : `${c ? `<button type="button" class="pd-btn" data-uf="another">🔄 Another</button>` : ''}<button type="button" class="pd-btn" data-uf="choose">🔍 Choose</button>`}</div>
+  </div>`;
+}
+function _ufListHtml(items) {
+  const today = _pdDay(0);
+  const head = (it) => it.skip ? 'Videos and GIFs (a photo can’t replace these)' : it.band === 0 ? 'Today · ' + _ppNiceDay(today) : it.band === 1 ? _ppNiceDay(it.date)
+    : it.band === 2 ? 'Not scheduled yet' : it.band === 3 ? 'Earlier · ' + _ppNiceDay(it.date) : 'Drafts';
+  let out = '', last = '';
+  items.filter(i => !i.skip).concat(items.filter(i => i.skip)).forEach(it => { const h = head(it); if (h !== last) { out += `<div class="uf-day">${_pdE(h)}</div>`; last = h; } out += _ufRowHtml(it); });
+  return out;
+}
+function _ufRow(it, st, msg) {
+  const el = document.getElementById('uf-r-' + _ufDom(it.key));
+  if (!el) return;
+  if (st === 'done') { const t = document.createElement('div'); t.innerHTML = _ufRowHtml(it); el.replaceWith(t.firstElementChild); return; }
+  el.classList.toggle('uf-busy', st === 'busy');
+  const s = el.querySelector('.uf-st');
+  if (s) s.innerHTML = st === 'busy' ? '⏳ Finding a photo…' : st === 'none' ? '<span class="pd-warn">No photo came up for these words: use 🔍 Choose to search your own.</span>'
+    : st === 'err' ? `<span class="pd-warn">⚠ ${_pdE(msg || 'That photo didn’t download')}. Try again.</span>` : '';
+  el.querySelectorAll('[data-uf]').forEach(b => { b.disabled = st === 'busy'; });
+}
+function _ufCountRun() {
+  const o = _ufOpts(), n = _ufWanted(_uf.items, o).filter(it => { const c = _ufCur(it); return c && !_ufSrc(c); }).length;
+  const el = document.getElementById('uf-n'), run = document.getElementById('uf-run');
+  if (el) el.textContent = String(n);
+  if (run && !_uf.busy) run.disabled = !n;
+}
+async function pdUnsplashOpen() {
+  _pdModal('uf-win', `<div class="pd-mh"><h2>🌄 Fill missing pictures from Unsplash</h2><button type="button" class="pd-x" aria-label="Close" onclick="pdCloseModal('uf-win')">✕</button></div>
+    <div class="pd-mb" id="uf-body"><p class="pd-note">Looking for posts without their pictures…</p></div>
+    <div class="pd-mf"><button type="button" class="pd-btn" onclick="pdCloseModal('uf-win')">Close</button></div>`, true);
+  await _ufDraw();
+}
+async function _ufDraw() {
+  const body = document.getElementById('uf-body');
+  if (!body) return;
+  const ws = getActiveWorkspace(), brand = (getWorkspaceNames() || {})[ws] || 'this brand';
+  const items = await _ufItems();
+  _uf.items = items;
+  const fill = items.filter(i => !i.skip), np = fill.filter(i => i.kind === 'post').length, nd = fill.filter(i => i.kind === 'draft').length;
+  const nEarlier = fill.filter(i => i.band === 3).length, o = _ufOpts();
+  if (!fill.length) {
+    body.innerHTML = `<p class="pd-note pd-good">✅ Every post and draft in ${_pdE(brand)} has its picture${items.length ? ' (apart from the videos and GIFs below, which need re-uploading in their editor)' : ''}.</p>
+      <p class="pd-note">To use an Unsplash photo on any post, open it and press <b>🌄 Find a photo on Unsplash</b> under its image.</p><div id="uf-list">${_ufListHtml(items)}</div>`;
+    return;
+  }
+  const what = [np ? `<b>${np}</b> post${np === 1 ? '' : 's'}` : '', nd ? `<b>${nd}</b> draft${nd === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
+  const P = _ufP();
+  const keyRow = !P ? `<p class="pd-note pd-warn">Open the Scheduler inside PostPilot Studio to use Unsplash.</p>` : _ufHasKey() ? '' :
+    `<div class="uf-key"><p class="pd-note pd-warn">🔑 Unsplash needs your free access key first.</p>
+      <p class="pd-note">Get one at <a href="https://unsplash.com/developers" target="_blank" rel="noopener">unsplash.com/developers</a> (Your apps → New Application, then copy its <b>Access Key</b>). Paste it in this box and press <b>Save key</b>:</p>
+      <div class="uf-krow"><input id="uf-key" type="text" placeholder="Paste your Unsplash Access Key here" autocomplete="off" spellcheck="false" aria-label="Your Unsplash Access Key"/><button type="button" class="pd-btn pd-primary" onclick="ufSaveKey()">Save key</button></div></div>`;
+  body.innerHTML = `<p class="pd-note">${what} in <b>${_pdE(brand)}</b> ${fill.length === 1 ? 'is' : 'are'} missing ${fill.length === 1 ? 'its picture' : 'their pictures'}. PostPilot finds an Unsplash photo that fits each one (from its headline, caption and blog link), cropped to its platform's size, starting with today's posts (<b>${_pdE(_ppNiceDay(_pdDay(0)))}</b>) and then the days after. Every photo credits its photographer, with their name linked to their Unsplash profile.</p>
+    ${keyRow}
+    <div class="uf-opts">
+      <label id="uf-o-rebuild-l" hidden><input type="checkbox" id="uf-o-rebuild" ${o.rebuild ? 'checked' : ''}/> <span>♻️ First, rebuild the <b id="uf-nrb">0</b> that are in your saved batches exactly as they were (recommended: your own designs come back)</span></label>
+      ${nEarlier ? `<label><input type="checkbox" id="uf-o-earlier" ${o.earlier ? 'checked' : ''}/> <span>Also fill the ${nEarlier} earlier post${nEarlier === 1 ? '' : 's'} (before today)</span></label>` : ''}
+      ${nd ? `<label><input type="checkbox" id="uf-o-drafts" ${o.drafts ? 'checked' : ''}/> <span>Also fill the ${nd} draft${nd === 1 ? '' : 's'}</span></label>` : ''}
+      <label><input type="checkbox" id="uf-o-resume" ${o.resume ? 'checked' : ''}/> <span>If Unsplash’s hourly limit is reached, carry on by itself when it resets (while PostPilot is open)</span></label>
+    </div>
+    <div class="uf-go"><button type="button" class="pd-btn pd-primary" id="uf-run" onclick="ufAutoFill()">✨ Auto-fill <span id="uf-n">${fill.length}</span>, starting with today</button><button type="button" class="pd-btn pd-danger" id="uf-stop" onclick="ufStop()" hidden>⏹ Stop</button></div>
+    <div id="uf-stat" class="pd-note" role="status" aria-live="polite">${_uf.busy ? 'Filling…' : _uf.resumeAt ? `Carrying on by itself at <b>${_pdE(_ufClock(_uf.resumeAt))}</b>.` : ''}</div>
+    <div id="uf-list">${_ufListHtml(items)}</div>`;
+  body.querySelectorAll('.uf-opts input').forEach(i => i.addEventListener('change', _ufCountRun));
+  _ufCountRun();
+  if (_uf.busy) _ufLock(true);
+  // How many the saved batches can rebuild exactly
+  try {
+    if (P && typeof P.ppRebuildMatch === 'function') {
+      const names = [...new Set(fill.map(i => i.x.imageName).filter(Boolean))];
+      const hit = names.length ? await P.ppRebuildMatch(names) : [];
+      const n = fill.filter(i => hit.includes(i.x.imageName)).length;
+      const l = document.getElementById('uf-o-rebuild-l'), c = document.getElementById('uf-nrb');
+      if (l && c && n) { c.textContent = String(n); l.hidden = false; }
+    }
+  } catch (e) {}
+}
+function ufSaveKey() {
+  const P = _ufP(), i = document.getElementById('uf-key'), v = String((i && i.value) || '').trim();
+  if (!P || !v) { if (i) i.focus(); return; }
+  try {
+    const keys = typeof P._usKeys === 'function' ? P._usKeys() : ['', '', '', '', ''];
+    const at = keys.findIndex(k => !k);
+    keys[at < 0 ? 0 : at] = v;
+    P._usSetKeys(keys);
+  } catch (e) {}
+  _ufDraw();
+}
+
+// ── 🔍 Choose a photo yourself ──
+function _ufPSay(html, warn) { const el = document.getElementById('uf-pstat'); if (el) { el.innerHTML = html; el.classList.toggle('pd-warn', !!warn); } }
+function ufPickOpen(target) {
+  let pid, x, who;
+  if (target.form) {
+    if (!state.form) return;
+    try { syncFormFromDOM(); } catch (e) {}
+    pid = state.activePlatform; x = state.form;
+    who = `this ${_pdName(pid)} post`;
+  } else {
+    pid = target.it.pid; x = _ufCur(target.it) || target.it.x;
+    who = `the ${_pdName(pid)} ${target.it.kind}${target.it.date ? ' on ' + _ppNiceDay(target.it.date) : ''}`;
+  }
+  const [w, h] = _ufSize(pid);
+  const q = (target.it && _uf.q[target.it.key]) || _ufQuery(x, pid);
+  const grp = target.it ? _ufGroupItems(target.it) : [];
+  _uf.pick = { target, pid, w, h, orient: _ufOrient(w, h), q, page: 0, list: [], busy: false };
+  _pdModal('uf-pick', `<div class="pd-mh"><h2>🔍 Choose an Unsplash photo</h2><button type="button" class="pd-x" aria-label="Close" onclick="pdCloseModal('uf-pick')">✕</button></div>
+    <div class="pd-mb">
+      <p class="pd-note">For ${_pdE(who)}. Photos from <a href="${_pdE(_ufRef('https://unsplash.com/'))}" target="_blank" rel="noopener">Unsplash</a>: click one to use it. It's cropped to ${w} × ${h} for ${_pdE(_pdName(pid))}, and its photographer is credited.</p>
+      <form class="uf-sbar" onsubmit="event.preventDefault(); ufPickSearch(true)"><input id="uf-pq" type="search" value="${_pdE(q)}" aria-label="Search Unsplash for" placeholder="Search Unsplash (for example: dog halloween costume)" autocomplete="off"/><button type="submit" class="pd-btn pd-primary">Search</button></form>
+      ${grp.length ? `<label class="uf-grp"><input type="checkbox" id="uf-pgrp" checked/> Use it for the same post on ${_pdE(grp.map(g => _pdName(g.pid)).join(', '))} too</label>` : ''}
+      <div id="uf-pstat" class="pd-note" role="status" aria-live="polite"></div>
+      <div id="uf-grid" class="uf-grid"></div>
+      <div class="uf-more"><button type="button" class="pd-btn" id="uf-pmore" hidden onclick="ufPickSearch(false)">More photos</button></div>
+    </div>
+    <div class="pd-mf"><button type="button" class="pd-btn" onclick="pdCloseModal('uf-pick')">Cancel</button></div>`, true);
+  ufPickSearch(true);
+}
+async function ufPickSearch(fresh) {
+  const pk = _uf.pick;
+  if (!pk) return;
+  const inp = document.getElementById('uf-pq'), q = String((inp && inp.value) || pk.q || '').trim();
+  if (!q) return;
+  if (fresh) { pk.q = q; pk.page = 0; pk.list = []; const g = document.getElementById('uf-grid'); if (g) g.innerHTML = ''; }
+  if (!_ufP()) return _ufPSay('Open the Scheduler inside PostPilot Studio to use Unsplash.', true);
+  if (!_ufHasKey()) return _ufPSay('🔑 Add your Unsplash key first: open 🌄 Fill from Unsplash (in ⚙ Settings → ♻️ Restore missing pictures) and paste it there.', true);
+  pk.page++;
+  _ufPSay('Searching Unsplash…');
+  try {
+    const r = await _ufSearch(q, pk.orient, pk.page);
+    if (_uf.pick !== pk) return;
+    const start = pk.list.length;
+    pk.list.push(...r.results);
+    const grid = document.getElementById('uf-grid');
+    if (grid) grid.insertAdjacentHTML('beforeend', r.results.map((ph, i) => _ufTile(ph, start + i)).join(''));
+    const more = document.getElementById('uf-pmore');
+    if (more) more.hidden = pk.page >= r.pages || !r.results.length;
+    _ufPSay(pk.list.length ? `${pk.list.length} photos for “${_pdE(q)}”. Click one to use it.` : `No photos for “${_pdE(q)}”. Try other words.`);
+  } catch (e) { pk.page--; _ufPSay(_pdE(_ufErrText(e)), true); }
+}
+function _ufTile(ph, i) {
+  const u = ph.user || {}, prof = _ufRef((u.links && u.links.html) || (u.username ? 'https://unsplash.com/@' + u.username : 'https://unsplash.com/'));
+  const src = (ph.urls && (ph.urls.small || ph.urls.thumb || ph.urls.regular)) || '';
+  return `<figure class="uf-tile"><button type="button" class="uf-use" onclick="ufPickUse(${i}, this)" title="Use this photo"><img src="${_pdE(src)}" alt="${_pdE(ph.alt_description || 'Unsplash photo')}" loading="lazy"/></button><figcaption>by <a href="${_pdE(prof)}" target="_blank" rel="noopener">${_pdE(u.name || u.username || 'Unsplash')}</a></figcaption></figure>`;
+}
+async function ufPickUse(i, btn) {
+  const pk = _uf.pick, ph = pk && pk.list[i];
+  if (!ph || pk.busy) return;
+  pk.busy = true;
+  if (btn) btn.classList.add('uf-wait');
+  _ufPSay('Getting that photo…');
+  try {
+    if (pk.target.form) {
+      const fmt = _ufFmt(state.form || {});
+      const c = _ufCreditFrom(ph, pk.q, pk.w, pk.h, fmt);
+      const data = await _ufDownload(c.url, pk.w, pk.h, fmt);
+      _ufApplyForm(data, c);
+      _ufPing(c);
+    } else {
+      const it = pk.target.it, todo = [it];
+      const g = document.getElementById('uf-pgrp');
+      if (g && g.checked) todo.push(..._ufGroupItems(it));
+      for (const o of todo) {
+        o.ws = getActiveWorkspace();
+        const [w, h] = _ufSize(o.pid), fmt = _ufFmt(_ufCur(o) || o.x);
+        const c = _ufCreditFrom(ph, pk.q, w, h, fmt);
+        const data = await _ufDownload(c.url, w, h, fmt);
+        if (await _ufApply(o, data, c)) { (_uf.seen[o.key] = _uf.seen[o.key] || new Set()).add(ph.id); _ufPing(c); _ufRow(o, 'done'); }
+      }
+      _ufSoon(); _ufSaveSoon();
+    }
+    pdCloseModal('uf-pick');
+  } catch (e) { _ufPSay(_pdE(_ufErrText(e)), true); }
+  finally { pk.busy = false; if (btn) btn.classList.remove('uf-wait'); }
+}
+// In the editor: the photo goes on the post being edited (the picture it had can be put back)
+function _ufApplyForm(data, c) {
+  if (!state.form) return false;
+  try { syncFormFromDOM(); } catch (e) {}
+  const f = state.form, key = String(state.editingPostId) + '|' + state.activePlatform;
+  if ((f.image || f.imageOriginal) && !(_uf.prev && _uf.prev.key === key)) _uf.prev = { key, image: f.image, imageOriginal: f.imageOriginal, imageId: f.imageId, imageOriginalId: f.imageOriginalId, unsplash: f.unsplash || null, _imageDims: f._imageDims, isGif: f.isGif };
+  const fp = _ufFp(data), cc = Object.assign({}, c, { fp });
+  _ufRegPut(fp, cc);
+  state.form = { ...f, image: data, imageOriginal: data, imageId: null, imageOriginalId: null, _imageDims: c.w + '×' + c.h, unsplash: cc, isVideo: false, isGif: false };
+  render();
+  return true;
+}
+function ufPutBackPrev() {
+  const p = _uf.prev;
+  if (!p || !state.form || p.key !== String(state.editingPostId) + '|' + state.activePlatform) return;
+  try { syncFormFromDOM(); } catch (e) {}
+  state.form = { ...state.form, image: p.image, imageOriginal: p.imageOriginal, imageId: p.imageId, imageOriginalId: p.imageOriginalId, unsplash: p.unsplash, _imageDims: p._imageDims, isGif: p.isGif };
+  _uf.prev = null;
+  render();
+}
+// Clicks: the posting panel's credit, and the rows of the fill window
+document.addEventListener('click', (e) => {
+  const b = e.target && e.target.closest ? e.target.closest('[data-uf]') : null;
+  if (!b || b.disabled) return;
+  const a = b.dataset.uf;
+  if (a === 'cc-off' || a === 'cc-on') { _pdSet(wsKey('postpilot_uf_credit_comment'), a === 'cc-on'); _pdRefreshPanel(); return; }
+  if (a === 'cc-copy') { const c = _pdCur(), cr = c && _ufCredit(c.f); if (cr) _ppCopy(_ufCreditText(cr)).then(ok => { if (ok) b.textContent = '✓ Copied'; }); return; }
+  const row = b.closest('.uf-row'), it = row && _uf.items.find(x => x.key === row.dataset.k);
+  if (!it) return;
+  if (a === 'choose') return ufPickOpen({ it });
+  if (a === 'another') return void _ufAnother(it, b);
+});
+// "↩ Put back" belongs to one open editor
+const _ufBaseOpenComposer = openComposer;
+openComposer = function () { _uf.prev = null; return _ufBaseOpenComposer.apply(this, arguments); };
+const _ufBaseCloseComposer = closeComposer;
+closeComposer = function () { _uf.prev = null; return _ufBaseCloseComposer.apply(this, arguments); };
+const _ufBaseFromDraft = scheduleFromDraft;
+scheduleFromDraft = function () { _uf.prev = null; return _ufBaseFromDraft.apply(this, arguments); };
+// A photo you upload yourself replaces the Unsplash credit
+const _ufOrigUpload = handleImageUpload;
+handleImageUpload = function (e) {
+  if (state.form && e && e.target && e.target.files && e.target.files[0]) state.form.unsplash = null;
+  return _ufOrigUpload.apply(this, arguments);
+};
+
+// ═════════════════════════════════════════════════════════════════
+// THE SAFETY NET
+// ═════════════════════════════════════════════════════════════════
+// ── Saving: always into the brand the posts belong to ──
+// A save chose its brand only after its slow picture work, so a save still running when you switched brands
+// could land in the other brand. Now each save is pinned to the brand that was open when it started, and nothing
+// saves while a switch is loading the other brand (the brand you leave is saved first). The ids a picture was
+// saved under also stay on its post, so saving again doesn't store the same picture again under new ids.
+const _ufBaseSwitch = switchWorkspace;
+switchWorkspace = async function (wsId) {
+  if (_uf.switching || !WS_IDS.includes(wsId) || wsId === getActiveWorkspace()) return _ufBaseSwitch.apply(this, arguments);
+  try { await autoSave(); } catch (e) {}
+  _uf.switching = true;
+  try { return await _ufBaseSwitch.apply(this, arguments); } finally { _uf.switching = false; }
+};
+window.switchWorkspace = switchWorkspace;
+async function _ufStripAll(group, fn) {
+  const out = {};
+  for (const [platform, arr] of Object.entries(group || {})) out[platform] = await Promise.all((Array.isArray(arr) ? arr : []).map(x => fn(x)));
+  return out;
+}
+savePosts = async function (posts) {
+  if (_uf.switching) return;
+  const key = STORAGE_KEY();
+  try { localStorage.setItem(key, JSON.stringify(await _ufStripAll(posts, persistPostImages))); scheduleSyncToGitHub(); }
+  catch (e) { console.warn('savePosts failed:', e); showStorageWarning(e); }
+};
+saveDrafts = async function (drafts) {
+  if (_uf.switching) return;
+  const key = DRAFTS_STORAGE_KEY();
+  try { localStorage.setItem(key, JSON.stringify(await _ufStripAll(drafts, persistDraftImages))); scheduleSyncToGitHub(); }
+  catch (e) { console.warn('saveDrafts failed:', e); showStorageWarning(e); }
+};
+autoSave = async function () {
+  if (_uf.switching) return;
+  const key = AUTOSAVE_KEY();
+  try {
+    const posts = await _ufStripAll(state.posts, persistPostImages), drafts = await _ufStripAll(state.drafts, persistDraftImages);
+    localStorage.setItem(key, JSON.stringify({ savedAt: new Date().toISOString(), posts, drafts }));
+    state.lastSavedAt = new Date();
+    updateLastSavedLabel();
+  } catch (e) { console.warn('Auto-save failed:', e); showStorageWarning(e); }
+};
+
+// ── Safety copies: a second store that PostPilot never clears by itself ──
+// Each picture is stored once (by its fingerprint), with every post or draft id that has shown it. A picture that
+// changes keeps its earlier versions, and the newest one comes back first.
+const BK_DB = 'postpilot_picture_safety';
+const _bk = { db: null, byId: new Map(), fps: new Set(), ready: null, q: [], running: false, failed: 0 };
+function _bkOpen() {
+  if (_bk.db) return Promise.resolve(_bk.db);
+  return new Promise((res, rej) => {
+    let r;
+    try { r = indexedDB.open(BK_DB, 1); } catch (e) { return rej(e); }
+    r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains('pics')) db.createObjectStore('pics', { keyPath: 'k' }); if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'k' }); };
+    r.onsuccess = () => { _bk.db = r.result; _bk.db.onversionchange = () => { try { _bk.db.close(); } catch (e) {} _bk.db = null; }; res(_bk.db); };
+    r.onerror = () => rej(r.error);
+    r.onblocked = () => rej(new Error('blocked'));
+  });
+}
+function _bkIndex(m) {
+  if (!m || !m.id || !m.k) return;
+  const a = _bk.byId.get(m.id) || [], i = a.findIndex(v => v.k === m.k);
+  if (i >= 0) a[i] = m; else a.push(m);
+  a.sort((x, y) => (y.at || 0) - (x.at || 0));
+  _bk.byId.set(m.id, a);
+  if (m.fp) _bk.fps.add(m.fp);
+}
+_bk.ready = Promise.race([
+  (async () => {
+    try {
+      const db = await _bkOpen();
+      const all = await new Promise(res => { const q = db.transaction('meta', 'readonly').objectStore('meta').getAll(); q.onsuccess = () => res(q.result || []); q.onerror = () => res([]); });
+      all.forEach(_bkIndex);
+    } catch (e) {}
+  })(),
+  new Promise(r => setTimeout(r, 4000)),
+]);
+const _bkTx = (db, stores, fn) => new Promise((res, rej) => { const tx = db.transaction(stores, 'readwrite'); fn(tx); tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error || new Error('abort')); });
+async function _bkWrite(id, dataUrl, info) {
+  const fp = (info && info.fp) || _ufFp(dataUrl);
+  const a = _bk.byId.get(id) || [], old = a.find(v => v.fp === fp);
+  const db = await _bkOpen();
+  if (old) {
+    if (a[0] === old) return true;
+    // An earlier version is back (a picture put back): it's the newest again
+    const m = Object.assign({}, old, { at: Date.now() });
+    await _bkTx(db, 'meta', tx => tx.objectStore('meta').put(m));
+    _bkIndex(m);
+    return true;
+  }
+  const m = Object.assign({}, info || {}, { k: id + '|' + fp, id, fp, at: Date.now(), size: dataUrl.length });
+  const needPic = !_bk.fps.has(fp);
+  await _bkTx(db, ['pics', 'meta'], tx => { if (needPic) tx.objectStore('pics').put({ k: fp, dataUrl }); tx.objectStore('meta').put(m); });
+  _bkIndex(m);
+  return true;
+}
+function _bkSave(id, dataUrl, info) {
+  if (!id || !dataUrl || !String(dataUrl).startsWith('data:')) return;
+  const fp = _ufFp(dataUrl), a = _bk.byId.get(id);
+  if (a && a.length && a[0].fp === fp) return; // already its newest safety copy
+  if (_bk.q.some(j => j.id === id && j.info.fp === fp)) return;
+  _bk.q.push({ id, dataUrl, info: Object.assign({}, info || {}, { fp }) });
+  _bkRun();
+}
+async function _bkRun() {
+  if (_bk.running) return;
+  _bk.running = true;
+  try {
+    await _bk.ready;
+    while (_bk.q.length) { const j = _bk.q.shift(); try { await _bkWrite(j.id, j.dataUrl, j.info); } catch (e) { _bk.failed++; console.warn('A picture’s safety copy failed', e); } }
+  } finally { _bk.running = false; }
+}
+async function _bkGetPic(fp) {
+  try { const db = await _bkOpen(); return await new Promise(res => { const q = db.transaction('pics', 'readonly').objectStore('pics').get(fp); q.onsuccess = () => res(q.result ? q.result.dataUrl : null); q.onerror = () => res(null); }); } catch (e) { return null; }
+}
+async function _bkLatest(id) {
+  if (!id) return null;
+  await _bk.ready;
+  for (const v of (_bk.byId.get(id) || [])) { const u = await _bkGetPic(v.fp); if (u) return u; }
+  return null;
+}
+async function _ufPutMain(id, dataUrl) {
+  const db = await openImageDb();
+  await new Promise((res, rej) => { const tx = db.transaction(IMG_STORE, 'readwrite'); tx.objectStore(IMG_STORE).put({ id, dataUrl }); tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); });
+}
+async function _ufMainKeys() {
+  try { const db = await openImageDb(); return new Set(await new Promise(res => { const q = db.transaction(IMG_STORE, 'readonly').objectStore(IMG_STORE).getAllKeys(); q.onsuccess = () => res(q.result || []); q.onerror = () => res([]); })); }
+  catch (e) { return new Set(); }
+}
+// Every brand's saved posts and drafts (straight from storage)
+function _ufAllRecords() {
+  const out = [];
+  WS_IDS.forEach(ws => [['post', _STORAGE_KEY_BASE], ['draft', _DRAFTS_STORAGE_KEY_BASE]].forEach(([kind, base]) => {
+    const all = _pdLS(ws + '_' + base, null);
+    if (!all || typeof all !== 'object') return;
+    Object.entries(all).forEach(([pid, arr]) => (Array.isArray(arr) ? arr : []).forEach(rec => {
+      if (!rec) return;
+      const ids = (kind === 'post' ? [rec.imageOriginalId, rec.imageId] : [rec.imageFullId, rec.imageThumbId]).filter(id => id && !String(id).startsWith('data:'));
+      out.push({ ws, kind, pid, rec, ids: [...new Set(ids.map(String))] });
+    }));
+  }));
+  return out;
+}
+function _ufIdInfo() {
+  const m = new Map();
+  _ufAllRecords().forEach(r => r.ids.forEach((id, i) => { if (!m.has(id)) m.set(id, { ws: r.ws, pid: r.pid, kind: r.kind, post: String(r.rec.id), name: r.rec.imageName || '', date: r.rec.scheduledDate || '', second: i > 0 }); }));
+  return m;
+}
+// A safety copy of every picture that something uses and that has none yet (every brand). Returns how many failed.
+async function _ufCopyAll() {
+  await _bk.ready;
+  const used = _piUsedIds();
+  if (!used) return -1;
+  const info = _ufIdInfo(), have = await _ufMainKeys();
+  let left = 0;
+  for (const id of have) {
+    if (!used.has(id) || (_bk.byId.get(id) || []).length || (info.get(id) || {}).second) continue;
+    let u = null;
+    try { u = await imgLoad(id); } catch (e) {}
+    if (!u || !String(u).startsWith('data:')) continue;
+    const inf = Object.assign({ kind: 'found' }, info.get(id) || {});
+    delete inf.second;
+    try { await _bkWrite(id, u, inf); } catch (e) { left++; }
+  }
+  return left;
+}
+// Saving a post or draft: its picture's ids stay on it, its picture gets a safety copy, and its photo credit is
+// kept only while it's still that photo
+function _ufAfterPersist(rec, out, src, idKeys, info) {
+  if (rec && out && typeof rec === 'object') idKeys.forEach(k => { if (k in out) rec[k] = out[k]; });
+  if (!out || !src) return;
+  if (String(src).startsWith('data:')) {
+    const fp = _ufFp(src);
+    out.imageFp = fp;
+    if (out.unsplash && out.unsplash.fp && out.unsplash.fp !== fp) delete out.unsplash;
+    if (!out.unsplash) { const r = _ufReg()[fp]; if (r) out.unsplash = r; }
+    const id = out[idKeys[1]] || out[idKeys[0]];
+    if (id) _bkSave(id, src, info);
+  } else { delete out.imageFp; delete out.unsplash; } // a picture kept somewhere else (GitHub), not an Unsplash download
+}
+const _ufPrevPersist = persistPostImages;
+persistPostImages = async function (post) {
+  const src = post && (post.imageOriginal || post.image);
+  const out = await _ufPrevPersist.apply(this, arguments);
+  try { _ufAfterPersist(post, out, src, ['imageId', 'imageOriginalId'], { ws: getActiveWorkspace(), pid: (post && post.platform) || '', kind: 'post', post: String((post && post.id) || ''), name: (post && post.imageName) || '', date: (post && post.scheduledDate) || '' }); } catch (e) {}
+  return out;
+};
+const _ufPrevPersistDraft = persistDraftImages;
+persistDraftImages = async function (draft) {
+  const src = draft && draft.imageFull;
+  const out = await _ufPrevPersistDraft.apply(this, arguments);
+  try { _ufAfterPersist(draft, out, src, ['imageThumbId', 'imageFullId'], { ws: getActiveWorkspace(), pid: (draft && draft.platform) || '', kind: 'draft', post: String((draft && draft.id) || ''), name: (draft && draft.imageName) || '', date: '' }); } catch (e) {}
+  return out;
+};
+// A picture missing from the picture store comes back from its safety copy as the posts load
+const _ufPrevRehydrate = rehydratePost;
+rehydratePost = async function (post) {
+  const p = await _ufPrevRehydrate.apply(this, arguments);
+  try {
+    if (p && !p.image && !p.imageOriginal && (p.imageOriginalId || p.imageId)) {
+      const ids = [p.imageOriginalId, p.imageId].filter(Boolean);
+      for (const id of ids) {
+        const u = await _bkLatest(id);
+        if (u) { for (const j of ids) { try { await _ufPutMain(j, u); } catch (e) {} } p.image = p.imageOriginal = u; p._imageDims = await getImageSizeLabel(u); _uf.healed = (_uf.healed || 0) + 1; break; }
+      }
+    }
+  } catch (e) {}
+  return p;
+};
+const _ufPrevRehydrateDraft = rehydrateDraft;
+rehydrateDraft = async function (d) {
+  const x = await _ufPrevRehydrateDraft.apply(this, arguments);
+  try { if (x && !x.imageFull && (x.imageFullId || x.imageThumbId) && (await _ufHealDraft(x))) _uf.healed = (_uf.healed || 0) + 1; } catch (e) {}
+  return x;
+};
+// A draft's full picture (what it's scheduled with) comes back even when its small copy is still there
+async function _ufHealDraft(x) {
+  for (const id of [x.imageFullId, x.imageThumbId].filter(Boolean)) {
+    const u = await _bkLatest(id);
+    if (!u) continue;
+    if (x.imageFullId) { try { await _ufPutMain(x.imageFullId, u); } catch (e) {} }
+    if (!x.imageThumb && x.imageThumbId) { try { await _ufPutMain(x.imageThumbId, u); } catch (e) {} x.imageThumb = u; }
+    x.imageFull = u;
+    if (x.formSnapshot) x.formSnapshot = { ...x.formSnapshot, image: u, imageOriginal: u };
+    return true;
+  }
+  return false;
+}
+// The Unsplash photo a post was saved with, if its picture is still that photo
+const _ufCanRefetch = (x) => { const c = x && x.unsplash; return !!(c && c.url && c.w && c.h && c.fp && x.imageFp && c.fp === x.imageFp); };
+// When pictures are found missing: their safety copies first, then their Unsplash photo downloaded again
+async function _ufHeal(x, kind) {
+  if (kind === 'draft') { if (await _ufHealDraft(x)) return true; }
+  else {
+    const ids = [x.imageOriginalId, x.imageId].filter(Boolean);
+    for (const id of ids) { const u = await _bkLatest(id); if (u) { for (const j of ids) { try { await _ufPutMain(j, u); } catch (e) {} } x.imageOriginal = x.imageOriginal || u; x.image = x.image || u; return true; } }
+  }
+  const c = x.unsplash;
+  if (!_ufCanRefetch(x) || _uf.tried.has(c.url)) return false;
+  _uf.tried.add(c.url);
+  try {
+    const u = await _ufDownload(c.url, c.w, c.h, c.fmt || 'png');
+    const ids = (kind === 'post' ? [x.imageOriginalId, x.imageId] : [x.imageFullId, x.imageThumbId]).filter(Boolean);
+    for (const j of ids) { try { await _ufPutMain(j, u); } catch (e) {} }
+    if (kind === 'post') { x.imageOriginal = u; x.image = u; } else { x.imageFull = u; x.imageThumb = u; }
+    const fp = _ufFp(u);
+    x.unsplash = Object.assign({}, c, { fp });
+    x.imageFp = fp;
+    _ufRegPut(fp, x.unsplash);
+    if (!ids.length) _uf.needSave = true;
+    return true;
+  } catch (e) { return false; }
+}
+const _ufPrevFind = _piFind;
+_piFind = async function () {
+  const r = await _ufPrevFind.apply(this, arguments);
+  if (!r || !r.n) return r;
+  let healed = 0;
+  const posts = [], drafts = [];
+  const heal = async (x, kind) => { try { return await _ufHeal(x, kind); } catch (e) { return false; } };
+  for (const x of r.posts) { if (await heal(x.p, 'post')) healed++; else posts.push(x); }
+  for (const x of r.drafts) { if (await heal(x.d, 'draft')) healed++; else drafts.push(x); }
+  if (healed) {
+    _piOrigRender();
+    if (_uf.needSave) { _uf.needSave = false; try { savePosts(state.posts); saveDrafts(state.drafts); } catch (e) {} }
+    _ppToast(`🛡 PostPilot put back ${healed} missing picture${healed === 1 ? '' : 's'} from its safety copies.`, 8000);
+  }
+  return { posts, drafts, n: posts.length + drafts.length };
+};
+// "Clear the picture store" only runs once every picture has its safety copy
+const _ufBaseClearAll = clearAllImageCache;
+clearAllImageCache = async function () {
+  try { await savePosts(state.posts); await saveDrafts(state.drafts); } catch (e) {}
+  for (let t = 0; (_bk.running || _bk.q.length) && t < 300; t++) await new Promise(r => setTimeout(r, 200));
+  const left = await _ufCopyAll();
+  if (left || _bk.q.length) {
+    showToast(`Nothing was cleared: ${left > 0 ? left + ' picture' + (left === 1 ? '' : 's') + ' couldn’t get a safety copy' : 'PostPilot couldn’t check every picture has a safety copy'}. Save a copy to this computer first (⚙ Settings → 💾 Save a copy of all pictures).`, 'error');
+    return;
+  }
+  return _ufBaseClearAll.apply(this, arguments);
+};
+// A few seconds after PostPilot opens: every brand's missing pictures come back from their safety copies (or
+// Unsplash), and every picture without a safety copy gets one. Then the check that each one has one.
+async function _ufStartupPass() {
+  if (_uf.startDone) return;
+  _uf.startDone = true;
+  try {
+    await _bk.ready;
+    const used = _piUsedIds();
+    if (!used || !used.size) return;
+    const have = await _ufMainKeys();
+    let back = 0;
+    for (const id of used) {
+      if (have.has(id)) continue;
+      const u = await _bkLatest(id);
+      if (u) { try { await _ufPutMain(id, u); have.add(id); back++; } catch (e) {} }
+    }
+    for (const r of _ufAllRecords()) {
+      const c = r.rec.unsplash;
+      if (!_ufCanRefetch(r.rec) || !r.ids.length || r.ids.some(id => have.has(id)) || _uf.tried.has(c.url)) continue;
+      _uf.tried.add(c.url);
+      try { const u = await _ufDownload(c.url, c.w, c.h, c.fmt || 'png'); for (const id of r.ids) { await _ufPutMain(id, u); have.add(id); } back++; } catch (e) {}
+    }
+    back += _uf.healed || 0;
+    _uf.healed = 0;
+    if (back) { await _piFind(); _piOrigRender(); _ppToast(`🛡 PostPilot put back ${back} missing picture${back === 1 ? '' : 's'} from its safety copies.`, 9000); }
+    // The check: every picture has a safety copy
+    const left = await _ufCopyAll();
+    if (left > 0 || _bk.failed) {
+      const n = Math.max(left, _bk.failed);
+      _pdCard('ufsafe', `<div class="pp-rem-title">⚠ ${n} picture${n === 1 ? '' : 's'} couldn’t get a safety copy</div><div class="pp-rem-text">This browser may be short of space. Save a copy of your pictures to this computer now, so nothing can be lost.</div>`,
+        [['💾 Save a copy now', (e, c) => { c.remove(); ppSavePicturesToComputer(); }, true]], '#ef4444');
+    }
+    setTimeout(_ufBackupReminder, 30000);
+  } catch (e) { console.warn('Picture safety check failed', e); }
+}
+setTimeout(_ufStartupPass, 8000);
+// Ask the browser to keep PostPilot's storage when the computer runs low on space
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persisted().then(on => { if (!on) return navigator.storage.persist(); }).catch(() => {}); } catch (e) {}
+
+// ── 💾 Save a copy to this computer: one backup file with every brand's pictures ──
+const _zT = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function _zCrc(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = _zT[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+async function _zMake(files, onStep) {
+  const enc = new TextEncoder(), parts = [], cen = [], d = new Date();
+  const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  let off = 0;
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i], nm = enc.encode(f.name), bytes = new Uint8Array(await f.blob.arrayBuffer()), crc = _zCrc(bytes), sz = bytes.length;
+    if (onStep && i % 8 === 0) onStep(i, files.length);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true); lh.setUint16(10, time, true); lh.setUint16(12, date, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, sz, true); lh.setUint32(22, sz, true); lh.setUint16(26, nm.length, true); lh.setUint16(28, 0, true);
+    parts.push(lh.buffer, nm, f.blob);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true); ch.setUint16(12, time, true); ch.setUint16(14, date, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, sz, true); ch.setUint32(24, sz, true); ch.setUint16(28, nm.length, true); ch.setUint32(42, off, true);
+    cen.push(ch.buffer, nm);
+    off += 30 + nm.length + sz;
+    if (off > 4.2e9) throw new Error('more than 4 GB of pictures: too big for one backup file');
+  }
+  const cs = cen.reduce((a, b) => a + b.byteLength, 0), end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true); end.setUint32(12, cs, true); end.setUint32(16, off, true);
+  return new Blob(parts.concat(cen, [end.buffer]), { type: 'application/zip' });
+}
+// Reading a backup file back: [{ name, get: () => Promise<Blob> }]
+async function _zRead(file) {
+  const n = file.size, tl = Math.min(n, 65557), tail = new DataView(await file.slice(n - tl).arrayBuffer());
+  let e = -1;
+  for (let i = tl - 22; i >= 0; i--) if (tail.getUint32(i, true) === 0x06054b50) { e = i; break; }
+  if (e < 0) throw new Error('not a .zip file');
+  const count = tail.getUint16(e + 10, true), size = tail.getUint32(e + 12, true), at = tail.getUint32(e + 16, true);
+  const cen = new DataView(await file.slice(at, at + size).arrayBuffer()), dec = new TextDecoder(), out = [];
+  let p = 0;
+  for (let k = 0; k < count && p + 46 <= cen.byteLength; k++) {
+    if (cen.getUint32(p, true) !== 0x02014b50) break;
+    const method = cen.getUint16(p + 10, true), csize = cen.getUint32(p + 20, true), nl = cen.getUint16(p + 28, true), xl = cen.getUint16(p + 30, true), cl = cen.getUint16(p + 32, true), lo = cen.getUint32(p + 42, true);
+    const name = dec.decode(new Uint8Array(cen.buffer, cen.byteOffset + p + 46, nl));
+    p += 46 + nl + xl + cl;
+    if (name.endsWith('/')) continue;
+    out.push({ name, get: async () => {
+      const lh = new DataView(await file.slice(lo, lo + 30).arrayBuffer());
+      const s = lo + 30 + lh.getUint16(26, true) + lh.getUint16(28, true), raw = file.slice(s, s + csize);
+      if (method === 0) return raw;
+      if (method === 8 && typeof DecompressionStream === 'function') return await new Response(raw.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob();
+      throw new Error('this file is packed in a way PostPilot can’t open');
+    } });
+  }
+  return out;
+}
+const _ufExt = (t) => /png/.test(t) ? 'png' : /jpe?g/.test(t) ? 'jpg' : /gif/.test(t) ? 'gif' : /webp/.test(t) ? 'webp' : /mp4/.test(t) ? 'mp4' : /quicktime/.test(t) ? 'mov' : /webm/.test(t) ? 'webm' : 'bin';
+const UF_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm' };
+const _ufMimeOf = (name) => { const m = String(name).match(/\.([a-z0-9]+)$/i); return (m && UF_MIME[m[1].toLowerCase()]) || 'application/octet-stream'; };
+const _ufSafeName = (s) => String(s || '').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 100) || 'picture';
+const _ufBlobUrl = (blob, type) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(type ? new Blob([blob], { type }) : blob); });
+function _ufBkSay(html) { const el = document.getElementById('pi-out'); if (el) el.innerHTML = html; else _ppToast(html, 12000); }
+async function ppSavePicturesToComputer() {
+  if (_uf.zipBusy) return;
+  _uf.zipBusy = true;
+  try {
+    _ufBkSay('<p class="pd-note">💾 Gathering every brand’s pictures…</p>');
+    const names = getWorkspaceNames() || {}, day = _pdDay(0), root = 'PostPilot pictures ' + day;
+    const recs = _ufAllRecords().filter(r => r.ids.length);
+    const files = [], items = [], byId = new Map(), taken = new Set();
+    let miss = 0, k = 0;
+    for (const r of recs) {
+      if (++k % 10 === 0) _ufBkSay(`<p class="pd-note">💾 Gathering picture ${k} of ${recs.length}…</p>`);
+      const id = r.ids[0];
+      if (!byId.has(id)) {
+        let u = null;
+        for (const j of r.ids) { try { u = await imgLoad(j); } catch (e) {} if (u) break; }
+        if (!u) for (const j of r.ids) { u = await _bkLatest(j); if (u) break; }
+        if (!u || !String(u).startsWith('data:')) byId.set(id, '');
+        else {
+          const blob = await (await fetch(u)).blob(), ext = _ufExt(blob.type);
+          const dir = `${root}/${_ufSafeName(names[r.ws] || r.ws)}/${_ufSafeName(_pdName(r.pid))}`;
+          const when = r.kind === 'draft' ? 'draft ' : r.rec.scheduledDate ? r.rec.scheduledDate + ' ' : '';
+          const base = _ufSafeName(String(r.rec.imageName || '').replace(/\.[a-z0-9]{2,5}$/i, '') || r.kind + '-' + r.rec.id);
+          let path = `${dir}/${when}${base}.${ext}`, n = 2;
+          while (taken.has(path.toLowerCase())) path = `${dir}/${when}${base} (${n++}).${ext}`;
+          taken.add(path.toLowerCase());
+          files.push({ name: path, blob });
+          byId.set(id, path);
+        }
+      }
+      const file = byId.get(id);
+      if (!file) { miss++; continue; }
+      items.push({ file: file.slice(root.length + 1), ws: r.ws, brand: names[r.ws] || r.ws, kind: r.kind, pid: r.pid, id: String(r.rec.id), ids: r.ids, imageName: r.rec.imageName || '',
+        date: r.rec.scheduledDate || '', time: r.rec.scheduledTime || '', unsplash: r.rec.unsplash || null });
+    }
+    if (!files.length) { _ufBkSay('<p class="pd-note pd-warn">There are no pictures in PostPilot to save yet.</p>'); return; }
+    const pics = files.length;
+    files.push({ name: root + '/postpilot-backup.json', blob: new Blob([JSON.stringify({ app: 'PostPilot', kind: 'pictures', v: 1, made: new Date().toISOString(), items }, null, 1)], { type: 'application/json' }) });
+    files.push({ name: root + '/READ ME.txt', blob: new Blob([[`PostPilot pictures, saved ${day}`, '',
+      'Every picture of your PostPilot posts and drafts, for all your brands, in folders by brand and platform. You can open them right here.', '',
+      'To put them back in PostPilot:', '1. Open PostPilot Studio and go to the Scheduler.', '2. Click ⚙ Settings, then ♻️ Restore missing pictures (at the bottom, by 💾 Storage Usage).',
+      '3. Click 📦 Restore from a backup file and pick this .zip file.', '', 'Keep this file as it is (postpilot-backup.json inside it tells PostPilot which picture belongs to which post).'].join('\r\n')], { type: 'text/plain' }) });
+    const zip = await _zMake(files, (i, n) => _ufBkSay(`<p class="pd-note">💾 Packing picture ${Math.min(i + 1, n)} of ${n}…</p>`));
+    const fname = `PostPilot-pictures-${day}.zip`, P = window.parent;
+    let r = null;
+    if (P && P !== window && typeof P.xfSaveBlob === 'function') r = await P.xfSaveBlob(zip, fname, false, true);
+    else { const url = URL.createObjectURL(zip), a = document.createElement('a'); a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
+    if (!(r && r.pending)) _pdSet('postpilot_device_backup', { at: Date.now(), n: pics, file: fname });
+    const mb = (zip.size / 1048576).toFixed(zip.size > 10485760 ? 0 : 1);
+    const where = r && r.pending ? `Your browser needs your OK to save it in your <b>${_pdE(r.folder)}</b> folder: press <b>📁 Allow and save</b> at the top of the page.`
+      : r && r.folder ? `It’s in your <b>${_pdE(r.folder)}</b> folder.` : 'It’s in your <b>Downloads</b> folder.';
+    _ufBkSay(`<p class="pd-note pd-good">✅ Saved ${pics} picture${pics === 1 ? '' : 's'} (every brand) in <b>${_pdE(fname)}</b> (${mb} MB).</p><p class="pd-note">${where} Keep it: if pictures ever go missing, <b>📦 Restore from a backup file</b> puts them all back.${miss ? ` (${miss} post${miss === 1 ? ' was' : 's were'} already missing ${miss === 1 ? 'its picture' : 'their pictures'}, so ${miss === 1 ? 'it isn’t' : 'they aren’t'} in it.)` : ''}</p>`);
+    const card = document.getElementById('pdc-ufbk');
+    if (card) card.remove();
+  } catch (e) {
+    _ufBkSay(`<p class="pd-note pd-warn">Couldn’t save the backup file: ${_pdE(e.message || String(e))}</p>`);
+  } finally { _uf.zipBusy = false; }
+}
+// 📦 Restore from a backup file: pictures go back to their posts by the backup's list (every brand), then by file name
+async function piFromBackupFile(input) {
+  const f = input && input.files && input.files[0];
+  if (input) input.value = '';
+  if (!f) return;
+  _piSay('<p class="pd-note">📦 Reading your backup file…</p>');
+  let entries;
+  try { entries = await _zRead(f); } catch (e) { return _piSay(`<p class="pd-note pd-warn">That doesn’t look like a PostPilot backup file (${_pdE(e.message || String(e))}). Pick the .zip file PostPilot saved.</p>`); }
+  let n = 0;
+  const man = entries.find(e => /(^|\/)postpilot-backup\.json$/i.test(e.name)), named = new Map();
+  if (man) {
+    let m = null;
+    try { m = JSON.parse(await (await man.get()).text()); } catch (e) {}
+    const pre = man.name.slice(0, man.name.lastIndexOf('/') + 1), byName = new Map(entries.map(e => [e.name, e])), have = await _ufMainKeys(), recs = _ufAllRecords();
+    for (const it of (m && m.items) || []) {
+      const e = byName.get(pre + it.file);
+      if (!e) continue;
+      if (it.imageName && !named.has(e.name)) named.set(e.name, it.imageName);
+      // The same post (brand, platform and post) as it is now: its pictures' ids may have changed since the backup
+      const now = recs.find(r => r.ws === it.ws && r.kind === it.kind && r.pid === it.pid && String(r.rec.id) === String(it.id));
+      const need = ((now && now.ids.length ? now.ids : it.ids) || []).filter(id => id && !have.has(id));
+      if (!need.length) continue;
+      try { const u = await _ufBlobUrl(await e.get(), _ufMimeOf(it.file)); for (const id of need) { await _ufPutMain(id, u); have.add(id); } n++; } catch (x) {}
+    }
+  }
+  // Then anything else by file name (the post's own file name, as PostPilot knows it)
+  const files = entries.filter(e => _piIsPic(e.name)).map(e => { const nm = named.get(e.name) || e.name.split('/').pop(); return { name: nm, lastModified: 0, get: async () => new File([await e.get()], nm, { type: _ufMimeOf(e.name) }) }; });
+  const r = await _piRestore(files);
+  _piReport({ n: n + r.n, left: r.left, check: r.check, files: r.files }, 'backup');
+}
+
+// ── 🗂 Safety copies: every picture PostPilot has kept ──
+function _ufFreeBlobs() { _uf.blobUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch (e) {} }); _uf.blobUrls = []; }
+function ufCopiesClose() { _ufFreeBlobs(); pdCloseModal('uf-copies'); }
+async function ufCopiesOpen() {
+  await _bk.ready;
+  const all = [], seen = new Set();
+  _bk.byId.forEach(a => a.forEach(v => all.push(v)));
+  all.sort((x, y) => (y.at || 0) - (x.at || 0));
+  const list = all.filter(v => { if (seen.has(v.fp)) return false; seen.add(v.fp); return true; });
+  _uf.copies = list; _uf.copiesShown = 0;
+  _ufFreeBlobs();
+  const ov = _pdModal('uf-copies', `<div class="pd-mh"><h2>🗂 Safety copies of your pictures</h2><button type="button" class="pd-x" aria-label="Close" onclick="ufCopiesClose()">✕</button></div>
+    <div class="pd-mb"><p class="pd-note">PostPilot keeps a copy of every picture your posts and drafts use, in every brand, and the earlier version of a picture you change. Missing pictures come back from here by themselves. To keep one as a file, press <b>⬇ Save</b>.</p>
+      <p class="pd-note"><b>${list.length}</b> picture${list.length === 1 ? '' : 's'} kept, newest first.</p>
+      <div id="uf-cgrid" class="uf-grid uf-cgrid"></div>
+      <div class="uf-more"><button type="button" class="pd-btn" id="uf-cmore" onclick="ufCopiesMore()">Show more</button></div>
+      <div id="uf-cout" class="pd-note" role="status" aria-live="polite"></div></div>
+    <div class="pd-mf"><button type="button" class="pd-btn pd-ghost" onclick="ufCopiesTidy()">🧹 Remove old copies no post uses</button><button type="button" class="pd-btn" onclick="ppSavePicturesToComputer()">💾 Save everything to this computer</button><button type="button" class="pd-btn" onclick="ufCopiesClose()">Close</button></div>`, true);
+  ov.addEventListener('click', (e) => { if (e.target === ov) _ufFreeBlobs(); });
+  ufCopiesMore();
+}
+function ufCopiesMore() {
+  const grid = document.getElementById('uf-cgrid');
+  if (!grid) return;
+  const names = getWorkspaceNames() || {}, next = _uf.copies.slice(_uf.copiesShown, _uf.copiesShown + 24);
+  _uf.copiesShown += next.length;
+  const more = document.getElementById('uf-cmore');
+  if (more) more.hidden = _uf.copiesShown >= _uf.copies.length;
+  next.forEach(v => {
+    const fig = document.createElement('figure');
+    fig.className = 'uf-tile uf-copy';
+    const label = [names[v.ws] || '', v.pid ? _pdName(v.pid) : '', v.date ? _ppNiceDay(v.date) : v.kind === 'draft' ? 'draft' : ''].filter(Boolean).join(' · ');
+    fig.innerHTML = `<div class="uf-cimg"><span class="uf-ic">⏳</span></div><figcaption><span class="uf-cname" title="${_pdE(v.name || '')}">${_pdE(v.name || 'picture')}</span><span class="uf-cmeta">${_pdE(label)}${label ? ' · ' : ''}kept ${_pdE(new Date(v.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}</span><button type="button" class="pd-btn">⬇ Save</button></figcaption>`;
+    grid.appendChild(fig);
+    fig.querySelector('button').onclick = () => _ufCopySave(v);
+    _bkGetPic(v.fp).then(async u => {
+      const box = fig.querySelector('.uf-cimg');
+      if (!u) { box.innerHTML = '<span class="uf-ic">?</span>'; return; }
+      const blob = await (await fetch(u)).blob(), url = URL.createObjectURL(blob);
+      _uf.blobUrls.push(url);
+      box.innerHTML = /^video\//.test(blob.type) ? `<video src="${url}" muted></video>` : `<img src="${url}" alt=""/>`;
+    }).catch(() => {});
+  });
+}
+async function _ufCopySave(v) {
+  const u = await _bkGetPic(v.fp);
+  if (!u) return;
+  const blob = await (await fetch(u)).blob(), ext = _ufExt(blob.type);
+  let name = v.name || ('picture-' + _pdDay(0) + '.' + ext);
+  if (!/\.[a-z0-9]{2,4}$/i.test(name)) name += '.' + ext;
+  const P = window.parent;
+  let r = null;
+  if (P && P !== window && typeof P.xfSaveBlob === 'function') r = await P.xfSaveBlob(blob, name, false, true);
+  else { const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000); }
+  const out = document.getElementById('uf-cout');
+  if (out) out.innerHTML = `✅ Saved <b>${_pdE(name)}</b> ${r && r.folder ? 'to your <b>' + _pdE(r.folder) + '</b> folder' : 'to your Downloads'}.`;
+}
+async function ufCopiesTidy() {
+  await _bk.ready;
+  const used = _piUsedIds();
+  if (!used) return;
+  const cut = Date.now() - 30 * 864e5, gone = [];
+  _bk.byId.forEach((a, id) => { if (!used.has(id)) a.forEach(v => { if ((v.at || 0) < cut) gone.push(v); }); });
+  const out = document.getElementById('uf-cout');
+  if (!gone.length) { if (out) out.innerHTML = 'Nothing to remove: every copy belongs to a post or draft, or is less than 30 days old.'; return; }
+  if (!confirm(`Remove ${gone.length} safety ${gone.length === 1 ? 'copy' : 'copies'} of pictures that no post or draft uses (in any brand) and that are more than 30 days old? This can’t be undone.`)) return;
+  try {
+    const db = await _bkOpen();
+    const goneK = new Set(gone.map(v => v.k)), keepFp = new Set();
+    _bk.byId.forEach(a => a.forEach(v => { if (!goneK.has(v.k)) keepFp.add(v.fp); }));
+    const dropFp = [...new Set(gone.map(v => v.fp))].filter(fp => !keepFp.has(fp));
+    await _bkTx(db, ['pics', 'meta'], tx => { gone.forEach(v => tx.objectStore('meta').delete(v.k)); dropFp.forEach(fp => tx.objectStore('pics').delete(fp)); });
+    gone.forEach(v => { const a = (_bk.byId.get(v.id) || []).filter(x => x.k !== v.k); if (a.length) _bk.byId.set(v.id, a); else _bk.byId.delete(v.id); });
+    dropFp.forEach(fp => _bk.fps.delete(fp));
+    ufCopiesOpen();
+    setTimeout(() => { const o = document.getElementById('uf-cout'); if (o) o.innerHTML = `Removed ${gone.length} old ${gone.length === 1 ? 'copy' : 'copies'}.`; }, 50);
+  } catch (e) { if (out) out.innerHTML = 'Couldn’t remove them: ' + _pdE(e.message || String(e)); }
+}
+// How well this browser's pictures are protected (shown in the restore window)
+async function _ufSafetyHtml() {
+  await _bk.ready;
+  const used = _piUsedIds() || new Set(), main = await _ufMainKeys();
+  const live = [...used].filter(id => main.has(id) || _bk.byId.has(id)), safe = live.filter(id => _bk.byId.has(id)).length;
+  const last = _pdLS('postpilot_device_backup', null);
+  return `🛡 <b>${safe}</b> of ${live.length} picture${live.length === 1 ? '' : 's'} (every brand) ${live.length === 1 ? 'has' : 'have'} a safety copy in this browser${safe < live.length ? ' (the rest are being copied now)' : ''}. ` +
+    (last ? `Last copy saved to this computer: <b>${_pdE(new Date(last.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }))}</b>.` : '<b>No copy saved to this computer yet.</b>');
+}
+// Once a week (when there are new pictures): a nudge to save a copy to this computer
+function _ufBackupReminder() {
+  try {
+    const last = _pdLS('postpilot_device_backup', null), snooze = +_pdLS('postpilot_device_backup_snooze', 0) || 0;
+    if (Date.now() < snooze || (last && Date.now() - last.at < 7 * 864e5)) return;
+    const used = _piUsedIds() || new Set(), since = last ? last.at : 0;
+    let n = 0;
+    used.forEach(id => { const a = _bk.byId.get(id); if (a && a.some(v => (v.at || 0) > since)) n++; });
+    if (!n || document.getElementById('pdc-ufbk')) return;
+    const later = () => _pdSet('postpilot_device_backup_snooze', Date.now() + 3 * 864e5);
+    _pdCard('ufbk', `<div class="pp-rem-title">💾 Keep a copy of your pictures on this computer</div><div class="pp-rem-text">${n} picture${n === 1 ? ' isn’t' : 's aren’t'} saved as ${n === 1 ? 'a file' : 'files'} on this computer yet. One click puts every brand’s pictures in a single backup file you keep.</div>`,
+      [['💾 Save a copy', (e, c) => { c.remove(); ppSavePicturesToComputer(); }, true], ['Not now', (e, c) => { later(); c.remove(); }]], '#22c55e', later);
+  } catch (e) {}
+}
+
+(function _ufStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .uf-credit { font-size: 11.5px; color: var(--text-secondary, #b8bdd6); line-height: 1.45; overflow-wrap: anywhere; }
+    .uf-credit a { color: #f5a623; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+    .uf-credit.uf-card { margin-top: 4px; }
+    .uf-credit.uf-pd { margin-top: 6px; }
+    .uf-pd-act { margin-top: 2px; }
+    .uf-pd-act .pd-link { font-size: 11.5px; }
+    .uf-crow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .uf-cbtn { border: 1px solid var(--border-light, #303859); background: var(--bg-elevated, #1a2033); color: var(--text-primary, #e8ecf8); border-radius: 7px; padding: 5px 10px; font: 700 11.5px 'DM Sans', system-ui, sans-serif; cursor: pointer; }
+    .uf-cbtn:hover { border-color: #f5a623; }
+    .uf-cbtn:focus-visible, .uf-use:focus-visible { outline: 2px solid #f5a623; outline-offset: 2px; }
+    .uf-opts { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--border, #272e44); border-radius: 10px; background: rgba(255,255,255,.02); }
+    .uf-opts label { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: var(--text-secondary, #b8bdd6); cursor: pointer; line-height: 1.4; }
+    .uf-opts label[hidden] { display: none; }
+    .uf-opts input { accent-color: #f5a623; margin-top: 2px; flex-shrink: 0; }
+    .uf-go { display: flex; gap: 8px; flex-wrap: wrap; }
+    .uf-key { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px dashed rgba(245,166,35,.55); border-radius: 10px; }
+    .uf-krow, .uf-sbar { display: flex; gap: 8px; }
+    .uf-krow input, .uf-sbar input { flex: 1; min-width: 0; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--border-light, #303859); background: var(--bg-input, #1d2235); color: var(--text-primary, #e8ecf8); font: 13px 'DM Sans', system-ui, sans-serif; }
+    .uf-day { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #8b8fa8; margin: 8px 0 2px; }
+    #uf-list { display: flex; flex-direction: column; gap: 6px; }
+    .uf-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--border, #272e44); border-radius: 10px; background: var(--bg-card, #121620); }
+    .uf-row.uf-has { border-color: rgba(34,197,94,.45); }
+    .uf-row.uf-busy { opacity: .75; }
+    .uf-th { width: 64px; height: 64px; border-radius: 8px; overflow: hidden; background: rgba(255,255,255,.05); display: flex; align-items: center; justify-content: center; }
+    .uf-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .uf-meta { font-size: 12px; color: var(--text-secondary, #b8bdd6); }
+    .uf-sum { font-size: 12.5px; color: var(--text-primary, #e8ecf8); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin: 2px 0; }
+    .uf-q { font-size: 11.5px; color: #8b8fa8; }
+    .uf-st { font-size: 11.5px; }
+    .uf-act { display: flex; flex-direction: column; gap: 6px; }
+    .uf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+    .uf-tile { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .uf-use { padding: 0; border: 2px solid transparent; border-radius: 9px; overflow: hidden; cursor: pointer; background: rgba(255,255,255,.05); aspect-ratio: 3 / 4; }
+    .uf-use:hover { border-color: #f5a623; }
+    .uf-use.uf-wait { opacity: .5; cursor: progress; }
+    .uf-use img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .uf-tile figcaption { font-size: 11px; color: #8b8fa8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .uf-tile figcaption a { color: #f5a623; }
+    .uf-more { display: flex; justify-content: center; }
+    .uf-more [hidden] { display: none; }
+    .uf-grp { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--text-secondary, #b8bdd6); }
+    .uf-grp input { accent-color: #f5a623; }
+    .uf-cimg { aspect-ratio: 1; border-radius: 9px; overflow: hidden; background: rgba(255,255,255,.05); display: flex; align-items: center; justify-content: center; }
+    .uf-cimg img, .uf-cimg video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .uf-copy figcaption { display: flex; flex-direction: column; gap: 3px; white-space: normal; }
+    .uf-cname { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10.5px; color: var(--text-primary, #e8ecf8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .uf-cmeta { font-size: 10.5px; }
+    .uf-copy .pd-btn { align-self: flex-start; padding: 4px 9px; font-size: 11px; }
+    .uf-ic { font-size: 18px; opacity: .8; display: inline-flex; }
+    #uf-win, #uf-pick, #uf-copies, #pi-restore { z-index: 99998; } /* above the reminder cards (toasts stay on top) */
+    .pi-h { margin: 6px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: #8b8fa8; }
+    @media (max-width: 560px) {
+      .uf-row { grid-template-columns: 48px minmax(0, 1fr); }
+      .uf-th { width: 48px; height: 48px; }
+      .uf-act { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; }
+      .uf-krow, .uf-sbar { flex-wrap: wrap; }
+      .uf-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }`;
   document.head.appendChild(st);
 })();
 
@@ -44052,18 +45487,16 @@ render = function () { const r = _piOrigRender.apply(this, arguments); clearTime
           .replace(/\s*\(\d+\)$/, "")
           .replace(/[\s_\-]+/g, "-")
           .replace(/^-+|-+$/g, "");
-      // names: the file names the Scheduler is missing. onStep(done, total, name). Returns [{ name, blob }].
-      async function ppRebuildPictures(names, onStep) {
+      // Which saved batch posts match the missing pictures' file names
+      async function _rbJobs(names) {
         const want = new Map();
         (names || []).forEach((n) => {
           const k = _rbKey(n);
           if (k) want.set(k, n);
         });
-        const out = [];
-        if (!want.size || typeof _pbLoad !== "function" || typeof _mpBlob !== "function") return out;
-        while (_pb.busy) await new Promise((r) => setTimeout(r, 400));
-        // Which batch posts match a missing picture
         const jobs = [];
+        if (!want.size || typeof _pbLoad !== "function" || typeof _mpBlob !== "function") return jobs;
+        while (_pb.busy) await new Promise((r) => setTimeout(r, 400));
         for (const pid of PB_ORDER) {
           let raw = null;
           try {
@@ -44083,6 +45516,16 @@ render = function () { const r = _piOrigRender.apply(this, arguments); clearTime
             _pb.pid = prev;
           }
         }
+        return jobs;
+      }
+      // The names that can be rebuilt (nothing is drawn)
+      async function ppRebuildMatch(names) {
+        return (await _rbJobs(names)).map((j) => j.name);
+      }
+      // names: the file names the Scheduler is missing. onStep(done, total, name). Returns [{ name, blob }].
+      async function ppRebuildPictures(names, onStep) {
+        const out = [];
+        const jobs = await _rbJobs(names);
         // Draw them, one at a time
         for (let i = 0; i < jobs.length; i++) {
           const { pid, s, name } = jobs[i];
@@ -44109,6 +45552,19 @@ render = function () { const r = _piOrigRender.apply(this, arguments); clearTime
         }
         return out;
       }
+      // The size each platform's pictures are made at (the Scheduler crops Unsplash photos to it)
+      function ppPlatSize(pid) {
+        const p = typeof PLATS === "object" && PLATS ? PLATS[pid] : null;
+        return p && p.w && p.h ? { w: p.w, h: p.h } : null;
+      }
+      // Ask the browser to keep PostPilot's storage (pictures included) when the computer runs low on space
+      try {
+        if (navigator.storage && navigator.storage.persist)
+          navigator.storage
+            .persisted()
+            .then((on) => (on ? null : navigator.storage.persist()))
+            .catch(() => {});
+      } catch (e) {}
     </script>
     <script>
       // ══════════════════════════════════════════
