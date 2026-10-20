@@ -3385,7 +3385,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v117</span>
+              <span class="sb-version">v118</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -43820,10 +43820,12 @@ function _ufReg() {
   if (!_uf.reg) { const r = _pdLS(UF_REG, {}); _uf.reg = r && typeof r === 'object' ? r : {}; }
   return _uf.reg;
 }
-function _ufRegPut(fp, c) {
+// (a picture with a layout also keeps which layout and title it has, and where its plain photo is, so a copy of
+// the post knows it too)
+function _ufRegPut(fp, c, styled) {
   if (!fp || !c) return;
   const r = _ufReg();
-  r[fp] = { id: c.id, name: c.name, user: c.user, link: c.link, page: c.page, url: c.url, w: c.w, h: c.h, fmt: c.fmt, fp, at: c.at || Date.now() };
+  r[fp] = { id: c.id, name: c.name, user: c.user, link: c.link, page: c.page, url: c.url, raw: c.raw, w: c.w, h: c.h, fmt: c.fmt, fp, plainFp: c.plainFp || '', styled: styled || null, at: c.at || Date.now() };
   const keys = Object.keys(r);
   if (keys.length > 600) keys.sort((a, b) => (r[a].at || 0) - (r[b].at || 0)).slice(0, keys.length - 600).forEach(k => { delete r[k]; });
   _pdSet(UF_REG, r);
@@ -43836,7 +43838,19 @@ function _ufCredit(x) {
   const fp = _ufFp(src), own = x.unsplash && x.unsplash.name ? x.unsplash : null;
   if (own && (!own.fp || own.fp === fp)) return own;
   const r = _ufReg()[fp];
-  return r && r.name ? r : null;
+  if (!r || !r.name) return null;
+  const { styled, ...c } = r;
+  return c;
+}
+// The layout a post's picture was drawn with, if it has one (a copy of the post that lost the mark too)
+function _ufStyledOf(x) {
+  if (!x) return null;
+  const src = _ufSrc(x);
+  if (!src) return null;
+  const fp = _ufFp(src), own = x.unsplash && x.unsplash.name ? x.unsplash : null;
+  if (x.styled && own && (!own.fp || own.fp === fp)) return x.styled;
+  const r = _ufReg()[fp];
+  return r && r.styled ? r.styled : null;
 }
 const _ufProfile = (c) => (c && c.link) || (c && c.user ? 'https://unsplash.com/@' + c.user : 'https://unsplash.com/');
 function ufCreditHtml(c) {
@@ -43873,7 +43887,13 @@ function ufComposerRow(form) {
   const c = _ufCredit(form);
   const k = String(state.editingPostId) + '|' + state.activePlatform;
   const back = _uf.prev && _uf.prev.key === k;
-  return `<div class="uf-crow">${c ? `<span class="uf-credit">${ufCreditHtml(c)}</span>` : ''}<button type="button" class="uf-cbtn" onclick="event.preventDefault(); ufPickOpen({ form: true })">🌄 ${c ? 'Another Unsplash photo' : form.image ? 'Use an Unsplash photo instead' : 'Find a photo on Unsplash'}</button>${back ? `<button type="button" class="uf-cbtn" onclick="event.preventDefault(); ufPutBackPrev()">↩ Put back the picture it had</button>` : ''}</div>`;
+  const lay = c && typeof _lyP === 'function' && _lyP();
+  const st = _ufStyledOf(form), now = lay ? _lyTitle(form, state.activePlatform) : '';
+  const layBtns = lay ? `<button type="button" class="uf-cbtn ly-btn" onclick="event.preventDefault(); lyPickOpen({ form: true })">🎨 ${st ? 'Layout #' + (st.layout + 1) + ': change' : 'Add a layout'}</button>`
+    + (st && now && now !== st.title ? `<button type="button" class="uf-cbtn ly-btn" onclick="event.preventDefault(); lyRedraw()">↻ Redraw with the new title</button>` : '')
+    + (st ? `<button type="button" class="uf-cbtn" onclick="event.preventDefault(); lyPlain({ form: true })">↩ Plain photo</button>` : '') : '';
+  return `<div class="uf-crow">${c ? `<span class="uf-credit">${ufCreditHtml(c)}</span>` : ''}<button type="button" class="uf-cbtn" onclick="event.preventDefault(); ufPickOpen({ form: true })">🌄 ${c ? 'Another Unsplash photo' : form.image ? 'Use an Unsplash photo instead' : 'Find a photo on Unsplash'}</button>${layBtns}${back ? `<button type="button" class="uf-cbtn" onclick="event.preventDefault(); ufPutBackPrev()">↩ Put back the picture it had</button>` : ''}</div>`
+    + (st ? `<div class="uf-lynote">The image text: “${_pdE(st.title)}”</div>` : '');
 }
 
 // ── What each post is about, as words to search Unsplash for ──
@@ -44037,7 +44057,7 @@ function _ufCreditFrom(ph, q, w, h, fmt) {
   const u = ph.user || {};
   const url = ph.urls.raw + (ph.urls.raw.includes('?') ? '&' : '?') + `w=${w}&h=${h}&fit=crop&crop=entropy&q=85&fm=jpg`;
   return { id: ph.id, name: u.name || u.username || 'Unsplash photographer', user: u.username || '', link: (u.links && u.links.html) || (u.username ? 'https://unsplash.com/@' + u.username : ''),
-    page: (ph.links && ph.links.html) || '', url, dl: (ph.links && ph.links.download_location) || '', q, w, h, fmt, at: Date.now() };
+    page: (ph.links && ph.links.html) || '', url, raw: ph.urls.raw, dl: (ph.links && ph.links.download_location) || '', q, w, h, fmt, at: Date.now() };
 }
 // Same file type as the picture had ("….png" stays a PNG)
 const _ufFmt = (x) => /\.jpe?g$/i.test(String((x && x.imageName) || '')) ? 'jpg' : 'png';
@@ -44136,26 +44156,41 @@ async function _ufPersistOne(ws, kind, pid, rec) {
   all[pid][i] = stripped;
   try { localStorage.setItem(key, JSON.stringify(all)); return true; } catch (e) { return false; }
 }
-async function _ufApply(it, data, credit) {
+// guard: { fp } the picture the post had when this work began ('' for none). If the post (or its open editor) has
+// another picture by now, nothing is changed: it returns false and marks it.changed.
+async function _ufApply(it, data, credit, extra, guard) {
   const ws = getActiveWorkspace();
   if ((it.ws && it.ws !== ws) || _uf.switching) { const e = new Error('brand'); e.brand = true; throw e; }
+  it.changed = false;
+  if (guard) {
+    const cur = _ufCur(it);
+    let moved = !cur || _ufFp(_ufSrc(cur)) !== (guard.fp || '');
+    if (!moved && it.kind === 'post' && state.showComposer && state.form && String(state.editingPostId) === it.id && state.activePlatform === it.pid) {
+      try { syncFormFromDOM(); } catch (e) {}
+      moved = _ufFp(_ufSrc(state.form)) !== (guard.fp || '');
+    }
+    if (moved) { it.changed = true; return false; }
+  }
+  const ex = extra || { styled: null };
   const fp = _ufFp(data), c = Object.assign({}, credit, { fp }), dims = c.w + '×' + c.h;
-  _ufRegPut(fp, c);
+  delete c.styled;
+  if (!ex.styled) c.plainFp = fp;
+  _ufRegPut(fp, c, ex.styled || null);
   let rec = null;
   if (it.kind === 'post') {
     const arr = (state.posts[it.pid] || []).slice(), i = arr.findIndex(p => String(p.id) === it.id);
     if (i < 0) return false;
-    rec = { ...arr[i], image: data, imageOriginal: data, imageId: null, imageOriginalId: null, _imageDims: dims, unsplash: c };
+    rec = { ...arr[i], image: data, imageOriginal: data, imageId: null, imageOriginalId: null, _imageDims: dims, unsplash: c, ...ex };
     arr[i] = rec;
     state.posts = { ...state.posts, [it.pid]: arr };
     if (state.showComposer && state.form && String(state.editingPostId) === it.id && state.activePlatform === it.pid) {
       try { syncFormFromDOM(); } catch (e) {}
-      state.form = { ...state.form, image: data, imageOriginal: data, imageId: null, imageOriginalId: null, _imageDims: dims, unsplash: c };
+      state.form = { ...state.form, image: data, imageOriginal: data, imageId: null, imageOriginalId: null, _imageDims: dims, unsplash: c, ...ex };
     }
   } else {
     const arr = (state.drafts[it.pid] || []).slice(), i = arr.findIndex(d => String(d.id) === it.id);
     if (i < 0) return false;
-    rec = { ...arr[i], imageFull: data, imageThumb: data, imageFullId: null, imageThumbId: null, unsplash: c };
+    rec = { ...arr[i], imageFull: data, imageThumb: data, imageFullId: null, imageThumbId: null, unsplash: c, ...ex };
     arr[i] = rec;
     state.drafts = { ...state.drafts, [it.pid]: arr };
   }
@@ -44172,7 +44207,8 @@ function _ufSaveSoon() {
 }
 // A photo for one post: its group's photo, or the first one for its words that nothing else uses
 async function _ufFillOne(it, used, groupPick) {
-  const [w, h] = _ufSize(it.pid), fmt = _ufFmt(it.x), g = _ufGroup(it.x);
+  const [w, h] = _ufSize(it.pid), fmt = _ufFmt(it.x), g = _ufGroup(it.x), guard = { fp: _ufFp(_ufSrc(_ufCur(it) || it.x)) };
+  it.changed = false;
   let q = _uf.q[it.key] || _ufQuery(it.x, it.pid), ph = g && groupPick ? groupPick.get(g) : null;
   if (!ph) {
     const f = await _ufFind(q, _ufOrient(w, h), used, _uf.seen[it.key]);
@@ -44181,7 +44217,7 @@ async function _ufFillOne(it, used, groupPick) {
   }
   const c = _ufCreditFrom(ph, q, w, h, fmt);
   const data = await _ufDownload(c.url, w, h, fmt);
-  if (!(await _ufApply(it, data, c))) return false;
+  if (!(await _ufApply(it, data, c, null, guard))) return false;
   used.add(ph.id);
   if (g && groupPick) groupPick.set(g, ph);
   (_uf.seen[it.key] = _uf.seen[it.key] || new Set()).add(ph.id);
@@ -44228,7 +44264,7 @@ async function ufAutoFill(resumed, preset) {
   { const c = document.getElementById('pdc-ufresume'); if (c) c.remove(); }
   _uf.busy = true; _uf.stop = false; _uf.prog = null; _ufLock(true); _ufSideSync();
   const ws = getActiveWorkspace();
-  let filled = 0, rebuilt = 0, failed = 0, problem = null, fails = 0, total = 0;
+  let filled = 0, rebuilt = 0, failed = 0, problem = null, fails = 0, total = 0, styledN = 0, plainN = 0, ask = null;
   try {
     // 1. The posts in the saved batches come back exactly as they were
     if (o.rebuild && resumed !== true && typeof P.ppRebuildPictures === 'function') {
@@ -44261,7 +44297,19 @@ async function ufAutoFill(resumed, preset) {
       _ufSay(`🌄 Finding a photo for ${_pdE(_pdName(it.pid))}${it.date ? ' · ' + _pdE(_ppNiceDay(it.date)) : it.kind === 'draft' ? ' · draft' : ''} (${k + 1} of ${todo.length})…${kn ? `<br><span class="uf-kn">${_pdE(kn)}</span>` : ''}`);
       _ufRow(it, 'busy');
       try {
-        if (await _ufFillOne(it, used, groupPick)) { filled++; fails = 0; _ufRow(it, 'done'); _ufSoon(); }
+        if (await _ufFillOne(it, used, groupPick)) {
+          filled++; fails = 0;
+          // Its layout: when the Post Creator is set to this brand and you've okayed its logo and website (else it waits)
+          const rd = _lyP() ? _lyReady(ws) : null;
+          if (rd && !rd.ok) { plainN++; ask = rd; }
+          else if (rd) {
+            _ufSay(`🎨 Adding the layout for ${_pdE(_pdName(it.pid))}${it.date ? ' · ' + _pdE(_ppNiceDay(it.date)) : ''} (${k + 1} of ${todo.length})…`);
+            try { if (await _lyStyleOne(it)) styledN++; else plainN++; }
+            catch (e) { if (e.brand) throw e; plainN++; if (e.ready) ask = e.ready; }
+          }
+          _ufRow(it, 'done'); _ufSoon();
+        }
+        else if (it.changed) _ufRow(it, 'done'); // it got a picture meanwhile: left as it is
         else { failed++; _ufRow(it, 'none'); }
       } catch (e) {
         if (_ufIsKey(e)) { problem = 'key'; _ufRow(it, ''); break; }
@@ -44283,24 +44331,29 @@ async function ufAutoFill(resumed, preset) {
   const after = await _ufItems(), left = _ufWanted(after, o).length, vids = after.filter(it => it.skip).length;
   const bits = [];
   if (rebuilt) bits.push(`♻️ rebuilt ${rebuilt} from your saved batches`);
-  bits.push(`🌄 ${filled} new Unsplash photo${filled === 1 ? '' : 's'}`);
+  bits.push(`🌄 ${filled} new Unsplash photo${filled === 1 ? '' : 's'}${styledN ? (styledN === filled ? ', each with its layout, title, logo, website and photo credit' : ` (${styledN} with their layouts)`) : ''}`);
   let msg = `✅ Done: ${bits.join(', ')}.`;
+  const plainNote = !plainN ? '' : ' ' + (ask && ask.brand ? _pdE(_lyBrandText(ask.brand, plainN))
+    : ask && ask.confirm ? `${plainN === 1 ? 'One is' : plainN + ' are'} plain for now: check the logo and website on the card, and ${plainN === 1 ? 'it gets its layout' : 'they get their layouts'}.`
+    : `${plainN === 1 ? 'One is' : plainN + ' are'} still plain: press 🎨 Add layouts to give ${plainN === 1 ? 'it its layout' : 'them theirs'}.`);
+  msg += plainNote;
   if (problem === 'limit') {
-    msg = `${bits.join(', ')}. ${_ufAllUsedText()} (Unsplash’s limit). ${left} still need${left === 1 ? 's' : ''} a photo.`;
+    msg = `${bits.join(', ')}.${plainNote} ${_ufAllUsedText()} (Unsplash’s limit). ${left} still need${left === 1 ? 's' : ''} a photo.`;
     if (o.resume && left) { _ufScheduleResume(); msg += ` PostPilot carries on by itself at <b>${_pdE(_ufClock(_uf.resumeAt))}</b> while it stays open.`; }
     else msg += ` Press 🌄 Fill again after ${_pdE(_ufClock(_ufRestEnd()))}.`;
   } else if (problem === 'key') msg = _pdE(_ufErrText({ status: 401 }));
   else if (problem === 'nokey') { msg = `${rebuilt ? `♻️ Rebuilt ${rebuilt} from your saved batches. ` : ''}🔑 Paste your Unsplash key in the box above, then press ✨ Fill for the other ${left}.`; const k = document.getElementById('uf-key'); if (k) k.focus(); }
-  else if (problem === 'stopped') msg = `Stopped: ${bits.join(', ')}. ${left} still need${left === 1 ? 's' : ''} a photo.`;
+  else if (problem === 'stopped') msg = `Stopped: ${bits.join(', ')}.${plainNote} ${left} still need${left === 1 ? 's' : ''} a photo.`;
   else if (problem === 'brand') msg = 'Stopped because you switched brands. Open this window again to carry on.';
   else if (problem === 'studio') msg = _pdE(_ufErrText({ message: 'studio' }));
-  else if (problem === 'net') msg = `${bits.join(', ')}. Unsplash’s photos didn’t download (is the internet connected?). Press 🌄 Fill to try again.`;
+  else if (problem === 'net') msg = `${bits.join(', ')}.${plainNote} Unsplash’s photos didn’t download (is the internet connected?). Press 🌄 Fill to try again.`;
   else if (failed) msg += ` ${failed} didn’t find a photo: use 🔍 Choose on ${failed === 1 ? 'it' : 'those'}.`;
   if (!problem && !left) msg += vids ? ` Every empty photo slot is filled (${vids === 1 ? 'the video or GIF needs' : `the ${vids} videos and GIFs need`} re-uploading in ${vids === 1 ? 'its' : 'their'} editor).` : ' Every empty photo slot in this brand is filled.';
   _ufSay(msg, !!problem && problem !== 'stopped');
   if (!document.getElementById('uf-win') && (filled || rebuilt))
     _pdCard('ufdone', `<div class="pp-rem-title">🌄 ${filled + rebuilt} empty photo${filled + rebuilt === 1 ? '' : 's'} filled</div><div class="pp-rem-text">${msg}</div>`, [['Review them', (e, c) => { c.remove(); pdUnsplashOpen(); }, true], ['OK', (e, c) => c.remove()]], '#22c55e');
   if (document.getElementById('uf-win')) _ufCountRun();
+  if (plainN && ask && ask.confirm) _lyAsk(ask, () => lyStyleAll());
   return { filled, rebuilt, failed, problem, total };
 }
 // 🌄 Fill every empty photo now: one click, no questions (today's posts first; the list is there to review)
@@ -44355,8 +44408,11 @@ async function _ufAnother(it, btn) {
   if (btn) btn.disabled = true;
   _ufRow(it, 'busy');
   try {
-    if (await _ufFillOne(it, _ufUsedIds(), null)) { _ufRow(it, 'done'); _ufSoon(); _ufSaveSoon(); }
-    else _ufRow(it, 'none');
+    if (await _ufFillOne(it, _ufUsedIds(), null)) {
+      if (_lyP()) { _ufRow(it, 'busy'); try { await _lyStyleOne(it); } catch (e) { if (e.ready) _lyAsk(e.ready, _lyOnlyThen([it])); } }
+      _ufRow(it, 'done'); _ufSoon(); _ufSaveSoon();
+    }
+    else _ufRow(it, it.changed ? 'done' : 'none');
   } catch (e) { _ufRow(it, 'err', _ufErrText(e)); }
 }
 
@@ -44372,7 +44428,7 @@ function _ufRowHtml(it) {
       <div class="uf-sum">${_pdE(sum)}</div>
       ${c ? `<div class="uf-credit">${ufCreditHtml(c)}</div>` : q && !src ? `<div class="uf-q" title="What PostPilot searches Unsplash for">🔎 ${_pdE(q)}</div>` : ''}
       <div class="uf-st" aria-live="polite"></div></div>
-    <div class="uf-act">${it.skip ? '' : `${c ? `<button type="button" class="pd-btn" data-uf="another">🔄 Another</button>` : ''}<button type="button" class="pd-btn" data-uf="choose">🔍 Choose</button>`}</div>
+    <div class="uf-act">${it.skip ? '' : `${c ? `<button type="button" class="pd-btn" data-uf="another">🔄 Another</button>` : ''}<button type="button" class="pd-btn" data-uf="choose">🔍 Choose</button>${c && typeof _lyP === 'function' && _lyP() ? (() => { const st = _ufStyledOf(x); return `<button type="button" class="pd-btn" data-uf="layout">🎨 ${st ? 'Layout #' + (st.layout + 1) : 'Layout'}</button>`; })() : ''}`}</div>
   </div>`;
 }
 function _ufListHtml(items) {
@@ -44526,23 +44582,36 @@ async function ufPickUse(i, btn) {
   _ufPSay('Getting that photo…');
   try {
     if (pk.target.form) {
-      const fmt = _ufFmt(state.form || {});
+      const fmt = _ufFmt(state.form || {}), key0 = _lyFormKey(), fp0 = _ufFp(_ufSrc(state.form || {}));
       const c = _ufCreditFrom(ph, pk.q, pk.w, pk.h, fmt);
       const data = await _ufDownload(c.url, pk.w, pk.h, fmt);
+      // (only into the post it was chosen for, while it still has the picture it had: not another one opened meanwhile)
+      if (!state.form || _lyFormKey() !== key0) { _ufPSay('The editor now shows another post, so the photo wasn’t put on it.', true); return; }
+      try { syncFormFromDOM(); } catch (e) {}
+      if (_ufFp(_ufSrc(state.form)) !== fp0) { _ufPSay('This post got another picture meanwhile, so the photo wasn’t put on it.', true); return; }
       _ufApplyForm(data, c);
       _ufPing(c);
+      if (_lyP()) { _ufPSay('🎨 Adding the layout…'); try { await _lyStyleOne({ form: true }); } catch (e) { if (e.ready) { pdCloseModal('uf-pick'); _lyAsk(e.ready, _lyOnlyThen([{ form: true }])); } } }
     } else {
       const it = pk.target.it, todo = [it];
       const g = document.getElementById('uf-pgrp');
       if (g && g.checked) todo.push(..._ufGroupItems(it));
+      const wait = [];
+      let ask = null;
       for (const o of todo) {
         o.ws = getActiveWorkspace();
-        const [w, h] = _ufSize(o.pid), fmt = _ufFmt(_ufCur(o) || o.x);
+        const cur0 = _ufCur(o) || o.x, guard = { fp: _ufFp(_ufSrc(cur0)) };
+        const [w, h] = _ufSize(o.pid), fmt = _ufFmt(cur0);
         const c = _ufCreditFrom(ph, pk.q, w, h, fmt);
         const data = await _ufDownload(c.url, w, h, fmt);
-        if (await _ufApply(o, data, c)) { (_uf.seen[o.key] = _uf.seen[o.key] || new Set()).add(ph.id); _ufPing(c); _ufRow(o, 'done'); }
+        if (await _ufApply(o, data, c, null, guard)) {
+          (_uf.seen[o.key] = _uf.seen[o.key] || new Set()).add(ph.id); _ufPing(c);
+          if (_lyP()) { _ufPSay('🎨 Adding the layout…'); try { await _lyStyleOne(o); } catch (e) { if (e.ready) { ask = e.ready; wait.push(o); } } }
+          _ufRow(o, 'done');
+        } else if (o.changed) _ufRow(o, 'done');
       }
       _ufSoon(); _ufSaveSoon();
+      if (ask) { pdCloseModal('uf-pick'); _lyAsk(ask, _lyOnlyThen(wait)); }
     }
     pdCloseModal('uf-pick');
   } catch (e) { _ufPSay(_pdE(_ufErrText(e)), true); }
@@ -44553,10 +44622,11 @@ function _ufApplyForm(data, c) {
   if (!state.form) return false;
   try { syncFormFromDOM(); } catch (e) {}
   const f = state.form, key = String(state.editingPostId) + '|' + state.activePlatform;
-  if ((f.image || f.imageOriginal) && !(_uf.prev && _uf.prev.key === key)) _uf.prev = { key, image: f.image, imageOriginal: f.imageOriginal, imageId: f.imageId, imageOriginalId: f.imageOriginalId, unsplash: f.unsplash || null, _imageDims: f._imageDims, isGif: f.isGif };
-  const fp = _ufFp(data), cc = Object.assign({}, c, { fp });
-  _ufRegPut(fp, cc);
-  state.form = { ...f, image: data, imageOriginal: data, imageId: null, imageOriginalId: null, _imageDims: c.w + '×' + c.h, unsplash: cc, isVideo: false, isGif: false };
+  if ((f.image || f.imageOriginal) && !(_uf.prev && _uf.prev.key === key)) _uf.prev = { key, image: f.image, imageOriginal: f.imageOriginal, imageId: f.imageId, imageOriginalId: f.imageOriginalId, unsplash: f.unsplash || null, styled: f.styled || null, _imageDims: f._imageDims, isGif: f.isGif };
+  const fp = _ufFp(data), cc = Object.assign({}, c, { fp, plainFp: fp });
+  delete cc.styled;
+  _ufRegPut(fp, cc, null);
+  state.form = { ...f, image: data, imageOriginal: data, imageId: null, imageOriginalId: null, _imageDims: c.w + '×' + c.h, unsplash: cc, styled: null, isVideo: false, isGif: false };
   render();
   return true;
 }
@@ -44564,7 +44634,7 @@ function ufPutBackPrev() {
   const p = _uf.prev;
   if (!p || !state.form || p.key !== String(state.editingPostId) + '|' + state.activePlatform) return;
   try { syncFormFromDOM(); } catch (e) {}
-  state.form = { ...state.form, image: p.image, imageOriginal: p.imageOriginal, imageId: p.imageId, imageOriginalId: p.imageOriginalId, unsplash: p.unsplash, _imageDims: p._imageDims, isGif: p.isGif };
+  state.form = { ...state.form, image: p.image, imageOriginal: p.imageOriginal, imageId: p.imageId, imageOriginalId: p.imageOriginalId, unsplash: p.unsplash, styled: p.styled || null, _imageDims: p._imageDims, isGif: p.isGif };
   _uf.prev = null;
   render();
 }
@@ -44579,6 +44649,7 @@ document.addEventListener('click', (e) => {
   if (!it) return;
   if (a === 'choose') return ufPickOpen({ it });
   if (a === 'another') return void _ufAnother(it, b);
+  if (a === 'layout') return void lyPickOpen({ it });
 });
 // "↩ Put back" belongs to one open editor
 const _ufBaseOpenComposer = openComposer;
@@ -44590,7 +44661,7 @@ scheduleFromDraft = function () { _uf.prev = null; return _ufBaseFromDraft.apply
 // A photo you upload yourself replaces the Unsplash credit
 const _ufOrigUpload = handleImageUpload;
 handleImageUpload = function (e) {
-  if (state.form && e && e.target && e.target.files && e.target.files[0]) state.form.unsplash = null;
+  if (state.form && e && e.target && e.target.files && e.target.files[0]) { state.form.unsplash = null; state.form.styled = null; }
   return _ufOrigUpload.apply(this, arguments);
 };
 
@@ -44769,11 +44840,20 @@ function _ufAfterPersist(rec, out, src, idKeys, info) {
   if (String(src).startsWith('data:')) {
     const fp = _ufFp(src);
     out.imageFp = fp;
-    if (out.unsplash && out.unsplash.fp && out.unsplash.fp !== fp) delete out.unsplash;
-    if (!out.unsplash) { const r = _ufReg()[fp]; if (r) out.unsplash = r; }
+    if (out.unsplash && out.unsplash.fp && out.unsplash.fp !== fp) { delete out.unsplash; delete out.styled; if (rec) { delete rec.styled; } }
+    if (!out.unsplash) {
+      // (a copy of a post, to another platform or from a draft, gets its photo credit and layout back)
+      const r = _ufReg()[fp];
+      if (r) {
+        const { styled, ...c } = r;
+        out.unsplash = c;
+        if (styled) out.styled = styled; else delete out.styled;
+        if (rec && typeof rec === 'object' && !rec.unsplash) { rec.unsplash = c; if (styled && !rec.styled) rec.styled = styled; }
+      } else delete out.styled;
+    }
     const id = out[idKeys[1]] || out[idKeys[0]];
     if (id) _bkSave(id, src, info);
-  } else { delete out.imageFp; delete out.unsplash; } // a picture kept somewhere else (GitHub), not an Unsplash download
+  } else { delete out.imageFp; delete out.unsplash; delete out.styled; } // your own picture kept on GitHub: not an Unsplash photo
 }
 const _ufPrevPersist = persistPostImages;
 persistPostImages = async function (post) {
@@ -44826,7 +44906,7 @@ async function _ufHealDraft(x) {
 // The Unsplash photo a post was saved with, if its picture is still that photo
 const _ufCanRefetch = (x) => { const c = x && x.unsplash; return !!(c && c.url && c.w && c.h && c.fp && x.imageFp && c.fp === x.imageFp); };
 // When pictures are found missing: their safety copies first, then their Unsplash photo downloaded again
-async function _ufHeal(x, kind) {
+async function _ufHeal(x, kind, pid) {
   if (kind === 'draft') { if (await _ufHealDraft(x)) return true; }
   else {
     const ids = [x.imageOriginalId, x.imageId].filter(Boolean);
@@ -44835,15 +44915,30 @@ async function _ufHeal(x, kind) {
   const c = x.unsplash;
   if (!_ufCanRefetch(x) || _uf.tried.has(c.url)) return false;
   _uf.tried.add(c.url);
+  pid = pid || x.platform || '';
   try {
-    const u = await _ufDownload(c.url, c.w, c.h, c.fmt || 'png');
+    const plain = await _ufDownload(c.url, c.w, c.h, c.fmt || 'png'), plainFp = _ufFp(plain);
+    // the plain photo keeps a safety copy too (for ↩ Plain photo and 🎨 Layout)
+    if (!_bk.fps.has(plainFp)) _bkSave('plain_' + (c.id || 'photo') + '_' + pid + '_' + (x.id || ''), plain, { kind: 'plain', pid, ws: getActiveWorkspace(), name: x.imageName || '' });
+    let u = plain;
+    // With its layout: drawn again (same layout, title, logo and website); otherwise the plain photo, ready for 🎨 Add layouts
+    if (x.styled) {
+      const P = typeof _lyP === 'function' ? _lyP() : null;
+      try {
+        if (!P) throw new Error('studio');
+        const r = await P.ppStyleRender({ pid, ws: getActiveWorkspace(), title: x.styled.title, photo: _lyRawUrl(c) || plain, credit: _lyCreditOf(c), layout: x.styled.layout, look: await _lyLookOf(x.styled) });
+        u = await _ufBlobUrl(r.blob);
+        if (_ufFmt(x) === 'jpg') u = await _lyJpeg(u);
+      } catch (e) { u = plain; x.styled = null; }
+    }
     const ids = (kind === 'post' ? [x.imageOriginalId, x.imageId] : [x.imageFullId, x.imageThumbId]).filter(Boolean);
     for (const j of ids) { try { await _ufPutMain(j, u); } catch (e) {} }
     if (kind === 'post') { x.imageOriginal = u; x.image = u; } else { x.imageFull = u; x.imageThumb = u; }
     const fp = _ufFp(u);
-    x.unsplash = Object.assign({}, c, { fp });
+    x.unsplash = Object.assign({}, c, { fp, plainFp });
+    delete x.unsplash.styled;
     x.imageFp = fp;
-    _ufRegPut(fp, x.unsplash);
+    _ufRegPut(fp, x.unsplash, x.styled || null);
     if (!ids.length) _uf.needSave = true;
     return true;
   } catch (e) { return false; }
@@ -44854,9 +44949,9 @@ _piFind = async function () {
   if (!r || !r.n) return r;
   let healed = 0;
   const posts = [], drafts = [];
-  const heal = async (x, kind) => { try { return await _ufHeal(x, kind); } catch (e) { return false; } };
-  for (const x of r.posts) { if (await heal(x.p, 'post')) healed++; else posts.push(x); }
-  for (const x of r.drafts) { if (await heal(x.d, 'draft')) healed++; else drafts.push(x); }
+  const heal = async (x, kind, pid) => { try { return await _ufHeal(x, kind, pid); } catch (e) { return false; } };
+  for (const x of r.posts) { if (await heal(x.p, 'post', x.pid)) healed++; else posts.push(x); }
+  for (const x of r.drafts) { if (await heal(x.d, 'draft', x.pid)) healed++; else drafts.push(x); }
   if (healed) {
     _piOrigRender();
     if (_uf.needSave) { _uf.needSave = false; try { savePosts(state.posts); saveDrafts(state.drafts); } catch (e) {} }
@@ -44894,7 +44989,8 @@ async function _ufStartupPass() {
     }
     for (const r of _ufAllRecords()) {
       const c = r.rec.unsplash;
-      if (!_ufCanRefetch(r.rec) || !r.ids.length || r.ids.some(id => have.has(id)) || _uf.tried.has(c.url)) continue;
+      // (a picture with a layout is drawn again when its brand is open)
+      if (r.rec.styled || !_ufCanRefetch(r.rec) || !r.ids.length || r.ids.some(id => have.has(id)) || _uf.tried.has(c.url)) continue;
       _uf.tried.add(c.url);
       try { const u = await _ufDownload(c.url, c.w, c.h, c.fmt || 'png'); for (const id of r.ids) { await _ufPutMain(id, u); have.add(id); } back++; } catch (e) {}
     }
@@ -45116,12 +45212,28 @@ async function _ufCopySave(v) {
   const out = document.getElementById('uf-cout');
   if (out) out.innerHTML = `✅ Saved <b>${_pdE(name)}</b> ${r && r.folder ? 'to your <b>' + _pdE(r.folder) + '</b> folder' : 'to your Downloads'}.`;
 }
+// The copies a post still needs besides its own picture: the plain photo under a layout, and the logo on it
+function _ufKeepFps() {
+  const keep = new Set();
+  const add = (x) => {
+    if (!x || typeof x !== 'object') return;
+    if (x.unsplash && x.unsplash.plainFp) keep.add(x.unsplash.plainFp);
+    if (x.plainFp) keep.add(x.plainFp);
+    const st = x.styled;
+    if (st && st.logo) keep.add(st.logo);
+  };
+  _ufAllRecords().forEach(r => add(r.rec));
+  [state.posts, state.drafts].forEach(g => Object.values(g || {}).forEach(a => (a || []).forEach(add)));
+  add(state.form);
+  Object.values(_ufReg()).forEach(add);
+  return keep;
+}
 async function ufCopiesTidy() {
   await _bk.ready;
   const used = _piUsedIds();
   if (!used) return;
-  const cut = Date.now() - 30 * 864e5, gone = [];
-  _bk.byId.forEach((a, id) => { if (!used.has(id)) a.forEach(v => { if ((v.at || 0) < cut) gone.push(v); }); });
+  const cut = Date.now() - 30 * 864e5, gone = [], keep = _ufKeepFps();
+  _bk.byId.forEach((a, id) => { if (!used.has(id)) a.forEach(v => { if ((v.at || 0) < cut && !keep.has(v.fp)) gone.push(v); }); });
   const out = document.getElementById('uf-cout');
   if (!gone.length) { if (out) out.innerHTML = 'Nothing to remove: every copy belongs to a post or draft, or is less than 30 days old.'; return; }
   if (!confirm(`Remove ${gone.length} safety ${gone.length === 1 ? 'copy' : 'copies'} of pictures that no post or draft uses (in any brand) and that are more than 30 days old? This can’t be undone.`)) return;
@@ -45226,6 +45338,384 @@ function _ufBackupReminder() {
       .uf-krow, .uf-sbar { flex-wrap: wrap; }
       .uf-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }`;
+  document.head.appendChild(st);
+})();
+
+// ═════════════════════════════════════════════════════════════════
+// POST CREATOR LAYOUTS FOR FILLED PHOTOS (v118)
+// A photo filled from Unsplash gets the Post Creator treatment: the layout that suits its platform and photo best,
+// the post's title as the image text, your logo, website tag and the photographer's credit, drawn by the Post
+// Creator itself. 🎨 Layout (in the post's editor or the fill list) changes it; 🎨 Add layouts does every filled
+// photo at once. The logo and website are the Post Creator's, so it has to be set to the same brand as the Scheduler,
+// and PostPilot shows you that logo and website once for each brand (and again whenever they change) before using them.
+// Safe by design:
+//  • a picture is only replaced when the post (and its open editor) still has the picture the work began with,
+//  • the plain photo stays in the safety copies (and on Unsplash), so a layout can always be changed or taken off,
+//  • the logo and website each picture was drawn with are kept, so a lost picture is drawn again the same way.
+// ═════════════════════════════════════════════════════════════════
+const _ly = { busy: false, stop: false, prog: null, ranked: {}, toastAt: 0 };
+function _lyP() { const P = _ufP(); return P && typeof P.ppStyleRender === 'function' ? P : null; }
+// The image text: the post's title (the pin title, or the headline it was made with)
+function _lyTitle(x, pid) {
+  const clean = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const snap = (x && x.formSnapshot) || {};
+  let t = clean(x && x.title) || clean(x && x.srcPinTitle) || clean(x && x.srcHeader) || clean(snap.title) || clean(_ufHead(x || {}));
+  if (!t) {
+    let cap = '';
+    try { cap = clean(String(_ppPostText(x, pid) || '').split(/\n/)[0]); } catch (e) {}
+    t = cap.length > 120 ? cap.slice(0, 117).replace(/\s+\S*$/, '') + '…' : cap;
+  }
+  return t;
+}
+// The whole photo on Unsplash (the layout frames it itself)
+function _lyRawUrl(c) {
+  try {
+    const u = new URL((c && (c.raw || c.url)) || '');
+    if (!/(^|\.)unsplash\.com$/.test(u.hostname)) return '';
+    ['w', 'h', 'fit', 'crop', 'q', 'fm', 'dpr', 'auto', 'cs'].forEach(k => u.searchParams.delete(k));
+    u.searchParams.set('w', '2000'); u.searchParams.set('h', '2000'); u.searchParams.set('fit', 'max'); u.searchParams.set('q', '85'); u.searchParams.set('fm', 'jpg');
+    return u.toString();
+  } catch (e) { return ''; }
+}
+// The plain photo as the post had it: the post's own picture only when that's really the plain photo, else its
+// safety copy, else Unsplash again
+async function _lyPlain(x) {
+  const c = x ? (_ufCredit(x) || x.unsplash) : null, cur = _ufSrc(x);
+  if (cur && !_ufStyledOf(x) && (!c || !c.plainFp || c.plainFp === _ufFp(cur))) return cur;
+  if (c && c.plainFp) { const u = await _bkGetPic(c.plainFp); if (u) return u; }
+  if (c && c.url && c.w && c.h) { try { return await _ufDownload(c.url, c.w, c.h, c.fmt || 'png'); } catch (e) {} }
+  return '';
+}
+const _lyCreditOf = (c) => c ? { id: c.id, name: c.name, user: c.user, link: c.link, page: c.page } : null;
+// The logo and website a picture was drawn with (to draw it again the same way after it was lost)
+async function _lyLookOf(st) {
+  if (!st || !('site' in st)) return {};
+  let logo = null;
+  if (st.logo) logo = (await _bkGetPic(st.logo)) || null;
+  else if (st.logoUrl) logo = st.logoUrl;
+  else logo = '';
+  return { site: st.site || '', logo };
+}
+// Layouts the platform's other posts already use (so they don't all look the same)
+function _lyUsed(pid, exceptKey) {
+  const out = [];
+  [['post', state.posts], ['draft', state.drafts]].forEach(([kind, g]) => ((g && g[pid]) || []).forEach(x => { const st = x && _ufStyledOf(x); if (st && kind + '|' + pid + '|' + x.id !== exceptKey) out.push(st.layout); }));
+  return out;
+}
+const _lyRankKey = (key, pid, c, title, ws) => [key, pid, (c && c.id) || '', title, ws].join('|');
+// Which post or draft the editor shows, in which brand (so a picture meant for one never lands on another)
+const _lyFormKey = () => [state.showComposer && state.form ? 'open' : 'closed', String(state.editingPostId), String(state.editingDraftId), state.activePlatform, getActiveWorkspace()].join('|');
+async function _lyJpeg(data) {
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('the picture couldn’t be read')); i.src = data; });
+  const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+  c.getContext('2d').drawImage(img, 0, 0);
+  return c.toDataURL('image/jpeg', 0.92);
+}
+
+// ── Ready to draw? The Post Creator is set to the post's brand, and you've okayed the logo and website ──
+// Switching brands in the Post Creator changes its saved logos and colors, not the logo and website in use, so
+// PostPilot shows you the logo and website the pictures will get, once for each brand, and again only if they change.
+const _lyLookKey = (ws) => ws + '_pp_layout_look';
+function _lyReady(ws) {
+  const P = _lyP();
+  if (!P || typeof P.ppStyleCheck !== 'function') return { ok: true, live: null };
+  let chk;
+  try { chk = P.ppStyleCheck(ws); } catch (e) { return { ok: true, live: null }; }
+  if (!chk.ok) return { ok: false, brand: chk };
+  const live = { site: chk.site || '', logo: chk.logoFp || '' }, kept = _pdLS(_lyLookKey(ws), null);
+  if (kept && kept.site === live.site && kept.logo === live.logo) return { ok: true, live };
+  return { ok: false, confirm: { chk, live, changed: !!kept, ws } };
+}
+function _lyErr(rd) {
+  const e = new Error(rd.brand ? 'The Post Creator is set to another brand' : 'The logo and website need your OK');
+  e.ready = rd;
+  if (rd.brand) e.otherBrand = rd.brand;
+  return e;
+}
+// Shows what's needed: switch the Post Creator's brand, or okay the logo and website (then carries on). The card
+// sits above an open window (the 🌄 Fill list), so it's never hidden behind it.
+function _lyAsk(rd, then) {
+  if (!rd) return;
+  if (rd.brand) _lyBrandCard(rd.brand);
+  else if (rd.confirm) _lyLookCard(rd.confirm, then);
+  else return;
+  const box = _pdBox();
+  box.style.zIndex = '100001';
+  clearInterval(_ly.raiseT);
+  _ly.raiseT = setInterval(() => { if (!document.getElementById('pdc-lylook') && !document.getElementById('pdc-lybrand')) { box.style.zIndex = ''; clearInterval(_ly.raiseT); } }, 800);
+}
+// After ✓ Yes: just these posts (or the post in the editor) get their layouts
+function _lyOnlyThen(items) {
+  const run = async () => {
+    let n = 0;
+    for (const it of items) {
+      try { if (await _lyStyleOne(it)) { n++; if (!it.form) _ufRow(it, 'done'); } }
+      catch (e) { if (e.ready) return _lyAsk(e.ready, run); showToast('The layout couldn’t be drawn: ' + (e.message || e), 'error'); }
+    }
+    if (n) { _ufSoon(); _ufSaveSoon(); _ppToast(`🎨 ${n === 1 ? 'Layout added' : n + ' layouts added'}.`, 3500); }
+  };
+  return run;
+}
+function _lyLookCard(cf, then) {
+  const n = getWorkspaceNames() || {}, brand = n[cf.ws] || 'this brand', chk = cf.chk;
+  const logo = chk.logo && /^(data:image\/|https:\/\/)/.test(chk.logo) ? `<img src="${_pdE(chk.logo)}" alt="Logo" class="ly-lklogo"/>` : '<span class="ly-lknone">No logo</span>';
+  const site = chk.site ? `🌐 <b>${_pdE(chk.site)}</b>` : '<span class="ly-lknone">No website</span>';
+  const warn = !chk.logo && !chk.site ? '<div class="ly-lkwarn">⚠ The Post Creator has no logo and no website set.</div>' : '';
+  _pdCard('lylook', `<div class="pp-rem-title">🎨 ${cf.changed ? 'New logo or website for' : 'Logo and website for'} ${_pdE(brand)}’s layouts</div><div class="pp-rem-text">${cf.changed ? 'The Post Creator’s logo or website changed since your last layouts. ' : ''}Layouts put the Post Creator’s logo and website on each picture, as when you make a post there. ${_pdE(brand)}’s pictures will show:</div><div class="ly-lk">${logo}<span>${site}</span></div>${warn}<div class="pp-rem-text">Not right? Change them in the Post Creator (it should be set to ${_pdE(brand)}), then come back.</div>`,
+    [['✓ Yes, use them', (e, c) => { c.remove(); _pdSet(_lyLookKey(cf.ws), Object.assign({ at: Date.now() }, cf.live)); if (then) then(); }, true],
+     ['Open the Post Creator', (e, c) => { c.remove(); try { window.parent.studioTab('creator'); } catch (x) {} }], ['Not now', (e, c) => c.remove()]], '#a78bfa');
+}
+function _lyBrandNames(chk) {
+  const n = getWorkspaceNames() || {};
+  return { now: n[chk.now] || chk.nowName || 'another brand', want: n[getActiveWorkspace()] || chk.wantName || 'this brand' };
+}
+function _lyBrandText(chk, n) {
+  const b = _lyBrandNames(chk);
+  return `${n ? (n === 1 ? 'One photo is' : n + ' photos are') + ' plain for now: l' : 'L'}ayouts put the Post Creator’s logo and website on the picture, and the Post Creator is set to ${b.now}. Switch it to ${b.want} (the brand buttons at the top of the Post Creator), check the logo and website, then press 🎨 Add layouts.`;
+}
+function _lyBrandCard(chk) {
+  const b = _lyBrandNames(chk);
+  _pdCard('lybrand', `<div class="pp-rem-title">🎨 First switch the Post Creator to ${_pdE(b.want)}</div><div class="pp-rem-text">Layouts put the Post Creator’s logo and website on the picture, as when you make a post there. The Post Creator is set to <b>${_pdE(b.now)}</b>, and these posts are <b>${_pdE(b.want)}</b>’s. Choose ${_pdE(b.want)} with the brand buttons at the top of the Post Creator, check its logo and website, then press 🎨 Add layouts again.</div>`,
+    [['Open the Post Creator', (e, c) => { c.remove(); try { window.parent.studioTab('creator'); } catch (x) {} }, true], ['OK', (e, c) => c.remove()]], '#a78bfa');
+}
+
+// Draw one post (or the post open in the editor) with a layout: the best one, or the one given.
+// Returns its layout, or null when it was left as it is (the post has another picture by now).
+async function _lyStyleOne(it, opts) {
+  opts = opts || {};
+  const P = _lyP();
+  if (!P) { const e = new Error('studio'); throw e; }
+  const form = !!it.form, pid = form ? state.activePlatform : it.pid;
+  if (form) { try { syncFormFromDOM(); } catch (e) {} }
+  const x = form ? state.form : (_ufCur(it) || it.x);
+  if (!x) return null;
+  const c0 = _ufCredit(x) || x.unsplash;
+  if (!c0 || !c0.name) return null;
+  const { styled: _was, ...c } = c0;
+  const ws = getActiveWorkspace(), title = opts.title || _lyTitle(x, pid), key = form ? 'form|' + pid + '|' + state.editingPostId : it.key;
+  const rd = _lyReady(ws);
+  if (!rd.ok) throw _lyErr(rd);
+  const startFp = _ufFp(_ufSrc(x)), formKey = form ? _lyFormKey() : '';
+  const plain = await _lyPlain(x);
+  const sources = [_lyRawUrl(c), plain].filter(Boolean), rk = _lyRankKey(key, pid, c, title, ws);
+  let res = null, lastErr = null;
+  for (const photo of sources) {
+    try { res = await P.ppStyleRender({ pid, ws, title, photo, credit: _lyCreditOf(c), layout: opts.layout, avoid: _lyUsed(pid, key), seed: key + '|' + (c.id || ''), ranked: opts.layout == null ? _ly.ranked[rk] : null, expect: rd.live }); break; }
+    catch (e) {
+      // (the Post Creator's brand, logo or website changed meanwhile: ask again)
+      if (e && (e.otherBrand || e.lookChanged)) { const r2 = _lyReady(ws); if (r2.ok) throw new Error('the Post Creator’s logo or website changed while it was drawn: try again'); throw _lyErr(r2); }
+      lastErr = e;
+    }
+  }
+  if (!res || !res.blob) throw lastErr || new Error('the layout couldn’t be drawn');
+  if (res.ranked) _ly.ranked[rk] = res.ranked;
+  let data = await _ufBlobUrl(res.blob);
+  if (_ufFmt(x) === 'jpg') data = await _lyJpeg(data);
+  // What it was drawn with: layout, title, and the logo and website (the logo keeps a safety copy)
+  const look = res.look || {}, styled = { layout: res.layout, title, at: Date.now(), ws, site: look.site || '' };
+  if (look.logo && String(look.logo).startsWith('data:')) { styled.logo = _ufFp(look.logo); _bkSave('brandlogo_' + ws, look.logo, { kind: 'logo', ws, name: 'brand-logo.png' }); }
+  else if (look.logo && /^https:\/\//.test(look.logo)) styled.logoUrl = look.logo;
+  const plainFp = plain ? _ufFp(plain) : (c.plainFp || '');
+  if (plain && !_bk.fps.has(plainFp)) _bkSave('plain_' + (c.id || 'photo') + '_' + pid + '_' + (x.id || 'form'), plain, { kind: 'plain', pid, ws, name: x.imageName || '' });
+  const credit = Object.assign({}, c, { plainFp, raw: c.raw || _lyRawUrl(c) });
+  if (form) {
+    if (!_lyApplyForm(data, credit, styled, { ws, formKey, fp: startFp })) { const e = new Error('The post in the editor changed while its layout was being drawn, so it was left as it is.'); e.changed = true; throw e; }
+  } else if (!(await _ufApply(Object.assign(it, { ws }), data, credit, { styled }, { fp: startFp }))) return null;
+  return styled;
+}
+function _lyApplyForm(data, credit, styled, guard) {
+  if (!state.form || !state.showComposer) return false;
+  try { syncFormFromDOM(); } catch (e) {}
+  if (guard && (getActiveWorkspace() !== guard.ws || _lyFormKey() !== guard.formKey || _ufFp(_ufSrc(state.form)) !== (guard.fp || ''))) return false;
+  const fp = _ufFp(data), cc = Object.assign({}, credit, { fp });
+  delete cc.styled;
+  _ufRegPut(fp, cc, styled);
+  state.form = { ...state.form, image: data, imageOriginal: data, imageId: null, imageOriginalId: null, unsplash: cc, styled };
+  render();
+  return true;
+}
+// ↻ Redraw with the new title (the layout it has)
+async function lyRedraw() {
+  const st = state.form && _ufStyledOf(state.form);
+  if (!st) return;
+  _ppToast('🎨 Drawing it again with the new title…', 5000);
+  try { await _lyStyleOne({ form: true }, { layout: st.layout }); _ppToast('🎨 Drawn again with the new title.', 4000); }
+  catch (e) { if (e.ready) _lyAsk(e.ready, () => lyRedraw()); else showToast(e.message || String(e), 'error'); }
+}
+// ↩ Plain photo: the layout comes off
+async function lyPlain(target) {
+  const form = !!target.form;
+  if (form) { try { syncFormFromDOM(); } catch (e) {} }
+  const x = form ? state.form : _ufCur(target.it);
+  const c0 = x && (_ufCredit(x) || x.unsplash);
+  if (!c0) return;
+  const startFp = _ufFp(_ufSrc(x)), formKey = form ? _lyFormKey() : '', ws = getActiveWorkspace();
+  const plain = await _lyPlain(x);
+  if (!plain) return showToast('The plain photo couldn’t be found (is the internet connected?).', 'error');
+  const { styled: _was, ...c } = c0;
+  const credit = Object.assign({}, c, { plainFp: _ufFp(plain) });
+  if (form) {
+    if (!state.form || !state.showComposer) return;
+    try { syncFormFromDOM(); } catch (e) {}
+    if (_lyFormKey() !== formKey || getActiveWorkspace() !== ws || _ufFp(_ufSrc(state.form)) !== startFp) return showToast('The post in the editor changed meanwhile, so it was left as it is.', 'error');
+    const fp = _ufFp(plain), cc = Object.assign({}, credit, { fp });
+    _ufRegPut(fp, cc, null);
+    state.form = { ...state.form, image: plain, imageOriginal: plain, imageId: null, imageOriginalId: null, unsplash: cc, styled: null };
+    render();
+  } else {
+    const it = target.it;
+    if (!(await _ufApply(Object.assign(it, { ws }), plain, credit, { styled: null }, { fp: startFp }))) return;
+    _ufRow(it, 'done'); _ufSoon(); _ufSaveSoon();
+  }
+}
+// 🎨 Layout: the Post Creator's layout picker, drawn with this post's title and photo, best first
+async function lyPickOpen(target) {
+  const P = _lyP();
+  if (!P || typeof P.ppStylePick !== 'function') return showToast('Open the Scheduler inside PostPilot Studio to change layouts.', 'error');
+  const form = !!target.form, pid = form ? state.activePlatform : target.it.pid;
+  if (form) { try { syncFormFromDOM(); } catch (e) {} }
+  const x = form ? state.form : (_ufCur(target.it) || target.it.x);
+  const c = x && (_ufCredit(x) || x.unsplash);
+  if (!c) return;
+  const ws = getActiveWorkspace(), rd = _lyReady(ws);
+  if (!rd.ok) return _lyAsk(rd, () => lyPickOpen(target));
+  const title = _lyTitle(x, pid), key = form ? 'form|' + pid + '|' + state.editingPostId : target.it.key, rk = _lyRankKey(key, pid, c, title, ws);
+  const st = _ufStyledOf(x);
+  // The post (and picture) this picker is for: a pick only goes on it
+  const fp0 = _ufFp(_ufSrc(x)), formKey0 = form ? _lyFormKey() : '';
+  const still = () => form ? (_lyFormKey() === formKey0 && !!state.form && _ufFp(_ufSrc(state.form)) === fp0) : (getActiveWorkspace() === ws && _ufFp(_ufSrc(_ufCur(target.it) || {})) === fp0);
+  _ppToast('🎨 Getting the layouts ready for this post…', 6000);
+  const plain = await _lyPlain(x);
+  if (!still()) return showToast('That post isn’t open any more (or its picture changed), so its layouts weren’t shown.', 'error');
+  const spec = { pid, ws, title, credit: _lyCreditOf(c), layout: st ? st.layout : undefined, ranked: _ly.ranked[rk], expect: rd.live };
+  const onPick = async (n) => {
+    if (!still()) return showToast('That post isn’t open any more (or its picture changed), so the layout wasn’t put on it.', 'error');
+    _ppToast(`🎨 Drawing layout #${n + 1}…`, 6000);
+    try {
+      const r = await _lyStyleOne(form ? { form: true } : target.it, { layout: n, title });
+      if (!form) { _ufRow(target.it, 'done'); _ufSoon(); _ufSaveSoon(); }
+      _ppToast(r ? `🎨 Now using layout #${n + 1}.` : 'That post has another picture now, so it was left as it is.', 4000);
+    } catch (e) { if (e.ready) _lyAsk(e.ready, () => onPick(n)); else showToast(e.changed ? e.message : 'That layout couldn’t be drawn: ' + (e.message || e), 'error'); }
+  };
+  for (const photo of [_lyRawUrl(c), plain].filter(Boolean)) {
+    try {
+      const ranked = await P.ppStylePick(Object.assign({}, spec, { photo }), onPick);
+      _ly.ranked[rk] = ranked;
+      // (the picker opened late: the editor moved on meanwhile, so it closes again)
+      if (!still()) { try { P.mixClosePicker(); } catch (e) {} showToast('That post isn’t open any more, so its layouts were closed.', 'error'); }
+      return;
+    }
+    catch (e) {
+      if (e && (e.otherBrand || e.lookChanged)) { const r2 = _lyReady(ws); return r2.ok ? showToast('The Post Creator’s logo or website just changed. Press 🎨 Layout again.', 'error') : _lyAsk(r2, () => lyPickOpen(target)); }
+    }
+  }
+  showToast('The layouts couldn’t be drawn (is the internet connected?).', 'error');
+}
+
+// ── 🎨 Add layouts: every filled photo that's still plain, today's posts first ──
+function _lyCollect() {
+  const today = _pdDay(0), out = [];
+  const add = (kind, pid, x, band) => out.push({ kind, pid, id: String(x.id), x, date: x.scheduledDate || '', time: x.scheduledTime || '', key: kind + '|' + pid + '|' + x.id, band });
+  Object.entries(state.posts || {}).forEach(([pid, arr]) => (Array.isArray(arr) ? arr : []).forEach(p => {
+    if (!p || p.manualUpload || p.imagePurged || _ufIsVid(p) || _ufIsGif(p) || !_ufSrc(p) || !_ufCredit(p) || _ufStyledOf(p)) return;
+    const d = p.scheduledDate || '';
+    add('post', pid, p, _pdPostedLike(p) ? 5 : !d ? 2 : d === today ? 0 : d > today ? 1 : 3);
+  }));
+  Object.entries(state.drafts || {}).forEach(([pid, arr]) => (Array.isArray(arr) ? arr : []).forEach(d => {
+    if (!d || _ufIsVid(d) || _ufIsGif(d) || !_ufSrc(d) || !_ufCredit(d) || _ufStyledOf(d)) return;
+    add('draft', pid, d, 4);
+  }));
+  const desc = (b) => b === 3 || b === 5;
+  out.sort((a, b) => a.band - b.band || (desc(a.band) ? (b.date + b.time).localeCompare(a.date + a.time) : (a.date + a.time).localeCompare(b.date + b.time)));
+  return out;
+}
+function _lySay(html) { const t = document.getElementById('ly-run-text'); if (t) t.innerHTML = html; const s = document.getElementById('uf-stat'); if (s && _ly.busy) s.innerHTML = html; }
+function lyStop() { _ly.stop = true; _lySay('Stopping after this one…'); }
+async function lyStyleAll() {
+  if (_ly.busy || _uf.busy) return;
+  const P = _lyP();
+  if (!P) return showToast('Open the Scheduler inside PostPilot Studio to add layouts.', 'error');
+  const ws = getActiveWorkspace();
+  const todo = _ufWanted(_lyCollect(), UF_DEFAULTS);
+  if (!todo.length) return;
+  const rd = _lyReady(ws);
+  if (!rd.ok) return _lyAsk(rd, () => lyStyleAll());
+  _ly.busy = true; _ly.stop = false; _ly.prog = null;
+  ['pdc-lybrand', 'pdc-lylook'].forEach(id => { const c = document.getElementById(id); if (c) c.remove(); });
+  _pdCard('lyrun', `<div class="pp-rem-title">🎨 Adding layouts to your filled photos</div><div class="pp-rem-text" id="ly-run-text">Starting with today’s posts…</div>`, [['⏹ Stop', () => lyStop()]], '#a78bfa');
+  let done = 0, failed = 0, stopped = '', ask = null;
+  try {
+    for (let k = 0; k < todo.length; k++) {
+      const it = todo[k];
+      if (_ly.stop) { stopped = 'stopped'; break; }
+      if (getActiveWorkspace() !== ws) { stopped = 'brand'; break; }
+      const cur = _ufCur(it);
+      if (!cur || _ufStyledOf(cur) || !_ufCredit(cur)) continue;
+      it.x = cur;
+      _ly.prog = { k: k + 1, n: todo.length };
+      _lySideSync();
+      _lySay(`🎨 Choosing the best layout for ${_pdE(_pdName(it.pid))}${it.date ? ' · ' + _pdE(_ppNiceDay(it.date)) : it.kind === 'draft' ? ' · draft' : ''} (${k + 1} of ${todo.length})…`);
+      try { if (await _lyStyleOne(it)) { done++; _ufRow(it, 'done'); _ufSoon(); } else if (!it.changed) failed++; }
+      catch (e) {
+        if (e.message === 'studio' || e.brand) { stopped = e.brand ? 'brand' : 'studio'; break; }
+        if (e.ready) { stopped = 'ask'; ask = e.ready; break; }
+        failed++;
+      }
+    }
+  } finally {
+    if (done && getActiveWorkspace() === ws && !_uf.switching) { try { await savePosts(state.posts); await saveDrafts(state.drafts); } catch (e) {} }
+    _ly.busy = false; _ly.prog = null;
+    const c = document.getElementById('pdc-lyrun'); if (c) c.remove();
+    try { render(); } catch (e) {}
+    _lySideSync();
+  }
+  const left = _ufWanted(_lyCollect(), UF_DEFAULTS).length;
+  let msg = `🎨 ${done} photo${done === 1 ? '' : 's'} now ${done === 1 ? 'has its' : 'have their'} layout, title, logo, website and photo credit.`;
+  if (stopped === 'stopped') msg += ` Stopped: ${left} still plain.`;
+  else if (stopped === 'brand') msg += ' Stopped because you switched brands.';
+  else if (stopped === 'ask') msg += ask.brand ? ' Stopped: ' + _pdE(_lyBrandText(ask.brand, left)) : ` Stopped: the Post Creator’s logo or website changed. Check them on the card, and the other ${left} get their layouts.`;
+  else if (failed) msg += ` ${failed} couldn’t be drawn: try 🎨 Layout on ${failed === 1 ? 'it' : 'them'}.`;
+  _pdCard('lydone', `<div class="pp-rem-title">🎨 Layouts added</div><div class="pp-rem-text">${msg} To change one, open the post and press 🎨 Layout.</div>`, [['OK', (e, c) => c.remove(), true]], '#a78bfa');
+  if (ask && ask.confirm) _lyAsk(ask, () => lyStyleAll());
+  return { done, failed, stopped };
+}
+// The sidebar button, under 🌄 Fill
+function _lySideSync() {
+  const card = document.querySelector('.cu-card');
+  if (!card) return;
+  let b = card.querySelector('.ly-side');
+  const n = _ly.busy || !_lyP() ? 0 : _ufWanted(_lyCollect(), UF_DEFAULTS).length;
+  if (!_ly.busy && !n) { if (b) b.remove(); return; }
+  if (!b) {
+    b = document.createElement('button');
+    b.type = 'button'; b.className = 'cu-btn ly-side';
+    b.onclick = () => { if (_ly.busy) return; lyStyleAll(); };
+    const after = card.querySelector('.uf-side') || [...card.querySelectorAll('button.cu-btn')].find(x => /Today/.test(x.textContent || ''));
+    if (after) after.after(b); else card.prepend(b);
+  } else {
+    const fill = card.querySelector('.uf-side');
+    if (fill && fill.nextElementSibling !== b) fill.after(b);
+  }
+  const label = _ly.busy ? `🎨 Adding layouts${_ly.prog ? ` ${_ly.prog.k} of ${_ly.prog.n}` : ''}…` : `🎨 Add layouts to ${n} photo${n === 1 ? '' : 's'}`;
+  if (b.textContent !== label) b.textContent = label;
+  const tip = 'Gives every filled photo the Post Creator look: the best layout for its platform and photo, the post’s title, your logo, website and the photographer’s credit, today’s posts first';
+  if (b.title !== tip) b.title = tip;
+  b.classList.toggle('ly-going', _ly.busy);
+}
+let _lySideQ = 0;
+new MutationObserver(() => { if (_lySideQ) return; _lySideQ = requestAnimationFrame(() => { _lySideQ = 0; try { _lySideSync(); } catch (e) {} }); }).observe(document.documentElement, { childList: true, subtree: true });
+(function _lyStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .cu-btn.ly-side { border-color: rgba(167,139,250,.75) !important; background: rgba(167,139,250,.14) !important; color: #c4b5fd !important; font-weight: 800 !important; }
+    .cu-btn.ly-side:hover { background: rgba(167,139,250,.24) !important; }
+    .cu-btn.ly-side.ly-going { border-style: dashed !important; }
+    .uf-crow .uf-cbtn.ly-btn { border-color: rgba(167,139,250,.6); }
+    .uf-lynote { font-size: 11.5px; color: #8b8fa8; }
+    .ly-lk { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 8px 10px; border: 1px solid rgba(167,139,250,.45); border-radius: 9px; background: rgba(167,139,250,.08); font-size: 12.5px; overflow-wrap: anywhere; }
+    .ly-lklogo { width: 44px; height: 44px; object-fit: contain; border-radius: 6px; background: repeating-conic-gradient(rgba(255,255,255,.08) 0 25%, transparent 0 50%) 0 0 / 10px 10px; flex: none; }
+    .ly-lknone { color: #8b8fa8; font-style: italic; }
+    .ly-lkwarn { font-size: 12px; color: #fbbf4b; margin-bottom: 6px; }`;
   document.head.appendChild(st);
 })();
 
@@ -45641,15 +46131,12 @@ function _ufBackupReminder() {
               onStep(i, jobs.length, name);
             } catch (e) {}
           }
-          const prev = _pb.pid;
-          _pb.pid = pid;
           try {
-            const blob = await _pbWith(s, () => _mpBlob(s.layout, pid));
+            // (the batch post's settings are lent only while its design is laid out, all at once: see _ppLend)
+            const blob = await _ppOneAtATime(() => _ppRender(pid, s.layout, (fn) => _ppLend(s, pid, null, null, null, fn)));
             if (blob) out.push({ name, blob });
           } catch (e) {
             console.warn("Couldn't rebuild " + name, e);
-          } finally {
-            _pb.pid = prev;
           }
         }
         if (onStep) {
@@ -45672,6 +46159,457 @@ function _ufBackupReminder() {
             .then((on) => (on ? null : navigator.storage.persist()))
             .catch(() => {});
       } catch (e) {}
+      // ═══════════════════════════════════════════════════════════════
+      // POST CREATOR LAYOUTS FOR THE SCHEDULER'S PHOTOS (v118)
+      // A photo the Scheduler filled from Unsplash goes through the same steps as a Batch post: its title becomes the
+      // image text, the photo is framed on its subject (with the overlay that keeps text readable, as after an
+      // upload), the layouts are scored for that title and photo on that platform, and the best one is drawn with
+      // the Post Creator's logo, website tag and the photographer's credit.
+      // The Post Creator's settings are lent to a post only for moments that run all at once (laying a design out,
+      // scoring a few layouts, opening the layout picker), never across a wait. Nothing else can run during those
+      // moments, so nothing ever sees the lent settings: not your clicks or typing, not a save, not a Send, not the
+      // Batch or the rebuild. The slow part (loading the photo, drawing the picture) works on a finished copy of the
+      // design that no longer needs them, in its own corner of the page.
+      // The logo and website are the Post Creator's, so it has to be set to the post's brand, as when you make a
+      // post there (and the Scheduler shows you that logo and website once per brand before it uses them). A picture
+      // drawn again after it was lost keeps the logo and website it was first drawn with.
+      // ═══════════════════════════════════════════════════════════════
+      const _ppSt = { area: null, pickUrl: null, q: Promise.resolve() };
+      // One at a time (each one is a lot of work for the browser)
+      function _ppOneAtATime(fn) {
+        const run = _ppSt.q.then(fn, fn);
+        _ppSt.q = run.catch(() => {});
+        return run;
+      }
+      function _ppStyleArea() {
+        let a = document.getElementById("pp-style-score");
+        if (!a) {
+          a = document.createElement("div");
+          a.id = "pp-style-score";
+          a.setAttribute("aria-hidden", "true");
+          // (not visibility:hidden: the scoring treats hidden text as missing, so every layout would score the same)
+          a.style.cssText = "position:fixed;left:-40000px;top:0;width:2600px;display:flex;flex-wrap:wrap;align-items:flex-start;opacity:0;pointer-events:none;";
+          document.body.appendChild(a);
+        }
+        return a;
+      }
+      // Where the pictures are drawn: like the Post Creator's own download area, but its own, so a download you
+      // start meanwhile and this never clear each other's work
+      function _ppDrawArea() {
+        let a = document.getElementById("pp-style-draw");
+        if (!a) {
+          a = document.createElement("div");
+          a.id = "pp-style-draw";
+          a.setAttribute("aria-hidden", "true");
+          a.style.cssText = "position:fixed;top:0;left:0;pointer-events:none;z-index:-9999;";
+          document.body.appendChild(a);
+        }
+        return a;
+      }
+      // The photo as a short in-page address (a data URL repeated in every layout would be heavy)
+      async function _ppPhotoUrl(photo) {
+        if (!photo) return { url: "", done: () => {} };
+        const blob = await (await fetch(photo)).blob();
+        const url = URL.createObjectURL(blob);
+        return { url, done: () => setTimeout(() => URL.revokeObjectURL(url), 2000) };
+      }
+
+      // ── Which brand: the logo and website on the picture ──
+      const _PP_PLACEHOLDER_SITE = /^(https?:\/\/)?(www\.)?yourwebsite\.com\/?$/i;
+      const _ppSite = (v) => {
+        v = String(v || "").trim();
+        return _PP_PLACEHOLDER_SITE.test(v) ? "" : v;
+      };
+      const _ppActiveWs = () => (typeof BRAND_SYNC_WS_IDS !== "undefined" && BRAND_SYNC_WS_IDS[_pfActiveAccount]) || "ws_a";
+      function _ppBrandName(ws) {
+        try {
+          return (getPostPilotBrandData(ws) || {}).name || ws;
+        } catch (e) {
+          return ws;
+        }
+      }
+      // A short fingerprint of a picture (the same one the Scheduler uses)
+      function _ppFp(s) {
+        s = String(s || "");
+        if (!s) return "";
+        let h = 0x811c9dc5;
+        const n = s.length,
+          step = Math.max(1, Math.floor(n / 512));
+        for (let i = 0; i < n; i += step) {
+          h ^= s.charCodeAt(i);
+          h = Math.imul(h, 0x01000193);
+        }
+        h ^= s.charCodeAt(n - 1);
+        h = Math.imul(h, 0x01000193);
+        return n.toString(36) + "-" + (h >>> 0).toString(36);
+      }
+      // Is the Post Creator set to this brand, and which logo and website would the picture get? (The Scheduler
+      // asks before it draws, and shows you the logo and website once per brand.)
+      function ppStyleCheck(ws) {
+        const now = _ppActiveWs();
+        return { ok: !ws || ws === now, now, nowName: _ppBrandName(now), wantName: _ppBrandName(ws || now), site: _ppSite(S.siteURL), logo: S.logo || "", logoFp: _ppFp(S.logo || "") };
+      }
+      // A new picture: the Post Creator's logo and website as they are now (and as you okayed them: expect)
+      function _ppLiveLook(ws, expect) {
+        const c = ppStyleCheck(ws);
+        if (!c.ok) {
+          const e = new Error(`The Post Creator is set to ${c.nowName}, and this post is ${c.wantName}'s`);
+          e.otherBrand = c;
+          throw e;
+        }
+        if (expect && (expect.site !== c.site || expect.logo !== c.logoFp)) {
+          const e = new Error("The Post Creator's logo or website changed");
+          e.lookChanged = true;
+          throw e;
+        }
+        return { site: c.site, logo: c.logo };
+      }
+      // A picture drawn again: the logo and website it had (or the Post Creator's, when it's set to that brand)
+      function _ppKeptLook(look, ws) {
+        const same = !ws || ws === _ppActiveWs();
+        return {
+          site: look.site != null ? _ppSite(look.site) : same ? _ppSite(S.siteURL) : "",
+          logo: look.logo != null ? look.logo : same ? S.logo || "" : "",
+        };
+      }
+      // The brand's logo, website and color schemes, only while the settings are lent
+      function _ppBrandBorrow(ws, look) {
+        const saved = { acct: _pfActiveAccount, logo: S.logo, siteURL: S.siteURL, savedSlots: S.savedSlots };
+        if (look) {
+          S.logo = look.logo || "";
+          S.siteURL = look.site || "";
+        }
+        const idx = ws && typeof BRAND_SYNC_WS_IDS !== "undefined" ? BRAND_SYNC_WS_IDS.indexOf(ws) : -1;
+        if (idx >= 0 && idx !== _pfActiveAccount) {
+          _pfActiveAccount = idx;
+          try {
+            const raw = localStorage.getItem(ws + "_" + LS_SLOTS);
+            const p = raw ? JSON.parse(raw) : null;
+            if (Array.isArray(p)) S.savedSlots = applyBrandSlot(p.slice());
+          } catch (e) {}
+        }
+        return () => {
+          _pfActiveAccount = saved.acct;
+          S.logo = saved.logo;
+          S.siteURL = saved.siteURL;
+          S.savedSlots = saved.savedSlots;
+        };
+      }
+
+      // ── The settings lent to one post, all at once ──
+      // Everything is put back before anything else can run (and before any redraw the moment asked for).
+      function _ppLend(slot, pid, ws, look, setup, fn) {
+        const prevPid = _pb.pid,
+          keep = { overlay: S.overlay, photoCreditOn: S.photoCreditOn };
+        let restoreBrand = null,
+          saved = null;
+        _pbBusy++; // nothing saves, syncs or redraws meanwhile
+        try {
+          restoreBrand = _ppBrandBorrow(ws, look);
+          _pb.pid = pid;
+          saved = _pbApply(slot);
+          if (setup) setup();
+          return fn();
+        } finally {
+          if (saved) _pbRestore(saved);
+          S.overlay = keep.overlay;
+          S.photoCreditOn = keep.photoCreditOn;
+          _pb.pid = prevPid;
+          if (restoreBrand) restoreBrand();
+          _pbBusy--;
+          _pbFlush();
+        }
+      }
+      // This post: its title, its photo framed on its subject (with the overlay an upload gets), the photographer
+      // credited, its brand's logo and website
+      function _ppAsPost(s, fn) {
+        const slot = { header: s.title || "", body: "", photo: s.url || "", credit: s.credit ? Object.assign({}, s.credit, { src: s.url }) : null };
+        return _ppLend(
+          slot,
+          s.pid,
+          s.ws,
+          s.look,
+          () => {
+            S.photoCreditOn = true;
+            const info = s.info;
+            if (info && S.bg) {
+              S.bgInfo = Object.assign({ sig: "pp-" + (s.credit ? s.credit.id : "photo") }, info);
+              if (typeof smartOn !== "function" || smartOn()) {
+                S.bgX = Math.round(Math.min(92, Math.max(8, info.fx * 100)));
+                S.bgY = Math.round(Math.min(92, Math.max(8, info.fy * 100)));
+                if (typeof _autoOverlay === "function") S.overlay = _autoOverlay(info);
+              }
+            }
+          },
+          fn
+        );
+      }
+      // Draw one layout at the platform's size, exactly as the Post Creator saves it (PNG). lend(fn) runs fn with the
+      // post's settings; only laying the design out needs them.
+      async function _ppRender(pid, layout, lend) {
+        const pl = PLATS[pid];
+        if (!pl || !templates[layout]) throw new Error("Couldn't draw this design");
+        const fw = pl.w,
+          fh = pl.h;
+        const wrap = document.createElement("div");
+        wrap.style.cssText = `width:${fw}px;height:${fh}px;overflow:hidden;position:relative;`;
+        _ppDrawArea().appendChild(wrap);
+        try {
+          let bg = "#000000";
+          lend(() => {
+            wrap.innerHTML = applyGifOverlay(templates[layout](PAL(), fw, fh));
+            bg = gapColor();
+            try {
+              fitTextBatch([wrap]);
+            } catch (e) {}
+          });
+          // The rest is the Post Creator's own export steps, on the finished design
+          window._xfBusyUntil = performance.now() + 6000;
+          try {
+            await _xfBakeBackgrounds(wrap);
+          } catch (e) {
+            console.warn("Photo prep (backgrounds) failed:", e);
+          }
+          try {
+            _xfBakeClips(wrap);
+          } catch (e) {}
+          try {
+            await _xfBakeImgs(wrap);
+          } catch (e) {
+            console.warn("Photo prep (images) failed:", e);
+          }
+          try {
+            _xfBakeGlows(wrap);
+            _xfFlattenMoves(wrap);
+          } catch (e) {}
+          const c1 = await html2canvas(wrap, {
+            width: fw,
+            height: fh,
+            scale: 1,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: bg,
+            logging: false,
+            x: 0,
+            y: 0,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: Math.max(fw, window.innerWidth || fw),
+            windowHeight: Math.max(fh, window.innerHeight || fh),
+          });
+          // (drawn at 2× and saved at the platform's size, like the Post Creator's pictures for the Scheduler)
+          const c2 = document.createElement("canvas");
+          c2.width = fw * 2;
+          c2.height = fh * 2;
+          const x2 = c2.getContext("2d");
+          x2.imageSmoothingEnabled = true;
+          x2.imageSmoothingQuality = "high";
+          x2.drawImage(c1, 0, 0, c2.width, c2.height);
+          const out = document.createElement("canvas");
+          out.width = fw;
+          out.height = fh;
+          const xo = out.getContext("2d");
+          xo.imageSmoothingEnabled = true;
+          xo.imageSmoothingQuality = "high";
+          xo.drawImage(c2, 0, 0, fw, fh);
+          return await new Promise((res, rej) => out.toBlob((b) => (b ? res(b) : rej(new Error("No image"))), "image/png"));
+        } finally {
+          wrap.remove();
+        }
+      }
+
+      // What Smart Fit leaves to the person looking at the layouts, checked here because nobody looks before these
+      // are drawn: words a layout prints besides the post's title, website and photo credit ("NEW", "Hot Deal",
+      // "Upload Image 2", "Vol. 1", a star rating), the logo sitting on the headline, and the one photo repeated in
+      // several frames. Those layouts are ranked lower, and they are all still there to pick by hand.
+      const _PP_RATING = /[★⭐☆]{3,}/;
+      function _ppWords(s) {
+        return String(s || "").toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+      }
+      function _ppLineRects(el) {
+        const rg = document.createRange();
+        rg.selectNodeContents(el);
+        return [...rg.getClientRects()].filter((r) => r.width > 0.5 && r.height > 0.5);
+      }
+      function _ppLooks(inner, title, site) {
+        const own = new Set(_ppWords(title)),
+          ownList = [...own],
+          titleFlat = ownList.length ? _ppWords(title).join("") : "",
+          siteWords = _ppWords(site),
+          siteFlat = siteWords.join("");
+        siteWords.forEach((w) => own.add(w));
+        const ownWord = (w) => own.has(w) || (w.length >= 4 && (ownList.some((o) => o.startsWith(w)) || siteFlat.includes(w)));
+        const extra = [];
+        const walk = document.createTreeWalker(inner, NodeFilter.SHOW_TEXT);
+        for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+          const el = n.parentElement,
+            t = n.nodeValue || "";
+          if (!el || !/\S/.test(t) || el.closest("[data-sf]")) continue;
+          if (_effOpacity(el, inner) < 0.3) continue;
+          if (_PP_RATING.test(t)) extra.push("★★★");
+          // A piece of the title ("EARTHQ", "Halloween pet") or of the website is still the title or the website
+          const flat = _ppWords(t).join("");
+          if (flat.length >= 3 && (titleFlat.includes(flat) || siteFlat.includes(flat))) continue;
+          _ppWords(t).forEach((w) => {
+            if (!ownWord(w)) extra.push(w);
+          });
+        }
+        // The logo on the headline (each line of it, so the space beside a short line doesn't count)
+        let logoHit = 0;
+        const lines = [];
+        _findTextEls(inner, title).forEach((el) => {
+          if (_effOpacity(el, inner) >= 0.5) lines.push(..._ppLineRects(el));
+        });
+        if (lines.length) {
+          inner.querySelectorAll('[data-sf="logo"], [data-sf="logo2"]').forEach((lg) => {
+            if (_effOpacity(lg, inner) < 0.2) return;
+            const lr = lg.getBoundingClientRect(),
+              A = _area(lr);
+            if (!A) return;
+            let hit = 0;
+            lines.forEach((r) => (hit += _area(_rectI(lr, r))));
+            logoHit = Math.max(logoHit, Math.min(1, hit / A));
+          });
+        }
+        // The same photo in more than one frame (a soft, see-through backdrop behind it doesn't count)
+        let copies = 0;
+        if (S.bg) {
+          const cr = inner.getBoundingClientRect(),
+            CA = _area(cr),
+            pre = S.bg.slice(0, 160);
+          inner.querySelectorAll("img, [style*='url(']").forEach((el) => {
+            const isImg = el.tagName === "IMG" ? el.getAttribute("src") === S.bg : (el.getAttribute("style") || "").indexOf(pre) !== -1;
+            if (!isImg || _effOpacity(el, inner) < 0.6) return;
+            if (/blur\(/.test(getComputedStyle(el).filter || "")) return;
+            if (CA && _area(_rectI(el.getBoundingClientRect(), cr)) / CA >= 0.04) copies++;
+          });
+        }
+        return { extra, logoHit, copies };
+      }
+      // Every layout scored for this title and photo on this platform (the Post Creator's own Smart Fit scoring,
+      // then the checks above), eight layouts at a time
+      async function _ppScoreAll(s) {
+        const pl = PLATS[s.pid];
+        if (!pl) return [];
+        const area = _ppStyleArea();
+        const T = 220 / Math.max(pl.w, pl.h),
+          tw = Math.round(pl.w * T),
+          th = Math.round(pl.h * T);
+        const out = [];
+        for (let i0 = 0; i0 < templates.length; i0 += 8) {
+          _ppAsPost(s, () => {
+            const pal = PAL();
+            for (let i = i0; i < Math.min(templates.length, i0 + 8); i++) {
+              const card = document.createElement("div");
+              card.className = "mp-score-card";
+              const wrap = document.createElement("div");
+              wrap.className = "tcard-preview";
+              wrap.style.cssText = `position:relative;overflow:hidden;width:${tw}px;height:${th}px;`;
+              const inner = document.createElement("div");
+              inner.style.cssText = `position:absolute;top:0;left:0;width:${pl.w}px;height:${pl.h}px;transform:scale(${T});transform-origin:top left;`;
+              try {
+                inner.innerHTML = applyGifOverlay(templates[i](pal, pl.w, pl.h));
+              } catch (e) {
+                continue;
+              }
+              wrap.appendChild(inner);
+              card.appendChild(wrap);
+              area.appendChild(card);
+              try {
+                fitTextBatch([inner]);
+              } catch (e) {}
+              try {
+                const r = _scoreCard(card);
+                if (r) {
+                  let lk = { extra: [], logoHit: 0, copies: 0 };
+                  try {
+                    lk = _ppLooks(inner, S.header, S.siteURL);
+                  } catch (e) {}
+                  let sc = r.score;
+                  if (lk.extra.length) sc -= 25;
+                  if (lk.logoHit > 0.05) sc -= 15;
+                  if (lk.copies > 1) sc -= 10;
+                  out.push({ i, score: Math.round(sc * 10) / 10, smart: r.score, extra: lk.extra.slice(0, 8), logo: Math.round(lk.logoHit * 100) / 100, copies: lk.copies });
+                }
+              } catch (e) {}
+              area.removeChild(card);
+            }
+          });
+          await new Promise((r) => setTimeout(r, 0));
+        }
+        return out.sort((a, b) => b.score - a.score || a.i - b.i);
+      }
+      async function _ppPrep(spec, look) {
+        const ph = await _ppPhotoUrl(spec.photo);
+        let info = null;
+        try {
+          info = ph.url && typeof analyzeImage === "function" ? await analyzeImage(ph.url) : null;
+        } catch (e) {}
+        return { ph, s: Object.assign({}, spec, { url: ph.url, info, look }) };
+      }
+      // spec: { pid, ws, title, photo (data or https), credit, layout (optional), avoid: [layouts], seed, ranked,
+      //   look (for a picture drawn again: { site, logo } it had) }
+      // Returns { blob (PNG at the platform's size), layout, ranked, look: { site, logo } }
+      function ppStyleRender(spec) {
+        return _ppOneAtATime(() => _ppStyleRender(spec));
+      }
+      async function _ppStyleRender(spec) {
+        const look = spec.look ? _ppKeptLook(spec.look, spec.ws) : _ppLiveLook(spec.ws, spec.expect);
+        const { ph, s } = await _ppPrep(spec, look);
+        try {
+          let layout = Number.isInteger(spec.layout) && templates[spec.layout] ? spec.layout : null,
+            ranked = spec.ranked || null;
+          if (layout == null) {
+            if (!ranked) ranked = await _ppScoreAll(s);
+            // The best for this post; among layouts that score the same, a different one for different posts, and
+            // not one the platform's other posts already use
+            const avoid = new Set(spec.avoid || []),
+              top = ranked.length ? ranked[0].score : 0;
+            const near = ranked.filter((r) => r.score >= top - 1 && !avoid.has(r.i));
+            let h = 0;
+            for (const ch of String(spec.seed || "")) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+            const pick = near.length ? near[h % near.length] : ranked.slice(0, 8).find((r) => !avoid.has(r.i)) || ranked[0];
+            layout = pick ? pick.i : 0;
+          }
+          const blob = await _ppRender(s.pid, layout, (fn) => _ppAsPost(s, fn));
+          return { blob, layout, ranked, look };
+        } finally {
+          ph.done();
+        }
+      }
+      // The layouts for this post, best first, to choose from (the Post Creator's layout picker, drawn with this
+      // post's title and photo). onPick(layout) runs when one is clicked.
+      function ppStylePick(spec, onPick) {
+        return _ppOneAtATime(() => _ppStylePick(spec, onPick));
+      }
+      async function _ppStylePick(spec, onPick) {
+        const look = _ppLiveLook(spec.ws, spec.expect);
+        const { ph, s } = await _ppPrep(spec, look);
+        if (_ppSt.pickUrl) {
+          try {
+            URL.revokeObjectURL(_ppSt.pickUrl);
+          } catch (e) {}
+        }
+        _ppSt.pickUrl = ph.url; // kept while the picker shows it
+        const ranked = spec.ranked || (await _ppScoreAll(s));
+        _ppAsPost(s, () => {
+          const keepScores = _tmplScores,
+            keepPicks = _topPicks,
+            sc = {};
+          ranked.forEach((r) => (sc[r.i] = { score: r.score }));
+          _tmplScores = sc;
+          _topPicks = new Set(ranked.slice(0, 6).filter((r) => r.score >= 55).map((r) => r.i));
+          try {
+            mixOpenPicker(Number.isInteger(spec.layout) ? spec.layout : ranked.length ? ranked[0].i : 0, spec.pid, (n) => setTimeout(() => onPick(n), 0));
+            const sub = document.getElementById("mix-sub");
+            if (sub) sub.textContent = `Drawn with this post's title and photo. The best layouts for it come first.`;
+          } finally {
+            _tmplScores = keepScores;
+            _topPicks = keepPicks;
+          }
+        });
+        return ranked;
+      }
     </script>
     <script>
       // ══════════════════════════════════════════
