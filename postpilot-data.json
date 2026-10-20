@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-10-20T02:57:55.605Z",
+  "lastSaved": "2026-10-20T03:02:49.354Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -5518,9 +5518,9 @@
         "id": 1791339517494.192,
         "platform": "instagram",
         "scheduledDate": "2026-10-19",
-        "scheduledTime": "09:00",
+        "scheduledTime": "20:02",
         "timezone": "America/Los_Angeles",
-        "publishStatus": "scheduled",
+        "publishStatus": "published",
         "publishError": "",
         "publishedAt": null,
         "imageName": "Three-drivers-three-cars-one-household_0006_Instagram.png",
@@ -5561,7 +5561,7 @@
         "ytDriveUrl": "",
         "ytLiveUrl": "",
         "tags": [],
-        "liveUrl": "",
+        "liveUrl": "https://www.instagram.com/p/Desv5iJG5xG/",
         "fromBrandCreator": true,
         "_imageDims": "1080×1080",
         "unsplash": {
@@ -5580,7 +5580,13 @@
           "fp": "1dxem-uap78v"
         },
         "isVideo": false,
-        "isGif": false
+        "isGif": false,
+        "platformScheduled": false,
+        "liveAt": 1792465362990,
+        "plannedFor": {
+          "date": "2026-10-19",
+          "time": "09:00"
+        }
       },
       {
         "id": 1791339517494.7358,
@@ -12328,9 +12334,9 @@
       "missedDayPending": null
     },
     "instagram": {
-      "count": 0,
-      "lastDate": "",
-      "lastMilestone": 0,
+      "count": 1,
+      "lastDate": "2026-10-19",
+      "lastMilestone": 1,
       "freezeTokens": 0,
       "trophies": 0,
       "frozenDates": [],
@@ -12428,9 +12434,9 @@
       "missedDayPending": null
     },
     "facebook": {
-      "count": 1,
-      "lastDate": "2026-10-16",
-      "lastMilestone": 1,
+      "count": 0,
+      "lastDate": "",
+      "lastMilestone": 0,
       "freezeTokens": 0,
       "trophies": 0,
       "frozenDates": [],
