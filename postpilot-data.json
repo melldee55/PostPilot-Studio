@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-10-19T23:53:35.610Z",
+  "lastSaved": "2026-10-20T00:01:05.627Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -11276,9 +11276,9 @@
   "analytics": {},
   "streaks": {
     "pinterest": {
-      "count": 1,
-      "lastDate": "2026-10-16",
-      "lastMilestone": 1,
+      "count": 0,
+      "lastDate": "",
+      "lastMilestone": 0,
       "freezeTokens": 0,
       "trophies": 0,
       "frozenDates": [],
