@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-10-20T03:09:55.532Z",
+  "lastSaved": "2026-10-20T03:13:04.277Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -3343,7 +3343,7 @@
       {
         "id": 1791338914182.98,
         "platform": "pinterest",
-        "scheduledDate": "2026-10-20",
+        "scheduledDate": "2026-10-19",
         "scheduledTime": "10:00",
         "timezone": "America/Los_Angeles",
         "publishStatus": "scheduled",
@@ -3620,7 +3620,7 @@
       {
         "id": 1790383606191.224,
         "platform": "pinterest",
-        "scheduledDate": "2026-10-20",
+        "scheduledDate": "2026-10-19",
         "scheduledTime": "16:00",
         "timezone": "America/Los_Angeles",
         "publishStatus": "scheduled",
@@ -3690,7 +3690,7 @@
       {
         "id": 1790735456698,
         "platform": "pinterest",
-        "scheduledDate": "2026-10-20",
+        "scheduledDate": "2026-10-19",
         "scheduledTime": "18:00",
         "timezone": "America/Los_Angeles",
         "publishStatus": "scheduled",
@@ -3828,7 +3828,7 @@
       {
         "id": 1790383600512.7205,
         "platform": "pinterest",
-        "scheduledDate": "2026-10-20",
+        "scheduledDate": "2026-10-19",
         "scheduledTime": "20:00",
         "timezone": "America/Los_Angeles",
         "publishStatus": "scheduled",
@@ -5751,7 +5751,7 @@
       {
         "id": 1791339517494.7358,
         "platform": "instagram",
-        "scheduledDate": "2026-10-20",
+        "scheduledDate": "2026-10-19",
         "scheduledTime": "10:00",
         "timezone": "America/Los_Angeles",
         "publishStatus": "scheduled",
