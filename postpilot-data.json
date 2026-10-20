@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-10-20T03:05:55.615Z",
+  "lastSaved": "2026-10-20T03:07:55.711Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -6759,9 +6759,9 @@
         "id": 1790736447648.79,
         "platform": "google",
         "scheduledDate": "2026-10-19",
-        "scheduledTime": "10:00",
+        "scheduledTime": "20:06",
         "timezone": "America/Los_Angeles",
-        "publishStatus": "scheduled",
+        "publishStatus": "published",
         "publishError": "",
         "publishedAt": null,
         "imageName": "Renting-with-a-killer-gaming-setup_0007_Google.png",
@@ -6804,7 +6804,7 @@
         "tags": [
           "renter"
         ],
-        "liveUrl": "",
+        "liveUrl": "https://share.google/y1n6tqkSn9UocaJJO",
         "fromBrandCreator": true,
         "rescheduledFrom": {
           "date": "2026-10-13",
@@ -6827,7 +6827,12 @@
           "fp": "19fdq-vqvg8v"
         },
         "isVideo": false,
-        "isGif": false
+        "isGif": false,
+        "liveAt": 1792465593417,
+        "plannedFor": {
+          "date": "2026-10-19",
+          "time": "10:00"
+        }
       },
       {
         "id": 1790365502814,
@@ -13015,9 +13020,9 @@
       "missedDayPending": null
     },
     "google": {
-      "count": 0,
-      "lastDate": "",
-      "lastMilestone": 0,
+      "count": 1,
+      "lastDate": "2026-10-19",
+      "lastMilestone": 1,
       "freezeTokens": 0,
       "trophies": 0,
       "frozenDates": [],
