@@ -3385,7 +3385,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v115</span>
+              <span class="sb-version">v116</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -43694,7 +43694,12 @@ async function _piCount() {
   if (!_piMissing().n) { const c = document.getElementById('pdc-imgmiss'); if (c) c.remove(); return; }
   _piBusy = true;
   let n = 0, vids = 0;
-  try { const m = await _piFind(); n = m.n; vids = m.posts.filter(x => x.p.isVideo || x.p.isGif || /\.(mp4|mov|webm|gif)$/i.test(String(x.p.imageName || ''))).length + m.drafts.filter(x => x.d.isVideo || x.d.isGif || /\.(mp4|mov|webm|gif)$/i.test(String(x.d.imageName || ''))).length; } catch (e) {} finally { _piBusy = false; }
+  try {
+    // Posts that already went out don't need their picture to post (they're still in the lists to fill)
+    const m = await _piFind(), posts = m.posts.filter(x => !_pdPostedLike(x.p));
+    n = posts.length + m.drafts.length;
+    vids = posts.filter(x => x.p.isVideo || x.p.isGif || /\.(mp4|mov|webm|gif)$/i.test(String(x.p.imageName || ''))).length + m.drafts.filter(x => x.d.isVideo || x.d.isGif || /\.(mp4|mov|webm|gif)$/i.test(String(x.d.imageName || ''))).length;
+  } catch (e) {} finally { _piBusy = false; }
   const ws = getActiveWorkspace(), k = 'pi_seen_' + ws;
   const card = document.getElementById('pdc-imgmiss');
   if (!n) { if (card) card.remove(); return; }
@@ -43704,8 +43709,8 @@ async function _piCount() {
   const later = ['Later', (e, c) => { try { sessionStorage.setItem(k, String(n)); } catch (x) {} c.remove(); }];
   if (vids && vids === n) _pdCard('imgmiss', `<div class="pp-rem-title">🎬 ${n} post${n === 1 ? ' is' : 's are'} missing ${n === 1 ? 'its video or GIF' : 'their videos or GIFs'}</div><div class="pp-rem-text">${n === 1 ? 'It needs' : 'They need'} re-uploading in ${n === 1 ? 'its' : 'their'} editor, or put back from files.</div>`,
     [['♻️ Restore', (e, c) => { c.remove(); pdRestoreOpen(); }, true], later], '#ef4444', () => { try { sessionStorage.setItem(k, String(n)); } catch (x) {} });
-  else _pdCard('imgmiss', `<div class="pp-rem-title">🖼 ${n} post${n === 1 ? ' is' : 's are'} missing ${n === 1 ? 'its picture' : 'their pictures'}</div><div class="pp-rem-text">Fill them with Unsplash photos that fit each post (today's first), rebuild the ones from your saved batches, or put them back from files.</div>`,
-    [['🌄 Fill from Unsplash', (e, c) => { c.remove(); pdUnsplashOpen(); }, true], ['♻️ Restore', (e, c) => { c.remove(); pdRestoreOpen(); }], later], '#ef4444',
+  else _pdCard('imgmiss', `<div class="pp-rem-title">🖼 ${n} post${n === 1 ? ' is' : 's are'} missing ${n === 1 ? 'its picture' : 'their pictures'}</div><div class="pp-rem-text">One click fills every empty photo with an Unsplash photo that fits its post, today's first. Or get them back another way.</div>`,
+    [['🌄 Fill them all now', (e, c) => { c.remove(); ufFillAllNow(); }, true], ['♻️ Other ways', (e, c) => { c.remove(); pdRestoreOpen(); }], later], '#ef4444',
     () => { try { sessionStorage.setItem(k, String(n)); } catch (x) {} });
 }
 let _piT = 0;
@@ -44040,18 +44045,31 @@ function _ufGroup(x) {
   if (!m || m[1].length < 3 || /^(brandpost|draft|image|post|pasted-image|untitled|download|screenshot)$/.test(m[1])) return '';
   return m[1] + '_' + m[2];
 }
-async function _ufItems() {
-  const m = await _piFind();
+// The platforms whose posts need a picture (the night-before check flags them "No image" otherwise)
+const UF_NEEDS = new Set(['instagram', 'pinterest', 'google', 'tiktok']);
+// Every empty photo slot in this brand: posts and drafts that lost their picture, and posts on the platforms that
+// need one that have none. Bands: 0 today, 1 the days after, 2 not scheduled yet, 3 earlier (didn't go out),
+// 4 drafts, 5 already went out.
+function _ufCollect() {
   const today = _pdDay(0), out = [];
-  m.posts.forEach(({ pid, p }) => {
+  Object.entries(state.posts || {}).forEach(([pid, arr]) => (Array.isArray(arr) ? arr : []).forEach(p => {
+    if (!p || p.image || p.imageOriginal || p.imagePurged || p.manualUpload) return;
+    const lost = _piPostMissing(p);
+    if (!lost && !UF_NEEDS.has(pid)) return;
     const d = p.scheduledDate || '';
-    out.push({ kind: 'post', pid, id: String(p.id), x: p, date: d, time: p.scheduledTime || '', band: !d ? 2 : d === today ? 0 : d > today ? 1 : 3,
-      key: 'post|' + pid + '|' + p.id, skip: _ufIsVid(p) ? 'video' : _ufIsGif(p) ? 'gif' : '' });
-  });
-  m.drafts.forEach(({ pid, d }) => out.push({ kind: 'draft', pid, id: String(d.id), x: d, date: '', time: '', band: 4, key: 'draft|' + pid + '|' + d.id, skip: _ufIsVid(d) ? 'video' : _ufIsGif(d) ? 'gif' : '' }));
-  out.sort((a, b) => a.band - b.band || (a.band === 3 ? (b.date + b.time).localeCompare(a.date + a.time) : (a.date + a.time).localeCompare(b.date + b.time)));
+    out.push({ kind: 'post', pid, id: String(p.id), x: p, date: d, time: p.scheduledTime || '', lost, key: 'post|' + pid + '|' + p.id,
+      band: _pdPostedLike(p) ? 5 : !d ? 2 : d === today ? 0 : d > today ? 1 : 3, skip: _ufIsVid(p) ? 'video' : _ufIsGif(p) ? 'gif' : '' });
+  }));
+  Object.entries(state.drafts || {}).forEach(([pid, arr]) => (Array.isArray(arr) ? arr : []).forEach(d => {
+    if (!_piDraftMissing(d)) return;
+    out.push({ kind: 'draft', pid, id: String(d.id), x: d, date: '', time: '', lost: true, key: 'draft|' + pid + '|' + d.id, band: 4, skip: _ufIsVid(d) ? 'video' : _ufIsGif(d) ? 'gif' : '' });
+  }));
+  const desc = (b) => b === 3 || b === 5;
+  out.sort((a, b) => a.band - b.band || (desc(a.band) ? (b.date + b.time).localeCompare(a.date + a.time) : (a.date + a.time).localeCompare(b.date + b.time)));
   return out;
 }
+// The same, after PostPilot has put back whatever it can by itself
+async function _ufItems() { await _piFind(); return _ufCollect(); }
 function _ufCur(it) {
   const g = it.kind === 'post' ? state.posts : state.drafts;
   return ((g && g[it.pid]) || []).find(r => String(r.id) === it.id) || null;
@@ -44130,16 +44148,22 @@ async function _ufFillOne(it, used, groupPick) {
 }
 
 // ── ✨ Auto-fill ──
+const UF_DEFAULTS = { rebuild: false, earlier: true, drafts: true, posted: false, resume: true };
 function _ufOpts() {
-  const o = Object.assign({ rebuild: true, earlier: true, drafts: true, resume: true, ws: getActiveWorkspace() }, _uf.opts || {});
+  const o = Object.assign({}, UF_DEFAULTS, _uf.opts || {}, { ws: getActiveWorkspace() });
   const chk = (id, k) => { const el = document.getElementById(id); if (el) o[k] = !!el.checked; };
-  chk('uf-o-rebuild', 'rebuild'); chk('uf-o-earlier', 'earlier'); chk('uf-o-drafts', 'drafts'); chk('uf-o-resume', 'resume');
+  chk('uf-o-rebuild', 'rebuild'); chk('uf-o-earlier', 'earlier'); chk('uf-o-drafts', 'drafts'); chk('uf-o-posted', 'posted'); chk('uf-o-resume', 'resume');
   const rb = document.getElementById('uf-o-rebuild-l');
   if (rb && rb.hidden) o.rebuild = false;
   return o;
 }
-function _ufWanted(items, o) { return items.filter(it => !it.skip && (it.band <= 2 || (it.band === 3 && o.earlier) || (it.band === 4 && o.drafts))); }
-function _ufSay(html, warn) { const el = document.getElementById('uf-stat'); if (el) { el.innerHTML = html; el.classList.toggle('pd-warn', !!warn); } }
+function _ufWanted(items, o) { return items.filter(it => !it.skip && (it.band <= 2 || (it.band === 3 && o.earlier) || (it.band === 4 && o.drafts) || (it.band === 5 && o.posted))); }
+function _ufSay(html, warn) {
+  const el = document.getElementById('uf-stat');
+  if (el) { el.innerHTML = html; el.classList.toggle('pd-warn', !!warn); }
+  const t = document.getElementById('uf-run-text');
+  if (t) t.innerHTML = html;
+}
 function _ufLock(on) {
   const run = document.getElementById('uf-run'), stop = document.getElementById('uf-stop');
   if (run) run.disabled = on;
@@ -44147,11 +44171,11 @@ function _ufLock(on) {
   document.querySelectorAll('#uf-win .uf-opts input').forEach(i => { i.disabled = on; });
 }
 function ufStop() { _uf.stop = true; _ufSay('Stopping after this one…'); }
-async function ufAutoFill(resumed) {
+async function ufAutoFill(resumed, preset) {
   if (_uf.busy) return;
   const P = _ufP();
   if (!P) return _ufSay('Open the Scheduler inside PostPilot Studio to use Unsplash.', true);
-  const o = resumed === true && _uf.opts ? _uf.opts : _ufOpts();
+  const o = preset ? Object.assign({}, preset, { ws: getActiveWorkspace() }) : resumed === true && _uf.opts ? _uf.opts : _ufOpts();
   if (!_ufHasKey() && !o.rebuild) { _ufSay('🔑 Paste your Unsplash key in the box above first.', true); const k = document.getElementById('uf-key'); if (k) k.focus(); return; }
   if (resumed === true && o.ws !== getActiveWorkspace()) {
     _pdCard('ufresume', `<div class="pp-rem-title">🌄 Unsplash photos are waiting</div><div class="pp-rem-text">Switch back to <b>${_pdE((getWorkspaceNames() || {})[o.ws] || 'that brand')}</b> and open 🌄 Fill from Unsplash to carry on.</div>`, [], '#f5a623');
@@ -44160,7 +44184,7 @@ async function ufAutoFill(resumed) {
   _uf.opts = Object.assign({}, o, { ws: getActiveWorkspace() });
   clearTimeout(_uf.resumeT); _uf.resumeAt = 0;
   { const c = document.getElementById('pdc-ufresume'); if (c) c.remove(); }
-  _uf.busy = true; _uf.stop = false; _ufLock(true);
+  _uf.busy = true; _uf.stop = false; _uf.prog = null; _ufLock(true); _ufSideSync();
   const ws = getActiveWorkspace();
   let filled = 0, rebuilt = 0, failed = 0, problem = null, fails = 0, total = 0;
   try {
@@ -44189,6 +44213,8 @@ async function ufAutoFill(resumed) {
       const cur = _ufCur(it);
       if (!cur || _ufSrc(cur)) continue; // it has a picture again
       it.x = cur; it.ws = ws;
+      _uf.prog = { k: k + 1, n: todo.length };
+      _ufSideSync();
       _ufSay(`🌄 Finding a photo for ${_pdE(_pdName(it.pid))}${it.date ? ' · ' + _pdE(_ppNiceDay(it.date)) : it.kind === 'draft' ? ' · draft' : ''} (${k + 1} of ${todo.length})…`);
       _ufRow(it, 'busy');
       try {
@@ -44207,8 +44233,9 @@ async function ufAutoFill(resumed) {
     problem = _ufIsLimit(e) ? 'limit' : _ufIsKey(e) ? 'key' : 'net';
   } finally {
     if (filled) { try { await savePosts(state.posts); await saveDrafts(state.drafts); } catch (e) {} }
-    _uf.busy = false; _ufLock(false);
+    _uf.busy = false; _uf.prog = null; _ufLock(false);
     try { render(); } catch (e) {}
+    _ufSideSync();
   }
   const after = await _ufItems(), left = _ufWanted(after, o).length, vids = after.filter(it => it.skip).length;
   const bits = [];
@@ -44218,21 +44245,53 @@ async function ufAutoFill(resumed) {
   if (problem === 'limit') {
     msg = `${bits.join(', ')}. Your Unsplash keys are used up for this hour (Unsplash’s limit). ${left} still need${left === 1 ? 's' : ''} a photo.`;
     if (o.resume && left) { _ufScheduleResume(); msg += ` PostPilot carries on by itself at <b>${_pdE(_ufClock(_uf.resumeAt))}</b> while it stays open.`; }
-    else msg += ` Press ✨ Auto-fill again after ${_pdE(_ufClock(_ufRestEnd()))}.`;
+    else msg += ` Press 🌄 Fill again after ${_pdE(_ufClock(_ufRestEnd()))}.`;
   } else if (problem === 'key') msg = _pdE(_ufErrText({ status: 401 }));
-  else if (problem === 'nokey') { msg = `${rebuilt ? `♻️ Rebuilt ${rebuilt} from your saved batches. ` : ''}🔑 Paste your Unsplash key in the box above, then press ✨ Auto-fill for the other ${left}.`; const k = document.getElementById('uf-key'); if (k) k.focus(); }
+  else if (problem === 'nokey') { msg = `${rebuilt ? `♻️ Rebuilt ${rebuilt} from your saved batches. ` : ''}🔑 Paste your Unsplash key in the box above, then press ✨ Fill for the other ${left}.`; const k = document.getElementById('uf-key'); if (k) k.focus(); }
   else if (problem === 'stopped') msg = `Stopped: ${bits.join(', ')}. ${left} still need${left === 1 ? 's' : ''} a photo.`;
   else if (problem === 'brand') msg = 'Stopped because you switched brands. Open this window again to carry on.';
   else if (problem === 'studio') msg = _pdE(_ufErrText({ message: 'studio' }));
-  else if (problem === 'net') msg = `${bits.join(', ')}. Unsplash’s photos didn’t download (is the internet connected?). Press ✨ Auto-fill to try again.`;
+  else if (problem === 'net') msg = `${bits.join(', ')}. Unsplash’s photos didn’t download (is the internet connected?). Press 🌄 Fill to try again.`;
   else if (failed) msg += ` ${failed} didn’t find a photo: use 🔍 Choose on ${failed === 1 ? 'it' : 'those'}.`;
-  if (!problem && !left) msg += vids ? ` Every post that takes a photo has one again (${vids === 1 ? 'the video or GIF needs' : `the ${vids} videos and GIFs need`} re-uploading in ${vids === 1 ? 'its' : 'their'} editor).` : ' Every post in this brand has its picture again.';
+  if (!problem && !left) msg += vids ? ` Every empty photo slot is filled (${vids === 1 ? 'the video or GIF needs' : `the ${vids} videos and GIFs need`} re-uploading in ${vids === 1 ? 'its' : 'their'} editor).` : ' Every empty photo slot in this brand is filled.';
   _ufSay(msg, !!problem && problem !== 'stopped');
   if (!document.getElementById('uf-win') && (filled || rebuilt))
-    _pdCard('ufdone', `<div class="pp-rem-title">🌄 ${filled + rebuilt} picture${filled + rebuilt === 1 ? '' : 's'} filled</div><div class="pp-rem-text">${msg}</div>`, [['Open the list', (e, c) => { c.remove(); pdUnsplashOpen(); }, true]], '#22c55e');
+    _pdCard('ufdone', `<div class="pp-rem-title">🌄 ${filled + rebuilt} empty photo${filled + rebuilt === 1 ? '' : 's'} filled</div><div class="pp-rem-text">${msg}</div>`, [['Review them', (e, c) => { c.remove(); pdUnsplashOpen(); }, true], ['OK', (e, c) => c.remove()]], '#22c55e');
   if (document.getElementById('uf-win')) _ufCountRun();
   return { filled, rebuilt, failed, problem, total };
 }
+// 🌄 Fill every empty photo now: one click, no questions (today's posts first; the list is there to review)
+async function ufFillAllNow() {
+  if (_uf.busy) return pdUnsplashOpen();
+  if (!_ufP()) { showToast('Open the Scheduler inside PostPilot Studio to use Unsplash.', 'error'); return; }
+  if (!_ufHasKey()) { await pdUnsplashOpen(); const k = document.getElementById('uf-key'); if (k) k.focus(); return; }
+  if (!document.getElementById('uf-win'))
+    _pdCard('ufrun', `<div class="pp-rem-title">🌄 Filling your empty photos from Unsplash</div><div class="pp-rem-text" id="uf-run-text">Starting with today’s posts…</div>`,
+      [['See the list', () => pdUnsplashOpen()], ['⏹ Stop', () => ufStop()]], '#f5a623');
+  try { return await ufAutoFill(false, UF_DEFAULTS); }
+  finally { const c = document.getElementById('pdc-ufrun'); if (c) c.remove(); }
+}
+function _ufSideSync() {
+  const card = document.querySelector('.cu-card');
+  if (!card) return;
+  let b = card.querySelector('.uf-side');
+  const n = _uf.busy ? 0 : _ufWanted(_ufCollect(), UF_DEFAULTS).length;
+  if (!_uf.busy && !n) { if (b) b.remove(); return; }
+  if (!b) {
+    b = document.createElement('button');
+    b.type = 'button'; b.className = 'cu-btn uf-side';
+    b.onclick = () => { if (_uf.busy) pdUnsplashOpen(); else ufFillAllNow(); };
+    const today = [...card.querySelectorAll('button.cu-btn')].find(x => /Today/.test(x.textContent || ''));
+    if (today) today.after(b); else card.prepend(b);
+  }
+  const label = _uf.busy ? `🌄 Filling photos${_uf.prog ? ` ${_uf.prog.k} of ${_uf.prog.n}` : ''}…` : `🌄 Fill ${n} empty photo${n === 1 ? '' : 's'}`;
+  if (b.textContent !== label) b.textContent = label;
+  const tip = _uf.busy ? 'Filling your empty photo slots from Unsplash: click to watch' : 'Fills every empty photo slot in this brand with an Unsplash photo that fits its post, today’s posts first';
+  if (b.title !== tip) b.title = tip;
+  b.classList.toggle('uf-going', _uf.busy);
+}
+let _ufSideQ = 0;
+new MutationObserver(() => { if (_ufSideQ) return; _ufSideQ = requestAnimationFrame(() => { _ufSideQ = 0; try { _ufSideSync(); } catch (e) {} }); }).observe(document.documentElement, { childList: true, subtree: true });
 function _ufScheduleResume() {
   clearTimeout(_uf.resumeT);
   const at = _ufRestEnd() + 60e3;
@@ -44276,7 +44335,7 @@ function _ufRowHtml(it) {
 function _ufListHtml(items) {
   const today = _pdDay(0);
   const head = (it) => it.skip ? 'Videos and GIFs (a photo can’t replace these)' : it.band === 0 ? 'Today · ' + _ppNiceDay(today) : it.band === 1 ? _ppNiceDay(it.date)
-    : it.band === 2 ? 'Not scheduled yet' : it.band === 3 ? 'Earlier · ' + _ppNiceDay(it.date) : 'Drafts';
+    : it.band === 2 ? 'Not scheduled yet' : it.band === 3 ? 'Earlier, didn’t go out · ' + _ppNiceDay(it.date) : it.band === 4 ? 'Drafts' : 'Already went out' + (it.date ? ' · ' + _ppNiceDay(it.date) : '');
   let out = '', last = '';
   items.filter(i => !i.skip).concat(items.filter(i => i.skip)).forEach(it => { const h = head(it); if (h !== last) { out += `<div class="uf-day">${_pdE(h)}</div>`; last = h; } out += _ufRowHtml(it); });
   return out;
@@ -44310,9 +44369,9 @@ async function _ufDraw() {
   const items = await _ufItems();
   _uf.items = items;
   const fill = items.filter(i => !i.skip), np = fill.filter(i => i.kind === 'post').length, nd = fill.filter(i => i.kind === 'draft').length;
-  const nEarlier = fill.filter(i => i.band === 3).length, o = _ufOpts();
+  const nEarlier = fill.filter(i => i.band === 3).length, nPosted = fill.filter(i => i.band === 5).length, o = _ufOpts();
   if (!fill.length) {
-    body.innerHTML = `<p class="pd-note pd-good">✅ Every post and draft in ${_pdE(brand)} has its picture${items.length ? ' (apart from the videos and GIFs below, which need re-uploading in their editor)' : ''}.</p>
+    body.innerHTML = `<p class="pd-note pd-good">✅ No empty photo slots in ${_pdE(brand)}${items.length ? ' (apart from the videos and GIFs below, which need re-uploading in their editor)' : ''}.</p>
       <p class="pd-note">To use an Unsplash photo on any post, open it and press <b>🌄 Find a photo on Unsplash</b> under its image.</p><div id="uf-list">${_ufListHtml(items)}</div>`;
     return;
   }
@@ -44322,15 +44381,16 @@ async function _ufDraw() {
     `<div class="uf-key"><p class="pd-note pd-warn">🔑 Unsplash needs your free access key first.</p>
       <p class="pd-note">Get one at <a href="https://unsplash.com/developers" target="_blank" rel="noopener">unsplash.com/developers</a> (Your apps → New Application, then copy its <b>Access Key</b>). Paste it in this box and press <b>Save key</b>:</p>
       <div class="uf-krow"><input id="uf-key" type="text" placeholder="Paste your Unsplash Access Key here" autocomplete="off" spellcheck="false" aria-label="Your Unsplash Access Key"/><button type="button" class="pd-btn pd-primary" onclick="ufSaveKey()">Save key</button></div></div>`;
-  body.innerHTML = `<p class="pd-note">${what} in <b>${_pdE(brand)}</b> ${fill.length === 1 ? 'is' : 'are'} missing ${fill.length === 1 ? 'its picture' : 'their pictures'}. PostPilot finds an Unsplash photo that fits each one (from its headline, caption and blog link), cropped to its platform's size, starting with today's posts (<b>${_pdE(_ppNiceDay(_pdDay(0)))}</b>) and then the days after. Every photo credits its photographer, with their name linked to their Unsplash profile.</p>
+  body.innerHTML = `<p class="pd-note">${what} in <b>${_pdE(brand)}</b> ${fill.length === 1 ? 'has an empty photo slot' : 'have empty photo slots'}. PostPilot finds an Unsplash photo that fits each one (from its headline, caption and blog link), cropped to its platform's size, starting with today's posts (<b>${_pdE(_ppNiceDay(_pdDay(0)))}</b>) and then the days after. Every photo credits its photographer, with their name linked to their Unsplash profile.</p>
     ${keyRow}
     <div class="uf-opts">
-      <label id="uf-o-rebuild-l" hidden><input type="checkbox" id="uf-o-rebuild" ${o.rebuild ? 'checked' : ''}/> <span>♻️ First, rebuild the <b id="uf-nrb">0</b> that are in your saved batches exactly as they were (recommended: your own designs come back)</span></label>
-      ${nEarlier ? `<label><input type="checkbox" id="uf-o-earlier" ${o.earlier ? 'checked' : ''}/> <span>Also fill the ${nEarlier} earlier post${nEarlier === 1 ? '' : 's'} (before today)</span></label>` : ''}
-      ${nd ? `<label><input type="checkbox" id="uf-o-drafts" ${o.drafts ? 'checked' : ''}/> <span>Also fill the ${nd} draft${nd === 1 ? '' : 's'}</span></label>` : ''}
+      ${nEarlier ? `<label><input type="checkbox" id="uf-o-earlier" ${o.earlier ? 'checked' : ''}/> <span>The ${nEarlier} earlier post${nEarlier === 1 ? '' : 's'} that didn’t go out</span></label>` : ''}
+      ${nd ? `<label><input type="checkbox" id="uf-o-drafts" ${o.drafts ? 'checked' : ''}/> <span>The ${nd} draft${nd === 1 ? '' : 's'}</span></label>` : ''}
+      ${nPosted ? `<label><input type="checkbox" id="uf-o-posted" ${o.posted ? 'checked' : ''}/> <span>The ${nPosted} post${nPosted === 1 ? '' : 's'} that already went out</span></label>` : ''}
+      <label id="uf-o-rebuild-l" hidden><input type="checkbox" id="uf-o-rebuild" ${o.rebuild ? 'checked' : ''}/> <span>♻️ For the <b id="uf-nrb">0</b> that are in your saved batches, bring back your own designs instead of Unsplash photos</span></label>
       <label><input type="checkbox" id="uf-o-resume" ${o.resume ? 'checked' : ''}/> <span>If Unsplash’s hourly limit is reached, carry on by itself when it resets (while PostPilot is open)</span></label>
     </div>
-    <div class="uf-go"><button type="button" class="pd-btn pd-primary" id="uf-run" onclick="ufAutoFill()">✨ Auto-fill <span id="uf-n">${fill.length}</span>, starting with today</button><button type="button" class="pd-btn pd-danger" id="uf-stop" onclick="ufStop()" hidden>⏹ Stop</button></div>
+    <div class="uf-go"><button type="button" class="pd-btn pd-primary" id="uf-run" onclick="ufAutoFill()">✨ Fill all <span id="uf-n">${fill.length}</span> empty photos, today first</button><button type="button" class="pd-btn pd-danger" id="uf-stop" onclick="ufStop()" hidden>⏹ Stop</button></div>
     <div id="uf-stat" class="pd-note" role="status" aria-live="polite">${_uf.busy ? 'Filling…' : _uf.resumeAt ? `Carrying on by itself at <b>${_pdE(_ufClock(_uf.resumeAt))}</b>.` : ''}</div>
     <div id="uf-list">${_ufListHtml(items)}</div>`;
   body.querySelectorAll('.uf-opts input').forEach(i => i.addEventListener('change', _ufCountRun));
@@ -45110,6 +45170,9 @@ function _ufBackupReminder() {
     .uf-cmeta { font-size: 10.5px; }
     .uf-copy .pd-btn { align-self: flex-start; padding: 4px 9px; font-size: 11px; }
     .uf-ic { font-size: 18px; opacity: .8; display: inline-flex; }
+    .cu-btn.uf-side { border-color: rgba(245,166,35,.75) !important; background: rgba(245,166,35,.14) !important; color: #fbbf4b !important; font-weight: 800 !important; }
+    .cu-btn.uf-side:hover { background: rgba(245,166,35,.24) !important; }
+    .cu-btn.uf-side.uf-going { border-style: dashed !important; }
     #uf-win, #uf-pick, #uf-copies, #pi-restore { z-index: 99998; } /* above the reminder cards (toasts stay on top) */
     .pi-h { margin: 6px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: #8b8fa8; }
     @media (max-width: 560px) {
