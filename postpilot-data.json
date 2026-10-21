@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-10-21T02:11:24.086Z",
+  "lastSaved": "2026-10-21T02:13:14.150Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -9799,9 +9799,9 @@
         "id": 1791339821982.499,
         "platform": "bluesky",
         "scheduledDate": "2026-10-20",
-        "scheduledTime": "09:00",
+        "scheduledTime": "19:12",
         "timezone": "America/Los_Angeles",
-        "publishStatus": "scheduled",
+        "publishStatus": "published",
         "publishError": "",
         "publishedAt": null,
         "imageName": "Grandparent-rules-version-20_0028_Bluesky.png",
@@ -9842,7 +9842,7 @@
         "ytDriveUrl": "",
         "ytLiveUrl": "",
         "tags": [],
-        "liveUrl": "",
+        "liveUrl": "https://bsky.app/profile/ydinsurance.bsky.social/post/3mye35wdfzs2t",
         "fromBrandCreator": true,
         "_imageDims": "1080×1080",
         "unsplash": {
@@ -9871,7 +9871,13 @@
           "logo": "h4q-1gr9xza"
         },
         "isVideo": false,
-        "isGif": false
+        "isGif": false,
+        "platformScheduled": false,
+        "liveAt": 1792548778668,
+        "plannedFor": {
+          "date": "2026-10-20",
+          "time": "09:00"
+        }
       },
       {
         "id": 1791339821983.4062,
@@ -14155,9 +14161,9 @@
       "missedDayPending": null
     },
     "bluesky": {
-      "count": 0,
-      "lastDate": "",
-      "lastMilestone": 0,
+      "count": 1,
+      "lastDate": "2026-10-20",
+      "lastMilestone": 1,
       "freezeTokens": 0,
       "trophies": 0,
       "frozenDates": [],
