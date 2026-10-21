@@ -3385,7 +3385,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v118</span>
+              <span class="sb-version">v120</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -3574,6 +3574,10 @@
               <button class="plat-opt-btn" data-pid="alignable" onclick="choosePlatform('alignable')" style="--pc: #391590">
                 Alignable
                 <span>1200×750</span>
+              </button>
+              <button class="plat-opt-btn" data-pid="nextdoor" onclick="choosePlatform('nextdoor')" style="--pc: #1b8751">
+                Nextdoor
+                <span>1200×900</span>
               </button>
               <button
                 class="plat-opt-btn"
@@ -5160,6 +5164,7 @@ Your message, caption, or call to action goes right here.</textarea
         tumblr: { w: 1280, h: 1920, label: "Tumblr · 1280×1920 (2:3)", color: "#35465C" },
         kofi: { w: 1200, h: 630, label: "Ko-Fi · 1200×630 (1.91:1)", color: "#FF5E5B" },
         alignable: { w: 1200, h: 750, label: "Alignable · 1200×750 (8:5)", color: "#391590" },
+        nextdoor: { w: 1200, h: 900, label: "Nextdoor · 1200×900 (4:3)", color: "#1B8751" },
         patreon: { w: 1600, h: 400, label: "Patreon · 1600×400 (4:1)", color: "#FF424D" },
       };
 
@@ -5178,6 +5183,7 @@ Your message, caption, or call to action goes right here.</textarea
         shopify: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 57" fill="currentColor"><path d="M33.3,6.7c0,0-0.6,0.2-1.7,0.5c-0.2-0.6-0.5-1.3-0.8-2c-1.2-2.3-3-3.5-5.1-3.5c-0.1,0-0.3,0-0.4,0c-0.1-0.1-0.1-0.2-0.2-0.2c-0.9-1-2.1-1.5-3.5-1.4C19,0.2,16.5,2.2,14.4,5.7c-1.6,2.5-2.7,5.6-3.1,8c-3.2,1-5.4,1.7-5.4,1.7c-1.6,0.5-1.7,0.5-1.8,2.1C4,18.7,0,50.6,0,50.6l34.7,6.1V6.6C34.1,6.6,33.7,6.7,33.3,6.7z M23,8.6c-1.8,0.6-3.8,1.2-5.8,1.8c0.6-2.2,1.6-4.3,2.9-5.7c0.5-0.5,1.2-1.1,2-1.4C23,4.7,23.1,6.9,23,8.6z M19.3,1.6c0.6,0,1.2,0.1,1.7,0.4c-0.7,0.4-1.5,1-2.1,1.6c-1.7,1.9-3.1,4.8-3.6,7.6c-1.7,0.5-3.3,1-4.8,1.5C11.6,9,15,1.6,19.3,1.6z M19,25.4c0.2,2.9,7.9,3.6,8.4,10.5c0.3,5.5-2.9,9.2-7.5,9.5c-5.6,0.4-8.7-2.9-8.7-2.9l1.2-5c0,0,3.1,2.3,5.5,2.2c1.6-0.1,2.2-1.4,2.1-2.3c-0.2-3.8-6.6-3.6-7-9.9c-0.4-5.3,3.2-10.7,10.9-11.2c2.9-0.2,4.5,0.6,4.5,0.6l-1.7,6.6c0,0-2-0.9-4.3-0.7C19.1,23,19,25.3,19,25.4z M35.6,6.6H34v2.1l-7.3,2.1c0-0.2,0-0.4,0-0.6V6.6H35.6z"/></svg>`,
         tumblr: `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M14.563 24c-5.093 0-7.031-3.756-7.031-6.411V9.747H5.116V6.648c3.63-1.313 4.512-4.596 4.71-6.469C9.84.051 9.941 0 9.999 0h3.517v6.114h4.801v3.633h-4.82v7.47c.016 1.001.375 2.371 2.207 2.371h.09c.631-.02 1.486-.205 1.936-.419l1.156 3.425c-.436.636-2.4 1.374-4.304 1.406z"/></svg>`,
         alignable: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" style="fill:#391590"/><path fill-rule="evenodd" style="fill:#fff;fill-rule:evenodd" d="M10.3 5.2 H13.7 L18.4 18.6 H15.0 L14.1 15.8 H9.9 L9.0 18.6 H5.6 Z M12 9.0 L13.25 13.0 H10.75 Z"/></svg>`,
+        nextdoor: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" style="fill:#1B8751"/><path fill-rule="evenodd" style="fill:#fff;fill-rule:evenodd" d="M5 11.4 L12 5.4 L15.2 8.14 V6.2 H17.2 V9.86 L19 11.4 H17.2 V18.6 H6.8 V11.4 Z M10.4 12.6 H13.6 V15.8 H10.4 Z"/></svg>`,
         kofi: `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M23.881 8.948c-.773-4.085-4.859-4.591-4.859-4.591H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.918zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.884-2.059 3.015z"/></svg>`,
         patreon: `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M14.82 2.41c3.96 0 7.18 3.24 7.18 7.21 0 3.96-3.22 7.18-7.18 7.18-3.98 0-7.21-3.22-7.21-7.18 0-3.97 3.23-7.21 7.21-7.21M2 21.6h3.5V2.41H2V21.6z"/></svg>`,
       };
@@ -5199,7 +5205,7 @@ Your message, caption, or call to action goes right here.</textarea
         instagram: "Instagram", pinterest: "Pinterest", google: "Google Biz", linkedin: "LinkedIn",
         facebook: "Facebook", twitter: "Twitter/X", threads: "Threads", tiktok: "TikTok",
         youtube: "YouTube", bluesky: "Bluesky", shopify: "Shopify", tumblr: "Tumblr",
-        kofi: "Ko-Fi", alignable: "Alignable", patreon: "Patreon",
+        kofi: "Ko-Fi", alignable: "Alignable", nextdoor: "Nextdoor", patreon: "Patreon",
       };
 
       // Formats per platform. best:true marks the default: the size that takes the
@@ -5256,6 +5262,10 @@ Your message, caption, or call to action goes right here.</textarea
         tumblr: [{ id: "tall", name: "Tall 2:3", r: "2:3", w: 1280, h: 1920, best: true }],
         kofi: [{ id: "wide", name: "Post 1.91:1", r: "1.91:1", w: 1200, h: 630, best: true }],
         alignable: [{ id: "post", name: "Post 8:5", r: "8:5", w: 1200, h: 750, best: true }],
+        nextdoor: [
+          { id: "post", name: "Post 4:3", r: "4:3", w: 1200, h: 900, best: true, note: "Nextdoor's recommended post size. JPG or PNG, under 10 MB." },
+          { id: "square", name: "Square", r: "1:1", w: 1200, h: 1200, note: "A square option. Keep the words near the middle." },
+        ],
         patreon: [{ id: "banner", name: "Banner 4:1", r: "4:1", w: 1600, h: 400, best: true }],
       };
 
@@ -7927,6 +7937,7 @@ Your message, caption, or call to action goes right here.</textarea
           tumblr: "Tumblr",
           kofi: "Ko-Fi",
           alignable: "Alignable",
+          nextdoor: "Nextdoor",
           patreon: "Patreon",
         };
         // Replace dot with icon
@@ -8494,7 +8505,7 @@ Your message, caption, or call to action goes right here.</textarea
       // suit each platform, and open the platform with the image ready to paste/upload.
       // Nothing is ever posted for you.
       // ══════════════════════════════════════════
-      const MP_ORDER = ["instagram", "facebook", "linkedin", "alignable", "pinterest", "tiktok", "youtube", "google", "twitter", "threads", "bluesky", "shopify", "tumblr", "kofi", "patreon"];
+      const MP_ORDER = ["instagram", "facebook", "linkedin", "alignable", "nextdoor", "pinterest", "tiktok", "youtube", "google", "twitter", "threads", "bluesky", "shopify", "tumblr", "kofi", "patreon"];
       const MP_MORE = new Set(["shopify", "tumblr", "kofi", "patreon"]);
       const MP_SHORT = { google: "Google", twitter: "X", kofi: "Ko-fi" };
       // Where "Open" takes you. paste: the site takes a pasted image (Ctrl+V); otherwise the file is saved for upload.
@@ -8513,6 +8524,7 @@ Your message, caption, or call to action goes right here.</textarea
         tumblr: { url: "https://www.tumblr.com/new", paste: false },
         kofi: { url: "https://ko-fi.com/", paste: false },
         alignable: { url: "https://www.alignable.com/", paste: false },
+        nextdoor: { url: "https://nextdoor.com/", paste: false },
         patreon: { url: "https://www.patreon.com/", paste: false },
       };
       const _mpName = (p) => PLAT_NAMES[p] || p;
@@ -8886,7 +8898,7 @@ Your message, caption, or call to action goes right here.</textarea
       }
       // "Send to PostPilot" starts with the platforms chosen for this post
       // Platforms the Scheduler can hold (Threads isn't one: it uses Open ↗ and 📋 Caption)
-      const MP_SCHEDULER = new Set(["pinterest", "instagram", "google", "linkedin", "shopify", "bluesky", "tiktok", "youtube", "facebook", "twitter", "tumblr", "kofi", "alignable", "patreon"]);
+      const MP_SCHEDULER = new Set(["pinterest", "instagram", "google", "linkedin", "shopify", "bluesky", "tiktok", "youtube", "facebook", "twitter", "tumblr", "kofi", "alignable", "nextdoor", "patreon"]);
       function _mpPfDefaults() {
         const ok = (p) => MP_SCHEDULER.has(p) && PF_PLATFORMS.some((x) => x.id === p);
         return [S.platform].concat(mpList().filter((p) => p !== S.platform)).filter(ok);
@@ -10239,7 +10251,7 @@ Your message, caption, or call to action goes right here.</textarea
       // File names, file type and sizes are unchanged: the brief fills the headline exactly
       // as if you typed it, so the automatic file name is the same.
       // ══════════════════════════════════════════
-      const PC_LIMITS = { instagram: 2200, linkedin: 3000, pinterest: 500, google: 1500, twitter: 280, threads: 500, bluesky: 300, alignable: 1000 };
+      const PC_LIMITS = { instagram: 2200, linkedin: 3000, pinterest: 500, google: 1500, twitter: 280, threads: 500, bluesky: 300, alignable: 1000, nextdoor: 2000 };
       const PC_PIN_TITLE_LIMIT = 100;
       const PC_LINKED = new Set(["instagram", "pinterest", "google", "linkedin", "bluesky", "shopify"]);
       const PC_TAGGY = new Set(["instagram", "facebook", "linkedin", "pinterest", "tiktok", "twitter", "threads", "bluesky"]);
@@ -10248,7 +10260,7 @@ Your message, caption, or call to action goes right here.</textarea
         linkedin: "linkedin", "linked in": "linkedin", pinterest: "pinterest", tiktok: "tiktok", "tik tok": "tiktok",
         youtube: "youtube", yt: "youtube", google: "google", "google business": "google", "google my business": "google", gbp: "google", gmb: "google",
         x: "twitter", twitter: "twitter", "x twitter": "twitter", threads: "threads", bluesky: "bluesky", bsky: "bluesky",
-        shopify: "shopify", tumblr: "tumblr", "ko fi": "kofi", kofi: "kofi", patreon: "patreon", alignable: "alignable",
+        shopify: "shopify", tumblr: "tumblr", "ko fi": "kofi", kofi: "kofi", patreon: "patreon", alignable: "alignable", nextdoor: "nextdoor", "next door": "nextdoor", "nextdoor business": "nextdoor", "nextdoor for business": "nextdoor",
         all: "all", "all platforms": "all", default: "all", general: "all", everywhere: "all",
       };
       const PC_KEYS = {
@@ -10843,6 +10855,7 @@ Post:
         Object.keys(S.captions).forEach((p) => {
           if (pcOver(p)) warn.push(`${_mpName(p)} caption is ${pcLen(p, pcCaptionFor(p)).toLocaleString()} characters (limit ${PC_LIMITS[p].toLocaleString()})`);
         });
+        if (S.captions && S.captions.nextdoor && /(^|\s)#\w/.test(S.captions.nextdoor)) warn.push("Nextdoor caption has hashtags. Nextdoor posts read better without them, so take them out there.");
         const alFlags = S.captions && S.captions.alignable ? _pcAlignableFlags(S.captions.alignable) : "";
         if (alFlags) warn.push(`Alignable caption has ${alFlags}. Alignable hides network posts with contact details or sales links, so take it out there.`);
         if ((S.pinTitle || "").length > PC_PIN_TITLE_LIMIT) warn.push(`Pinterest title is over ${PC_PIN_TITLE_LIMIT} characters`);
@@ -11522,7 +11535,7 @@ Post:
       // ══════════════════════════════════════════
       const PB_N = 10;
       const PB_KEY = "bpc_pinbatch_v1"; // Pinterest's batch (as before); other platforms: bpc_batch_v1:<platform>
-      const PB_ORDER = ["pinterest", "instagram", "facebook", "linkedin", "alignable", "google", "twitter", "bluesky", "tiktok", "threads", "shopify", "tumblr", "kofi", "patreon"];
+      const PB_ORDER = ["pinterest", "instagram", "facebook", "linkedin", "alignable", "nextdoor", "google", "twitter", "bluesky", "tiktok", "threads", "shopify", "tumblr", "kofi", "patreon"];
       // What each platform's posts need (these match the Scheduler's fields for that platform)
       const PB_CFG = {
         pinterest: { noun: "pin", title: "Pin title", text: "Description", link: "Link", alt: true },
@@ -11530,6 +11543,7 @@ Post:
         facebook: { text: "Post text", link: "Link (added to the post)", linkInText: true, alt: true },
         linkedin: { text: "Post text", link: "Link", alt: true },
         alignable: { text: "Post text (start a discussion, no links or phone numbers)", alt: true, max: 1000 },
+        nextdoor: { text: "Post text (friendly and local, no hashtags)", link: "Link (added to the post)", linkInText: true, alt: true, max: 2000 },
         google: { text: "Post text", link: "Link (the Learn more button)", alt: true },
         twitter: { text: "Post (280 characters)", link: "Link (added to the post)", linkInText: true, alt: true, max: 280, linkLen: 23 },
         bluesky: { text: "Post (300 characters)", link: "Link", alt: true, max: 300 },
@@ -11886,6 +11900,7 @@ Post:
           ["tumblr", /\btumblr\b/i],
           ["kofi", /\bko-?fi\b/i],
           ["alignable", /\balignable\b/i],
+          ["nextdoor", /\bnextdoor\b|\bnext[\s-]door\s+(?:posts|batch)\b/i],
           ["patreon", /\bpatreon\b/i],
         ];
         for (const [pid, re] of names) if (re.test(intro)) return pid;
@@ -13699,7 +13714,7 @@ Post:
       }
       // A different hook, image line or question for each post and each platform, chosen the same way every time
       const _bfHash = (s) => [...String(s || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-      const BF_PLAT_OFF = { instagram: 0, facebook: 1, linkedin: 2, pinterest: 3, google: 4, twitter: 5, bluesky: 6, tiktok: 7, threads: 8, alignable: 9, shopify: 10, tumblr: 11, kofi: 12, patreon: 13 };
+      const BF_PLAT_OFF = { instagram: 0, facebook: 1, linkedin: 2, pinterest: 3, google: 4, twitter: 5, bluesky: 6, tiktok: 7, threads: 8, alignable: 9, shopify: 10, tumblr: 11, kofi: 12, patreon: 13, nextdoor: 14 };
       const _bfPick = (arr, a, k, salt) => (arr && arr.length ? arr[(_bfHash(a.slug + salt) + (k || 0)) % arr.length] : "");
       const _bfIsYDI = () => /youngdouglasinsurance\.com$/i.test(_bf.site || "");
       function _bfAgency() {
@@ -13812,6 +13827,10 @@ Post:
             // a friendly discussion starter, no links or contact details
             desc = join(_bfNoContact(hook), _bfParas(_bfFirst(_bfNoContact(sum), 3, 520), 1), t.qs[(off + 1) % t.qs.length] || q);
             desc = _bfFit(desc, 1000);
+            break;
+          case "nextdoor":
+            // neighborly and local: a helpful note for nearby neighbors, a question, then the link; no hashtags
+            desc = join(hook, cap(3, 520), q, "Read the full article here: " + link);
             break;
           case "tiktok":
             desc = join(hook, cap(2, 260, 1), "Full article on our blog, link in bio.", _bfTags(a, 5, pid));
@@ -14780,7 +14799,7 @@ Post:
           link,
           pintitle: head,
           alt: `${head}. ${body}`.trim(),
-          captions: { all: full, tiktok: `${head} ${body}${tags ? " " + tags : ""}`.trim(), youtube: plain, threads: `${head} ${body}${learn}`.slice(0, 500).trim(), shopify: plain, tumblr: plain, kofi: `${head} ${body}${learn}`.trim(), alignable: `${head}\n\n${body}\n\nWhat has your experience been?`.slice(0, 1000).trim(), patreon: plain, instagram: cap, facebook: `${head} ${body}${learn}`.trim(), linkedin: `${head}\n\n${body}${learn}`.trim(), pinterest: cap, google: `${head} ${body} Learn More by clicking the button below!`.trim(), twitter: short.length <= 280 ? short : head, bluesky: `${head} ${body}`.slice(0, 280).trim() },
+          captions: { all: full, tiktok: `${head} ${body}${tags ? " " + tags : ""}`.trim(), youtube: plain, threads: `${head} ${body}${learn}`.slice(0, 500).trim(), shopify: plain, tumblr: plain, kofi: `${head} ${body}${learn}`.trim(), alignable: `${head}\n\n${body}\n\nWhat has your experience been?`.slice(0, 1000).trim(), nextdoor: plain.slice(0, 2000), patreon: plain, instagram: cap, facebook: `${head} ${body}${learn}`.trim(), linkedin: `${head}\n\n${body}${learn}`.trim(), pinterest: cap, google: `${head} ${body} Learn More by clicking the button below!`.trim(), twitter: short.length <= 280 ? short : head, bluesky: `${head} ${body}`.slice(0, 280).trim() },
           links: {},
           alts: {},
           plats: S.platforms && S.platforms.length ? S.platforms.slice() : ["instagram", "facebook", "linkedin", "google"],
@@ -21204,6 +21223,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
           tumblr: "Tumblr - creative, expressive, slightly informal with aesthetic flair",
           kofi: "Ko-Fi - warm, grateful, creator-to-supporter tone with soft CTA",
           alignable: "Alignable - small-business networking feed: friendly, helpful and local; open with a real situation or tip and end with a question that invites replies; no phone numbers, emails, links, hashtags or sales offers (Alignable hides network posts with those)",
+          nextdoor: "Nextdoor - neighborhood feed: neighborly, helpful and local; share a useful tip or local update in plain friendly words and invite replies; no hashtags and no hard sales pitch (Nextdoor treats repeated or salesy business posts as spam)",
           patreon: "Patreon - exclusive, supporter-appreciation tone, highlight membership value",
         };
 
@@ -21386,7 +21406,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
         { id: "bluesky", name: "Bluesky", color: "#0085FF", ratio: "1.91:1" },
         { id: "shopify", name: "Shopify", color: "#96BF48", ratio: "1:1" },
         { id: "tumblr", name: "Tumblr", color: "#35465C", ratio: "2:3" },
-        { id: "kofi", name: "Ko-Fi", color: "#FF5E5B", ratio: "1.91:1" }, { id: "alignable", name: "Alignable", color: "#391590", ratio: "8:5" },
+        { id: "kofi", name: "Ko-Fi", color: "#FF5E5B", ratio: "1.91:1" }, { id: "alignable", name: "Alignable", color: "#391590", ratio: "8:5" }, { id: "nextdoor", name: "Nextdoor", color: "#1B8751", ratio: "4:3" },
         { id: "patreon", name: "Patreon", color: "#FF424D", ratio: "4:1" },
       ];
 
@@ -28794,10 +28814,10 @@ let state = {
   chimeSoundName: '',
   notifiedPostIds: new Set(),    // track which posts we've already celebrated
   liveNotifications: [],         // [{id, postTitle, platformName, platformColor, ts}]
-  posts: { pinterest: [], instagram: [], google: [], linkedin: [], shopify: [], bluesky: [], tiktok: [], youtube: [], twitter: [], kofi: [], alignable: [], facebook: [], tumblr: [], patreon: [] },
+  posts: { pinterest: [], instagram: [], google: [], linkedin: [], shopify: [], bluesky: [], tiktok: [], youtube: [], twitter: [], kofi: [], alignable: [], nextdoor: [], facebook: [], tumblr: [], patreon: [] },
   platformOrder: (() => { try { const s = localStorage.getItem(wsKey('postpilot_platform_order')); return s ? _ppAddAlignable(JSON.parse(s)) : ['pinterest','google','linkedin','alignable','instagram','shopify','bluesky','tiktok','youtube','twitter','kofi','facebook','tumblr','patreon']; } catch { return ['pinterest','google','linkedin','alignable','instagram','shopify','bluesky','tiktok','youtube','twitter','kofi','facebook','tumblr','patreon']; } })(),
   hiddenPlatforms: (() => { try { const s = localStorage.getItem(wsKey('postpilot_hidden_platforms')); return s ? new Set(JSON.parse(s)) : new Set(['twitter','kofi','facebook','tumblr','patreon']); } catch { return new Set(['twitter','kofi','facebook','tumblr','patreon']); } })(),
-  drafts: { pinterest: [], instagram: [], google: [], linkedin: [], shopify: [], bluesky: [], tiktok: [], youtube: [], twitter: [], kofi: [], alignable: [], facebook: [], tumblr: [], patreon: [] },
+  drafts: { pinterest: [], instagram: [], google: [], linkedin: [], shopify: [], bluesky: [], tiktok: [], youtube: [], twitter: [], kofi: [], alignable: [], nextdoor: [], facebook: [], tumblr: [], patreon: [] },
   showComposer: false,
   editingPostId: null,
   editingDraftId: null,   // draft currently open in the composer (so closing updates it instead of copying it)
@@ -29289,7 +29309,7 @@ function STREAK_KEY() { return wsKey('postflow_streaks'); } // {platformId: {cou
 // Load/save drafts for a specific workspace without switching the active workspace.
 // Used by autoSaveItemsToDrafts to silently land incoming items in non-active accounts.
 function loadDraftsForWorkspace(wsId) {
-  const base = { pinterest: [], instagram: [], google: [], linkedin: [], shopify: [], bluesky: [], tiktok: [], youtube: [], twitter: [], kofi: [], alignable: [], facebook: [], tumblr: [], patreon: [] };
+  const base = { pinterest: [], instagram: [], google: [], linkedin: [], shopify: [], bluesky: [], tiktok: [], youtube: [], twitter: [], kofi: [], alignable: [], nextdoor: [], facebook: [], tumblr: [], patreon: [] };
   try {
     const raw = localStorage.getItem(wsId + '_' + _DRAFTS_STORAGE_KEY_BASE);
     if (raw) return { ...base, ...JSON.parse(raw) };
@@ -33155,7 +33175,7 @@ function render() {
           <div class="stat-card" title="${DAILY_LIMIT_INFO[state.activePlatform].note}">
             <div class="stat-label">Daily Limit <span style="font-size:10px;color:var(--text-muted)">(spam safe)</span></div>
             <div class="stat-val" style="color:${platform.color}">${getDailyLimit(state.activePlatform) >= 50 ? '∞' : getDailyLimit(state.activePlatform)}<span class="stat-max">/day</span></div>
-            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Safe: ${DAILY_LIMIT_INFO[state.activePlatform].safe}/day</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Safe: ${DAILY_LIMIT_INFO[state.activePlatform].safe}/day${typeof ppWeekCapNote === 'function' ? ppWeekCapNote(state.activePlatform) : ''}</div>
           </div>
         </div>
 
@@ -33585,6 +33605,7 @@ function renderComposerModal(platform) {
           ${state.activePlatform === 'facebook' ? renderFacebookFields(form, platform) : ''}
           ${state.activePlatform === 'kofi' ? renderKofiFields(form, platform) : ''}
           ${state.activePlatform === 'alignable' ? renderAlignableFields(form, platform) : ''}
+          ${state.activePlatform === 'nextdoor' && typeof renderNextdoorFields === 'function' ? renderNextdoorFields(form, platform) : ''}
           ${state.activePlatform === 'tumblr' ? renderTumblrFields(form, platform) : ''}
           ${state.activePlatform === 'patreon' ? renderPatreonFields(form, platform) : ''}
 
@@ -36621,6 +36642,7 @@ function renderBestTimes() {
           <span class="bt-days">${[1, 2, 3, 4, 5, 6, 0].map(d => { const on = list.find(([w]) => w === d), wk = off && (d === 0 || d === 6);
             return `<span class="bt-day${on ? ' on' : ''}${wk ? ' off' : ''}"><button type="button" aria-pressed="${on ? 'true' : 'false'}" ${wk ? `disabled title="${escapeHtml(_ppBrand())} keeps weekends clear"` : ''} onclick="ppToggleBestDay('${pl.id}', ${d})">${_PP_DOW[d]}</button>${on && !wk ? `<select aria-label="${escapeHtml(pl.name)} ${_PP_DOW[d]} time" onchange="ppSetBestTime('${pl.id}', ${d}, this.value)">${_ppTimeOpts(on[1]).map(t => `<option value="${t}" ${t === on[1] ? 'selected' : ''}>${_ppClock(t)}</option>`).join('')}</select>` : ''}</span>`; }).join('')}</span>
           ${pl.id === 'pinterest' ? `<label class="bt-cap">Pins per day <select aria-label="Pinterest pins per day" onchange="ppSetPinCap(+this.value)">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${n === ppDailyCap('pinterest') ? 'selected' : ''}>${n}</option>`).join('')}</select></label>` : ''}
+          ${typeof ppNxdCapRow === 'function' ? ppNxdCapRow(pl.id) : ''}
           ${custom ? `<button type="button" class="od-mk" onclick="ppResetBestTimes('${pl.id}')">Reset</button>` : ''}</div></div>`; }).join('')}
     </div>
     <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;padding:16px 20px"><button class="btn-save" onclick="ppCloseBestTimes()">Done</button></div></div></div>`;
@@ -41693,9 +41715,9 @@ const _pdDay = (off) => { const d = new Date(); d.setDate(d.getDate() + (off || 
 const _pdLS = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
 const _pdSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 // Where each platform keeps its blog link
-const PD_LINK = Object.assign({}, PP_LINK_FIELD, { facebook: 'fbLink', kofi: 'kofiLink' });
+const PD_LINK = Object.assign({}, PP_LINK_FIELD, { facebook: 'fbLink', kofi: 'kofiLink', nextdoor: 'nextdoorLink' });
 // The most each platform's text can hold (Google Business: your protocol's 1,450; X counts every link as 23)
-const PD_LIMITS = { instagram: 2200, linkedin: 3000, pinterest: 500, google: 1450, twitter: 280, bluesky: 300, tiktok: 4000, youtube: 300, alignable: 1000, shopify: 10000 };
+const PD_LIMITS = { instagram: 2200, linkedin: 3000, pinterest: 500, google: 1450, twitter: 280, bluesky: 300, tiktok: 4000, youtube: 300, alignable: 1000, nextdoor: 2000, shopify: 10000 };
 // Links go in the first comment on these (your protocol), unless the post text already carries the link
 const PD_COMMENT_PLATS = new Set(['instagram', 'facebook', 'linkedin']);
 const _pdCaption = (src, pid) => (src ? _ppPostText(src, pid) : '');
@@ -41773,7 +41795,7 @@ const PD_HOSTS = [
   ['linkedin', /(^|\.)(linkedin\.com|lnkd\.in)$/i], ['pinterest', /(^|\.)(pinterest\.[a-z.]+|pin\.it)$/i],
   ['twitter', /(^|\.)(x\.com|twitter\.com)$/i], ['bluesky', /(^|\.)bsky\.app$/i], ['tiktok', /(^|\.)tiktok\.com$/i],
   ['youtube', /(^|\.)(youtube\.com|youtu\.be)$/i], ['alignable', /(^|\.)alignable\.com$/i], ['tumblr', /(^|\.)tumblr\.com$/i],
-  ['kofi', /(^|\.)ko-fi\.com$/i], ['patreon', /(^|\.)patreon\.com$/i],
+  ['kofi', /(^|\.)ko-fi\.com$/i], ['patreon', /(^|\.)patreon\.com$/i], ['nextdoor', /(^|\.)nextdoor\.(com|co\.uk|ca|com\.au)$/i],
   ['google', /(^|\.)(posts\.gle|g\.page|g\.co|maps\.app\.goo\.gl|goo\.gl|business\.google\.com|google\.[a-z.]+)$/i],
 ];
 function _pdHostPid(url) {
@@ -41795,6 +41817,8 @@ function _pdIsPostUrl(pid, url) {
     case 'youtube': return /youtu\.be$/.test(h) || /^\/(shorts\/|watch)/i.test(u.pathname);
     case 'google': return /posts\.gle|g\.page|g\.co|goo\.gl/.test(h) || /\/(maps|search|localposts)/i.test(u.pathname);
     case 'patreon': return /^\/posts\//i.test(u.pathname);
+    // A Nextdoor post: /p/… (the Share link), ?post=… or …/post/…; any other Nextdoor page isn't one
+    case 'nextdoor': return /^\/p\/[\w-]+/i.test(u.pathname) || /[?&](post|post_id)=\w/i.test(u.search) || /\/posts?\/[\w-]+/i.test(u.pathname);
     default: return u.pathname.length > 1;
   }
 }
@@ -41851,7 +41875,7 @@ savePost = function () {
   try { return _pdOrigSavePost.apply(this, arguments); } finally { _pd.saveLive = false; }
 };
 // Has anything you'd care about changed in the editor, compared with the saved post?
-const PD_DIRTY_KEYS = ['title', 'description', 'caption', 'content', 'liText', 'fbText', 'twitterText', 'bskyText', 'tiktokText', 'ytText', 'shopifyText', 'tumblrText', 'kofiText', 'alignableText', 'patreonText',
+const PD_DIRTY_KEYS = ['title', 'description', 'caption', 'content', 'liText', 'fbText', 'twitterText', 'bskyText', 'tiktokText', 'ytText', 'shopifyText', 'tumblrText', 'kofiText', 'alignableText', 'patreonText', 'nextdoorText', 'nextdoorLink',
   'hashtags', 'altText', 'igLink', 'destinationUrl', 'ctaUrl', 'ctaType', 'liArticleUrl', 'fbLink', 'bskyUrl', 'kofiLink', 'shopifyUrl', 'board', 'image', 'imageName', 'scheduledDate', 'scheduledTime', 'tags', 'location', 'eventTitle', 'couponCode', 'offerTerms'];
 function _pdDirty() {
   const f = state.form, p = state.editingPostId != null ? _pdFind(state.activePlatform, state.editingPostId) : null;
@@ -42944,6 +42968,7 @@ function _pdIssues(p, pid) {
   }
   if (pid === 'alignable' && /https?:\/\/|www\.|[\w.+-]+@[\w-]+\.[\w.]+|\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/.test(cap)) out.push('Has a link, email or phone number (Alignable hides those)');
   if (pid === 'instagram') { const n = (cap.match(/(^|\s)#[\w]+/g) || []).length; if (n > 30) out.push(`${n} hashtags (Instagram allows 30)`); }
+  if (pid === 'nextdoor' && typeof _nxdIssues === 'function') _nxdIssues(p, cap).forEach(x => out.push(x));
   if (pid !== 'google' && /—/.test(cap)) out.push('Has an em dash');
   if (cap.trim().length > 20) {
     const dup = (state.posts[pid] || []).find(q => String(q.id) !== String(p.id) && q.scheduledDate && Math.abs(_ppT(q.scheduledDate, '12:00') - _ppT(p.scheduledDate, '12:00')) <= 14 * 864e5 && _pdCaption(q, pid).trim() === cap.trim());
@@ -43776,7 +43801,7 @@ const _uf = { busy: false, stop: false, cache: new Map(), items: [], opts: null,
   resumeT: 0, resumeAt: 0, zipBusy: false, blobUrls: [], copies: [], copiesShown: 0, renderT: 0, startDone: false, q: {}, healed: 0, needSave: false };
 // The size each platform's pictures are made at (the Post Creator's sizes when it's there)
 const UF_SIZES = { instagram: [1080, 1440], pinterest: [1000, 1500], google: [1200, 900], linkedin: [1080, 1350], facebook: [1080, 1350], twitter: [1600, 900], threads: [1080, 1350],
-  tiktok: [1080, 1920], youtube: [1280, 720], bluesky: [1080, 1080], shopify: [1200, 1200], tumblr: [1280, 1920], kofi: [1200, 630], alignable: [1200, 750], patreon: [1600, 400] };
+  tiktok: [1080, 1920], youtube: [1280, 720], bluesky: [1080, 1080], shopify: [1200, 1200], tumblr: [1280, 1920], kofi: [1200, 630], alignable: [1200, 750], patreon: [1600, 400], nextdoor: [1200, 900] };
 function _ufSize(pid) {
   try { const P = window.parent; if (P && P !== window && typeof P.ppPlatSize === 'function') { const s = P.ppPlatSize(pid); if (s && s.w > 0 && s.h > 0) return [s.w, s.h]; } } catch (e) {}
   return UF_SIZES[pid] || [1080, 1080];
@@ -44688,6 +44713,8 @@ async function _ufStripAll(group, fn) {
 }
 savePosts = async function (posts) {
   if (_uf.switching) return;
+  // Every save first checks Nextdoor's caps (1 a day, 2 a week): a post that landed over them moves to its next good slot
+  try { if (typeof _ppCapNormalize === 'function') _ppCapNormalize(); } catch (e) {}
   const key = STORAGE_KEY();
   try { localStorage.setItem(key, JSON.stringify(await _ufStripAll(posts, persistPostImages))); scheduleSyncToGitHub(); }
   catch (e) { console.warn('savePosts failed:', e); showStorageWarning(e); }
@@ -45718,6 +45745,489 @@ new MutationObserver(() => { if (_lySideQ) return; _lySideQ = requestAnimationFr
     .ly-lkwarn { font-size: 12px; color: #fbbf4b; margin-bottom: 6px; }`;
   document.head.appendChild(st);
 })();
+
+// ═════════════════════════════════════════════════════════════════
+// POST FROM THE EDIT WINDOW (v119)
+// The edit window has its own Post ↗ (at the top, and above the buttons at the bottom). It saves your changes
+// first, so what goes out is what you see, then posts it on the post's own platform, the way Post ↗ on a post
+// does: Bluesky (when connected) posts it right away; the others open with the caption copied and the picture
+// saved, and the edit window turns into the posting checklist (copy buttons, first comment, the live link box).
+// A new post, a draft or a post in the Auto-Queue is saved as today's post first. Nothing is posted if the save
+// doesn't go through (its message says why), and a post that's already live asks before it goes out again.
+// The picture is saved the same way as Update Post (with its safety copy); posting never changes or removes it.
+// ═════════════════════════════════════════════════════════════════
+const _pe = { busy: false };
+// The edit window, as it is (not the posting checklist, which has its own buttons)
+const _peShow = () => !!(state.showComposer && state.form && !_pd.mode);
+function _peWords(pid, f) {
+  const name = _pdName(pid), isNew = state.editingPostId == null, bs = pid === 'bluesky' && _bsReady() && !f.isVideo;
+  const pic = f.isVideo ? 'saves the video' : (f.image || f.imageOriginal) ? 'saves the picture' : '';
+  const steps = ['copies the caption', pic, 'opens ' + name].filter(Boolean);
+  const how = steps.length > 2 ? steps.slice(0, -1).join(', ') + ' and ' + steps[steps.length - 1] : steps.join(' and ');
+  const save = isNew ? (f.scheduledDate ? 'Saves the post' : 'Saves it as today’s post') : f.scheduledDate ? 'Saves your changes' : 'Saves your changes (as today’s post)';
+  return {
+    label: bs ? '🦋 Post to Bluesky now' : `Post ↗ on ${name}`,
+    sub: bs ? `${save} and posts it on Bluesky right away.` : `${save}, then ${how}.`,
+  };
+}
+function _peStripHtml() {
+  const pid = state.activePlatform, f = state.form, color = _pdColor(pid), ink = _ppInk(color), w = _peWords(pid, f);
+  return `<div class="pe-strip" style="--pc:${color};--ink:${ink}"><button type="button" class="pd-go pe-go" data-pe="post" title="${_pdE(w.sub)}">${w.label.startsWith('🦋') ? '' : _pdIcon(pid, 15) + ' '}${_pdE(w.label)}</button><div class="pe-sub">${_pdE(w.sub)}</div></div>`;
+}
+const _peOrigComposer = renderComposerModal;
+renderComposerModal = function () {
+  let html = _peOrigComposer.apply(this, arguments);
+  try {
+    if (_peShow()) {
+      const pid = state.activePlatform, color = _pdColor(pid), ink = _ppInk(color), w = _peWords(pid, state.form);
+      html = html.replace('<div class="modal-footer"', _peStripHtml() + '<div class="modal-footer"');
+      html = html.replace('<button class="close-btn" onclick="closeComposer()">', `<button type="button" class="pe-hdr" data-pe="post" style="--pc:${color};--ink:${ink}" title="${_pdE(w.sub)}">${w.label.startsWith('🦋') ? '🦋 Post now' : 'Post ↗'}</button><button class="close-btn" onclick="closeComposer()">`);
+    }
+  } catch (e) {}
+  return html;
+};
+// A post that isn't on the calendar yet goes out today, at this time
+function _peSetNow() {
+  const d = new Date(), date = _ppDayStr(d), hh = String(d.getHours()).padStart(2, '0'), mm = String(Math.floor(d.getMinutes() / 5) * 5).padStart(2, '0');
+  const set = (id, v) => { const el = document.getElementById(id); if (el) { if (el.tagName === 'SELECT' && ![...el.options].some(o => o.value === v)) el.add(new Option(v, v)); el.value = v; } };
+  set('f-date', date); set('f-hour', hh); set('f-min', mm);
+  state.form.scheduledDate = date; state.form.scheduledTime = hh + ':' + mm;
+}
+async function pdPostFromEditor(btn) {
+  if (_pe.busy || !_peShow()) return;
+  try { syncFormFromDOM(); } catch (e) {}
+  const pid = state.activePlatform, f = state.form, name = _pdName(pid);
+  if (_pdPostedLike(f) && !confirm(`This post is already live on ${name}. Post it again?`)) return;
+  if (_pdOnPlat(f) && !confirm(`This post is scheduled on ${name} itself, so it goes out there on its own. Post it now anyway?`)) return;
+  const was = { date: f.scheduledDate || '', time: f.scheduledTime || '' };
+  if (!f.scheduledDate) _peSetNow();
+  // A save that didn't go through: the date and time go back to what they were
+  const undoNow = () => {
+    if (!state.showComposer || !state.form || was.date) return;
+    const [hh, mm] = String(was.time || '09:00').split(':');
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    set('f-date', ''); set('f-hour', hh); set('f-min', mm);
+    state.form.scheduledDate = ''; state.form.scheduledTime = was.time || '09:00';
+  };
+  _pe.busy = true;
+  document.querySelectorAll('[data-pe="post"]').forEach(b => b.classList.add('pp-busy'));
+  try {
+    let id = state.editingPostId != null ? String(state.editingPostId) : null;
+    if (id == null) {
+      // A new post or a draft: saved as a post first (quietly: posting follows straight away)
+      const before = new Set((state.posts[pid] || []).map(p => String(p.id)));
+      const sig = _ppSig(state.form, pid), date = state.form.scheduledDate;
+      const cheer = celebrateSchedule;
+      celebrateSchedule = function () {};
+      _pd.switching = true;
+      try { savePost(false); } finally { _pd.switching = false; celebrateSchedule = cheer; }
+      if (state.showComposer) { undoNow(); return; } // not saved: its message says why, and nothing is posted
+      let np = (state.posts[pid] || []).find(p => !before.has(String(p.id)));
+      // (a draft of a post that's already scheduled that day: that post is the one that goes out)
+      if (!np && !_ppEmptySig(sig)) np = (state.posts[pid] || []).find(p => p.scheduledDate === date && _ppSig(p, pid) === sig);
+      if (!np) return;
+      id = String(np.id);
+    } else {
+      // Every change you made is saved first, whichever box it's in
+      const changed = _pdDirty() || !state._formOpenSig || _formSig(state.form) !== state._formOpenSig;
+      if (changed) {
+        _pd.switching = true;
+        try { savePost(); } finally { _pd.switching = false; }
+        if (state.showComposer) { undoNow(); return; } // not saved: its message says why, and nothing is posted
+      }
+    }
+    await postOnPlatform(id, pid, btn);
+  } finally {
+    _pe.busy = false;
+    document.querySelectorAll('[data-pe="post"]').forEach(b => b.classList.remove('pp-busy'));
+  }
+}
+document.addEventListener('click', (e) => {
+  const b = e.target && e.target.closest ? e.target.closest('[data-pe="post"]') : null;
+  if (!b || b.disabled) return;
+  e.preventDefault();
+  pdPostFromEditor(b);
+}, true);
+(function _peStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .pe-strip { padding: 14px 24px 12px; border-top: 1px solid var(--border, #272e44); }
+    .pe-strip .pd-go { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 0; }
+    .pe-strip .pd-go svg { flex-shrink: 0; }
+    .pe-sub { font-size: 11.5px; color: var(--text-muted, #8b8fa8); margin-top: 6px; line-height: 1.45; text-align: center; }
+    .pe-hdr { margin-left: auto; margin-right: 8px; padding: 6px 12px; border-radius: 8px; border: none; background: var(--pc); color: var(--ink, #fff); font: 800 12px 'DM Sans', system-ui, sans-serif; cursor: pointer; white-space: nowrap; }
+    .pe-hdr:hover { filter: brightness(1.08); }
+    .pe-hdr:focus-visible, .pe-strip .pd-go:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .pe-hdr + .pp-hdr-del { margin-left: 0; }`;
+  document.head.appendChild(st);
+})();
+
+// ═════════════════════════════════════════════════════════════════
+// NEXTDOOR (v120): your business page on the neighborhood network
+//  • In the sidebar, calendar, editor (post text up to 2,000 characters and an optional link), Posting Desk,
+//    night-before check, phone list, picture backups and picture fill (pictures at 1200×900, Nextdoor's post size).
+//  • Never more than 1 post a day and 2 a week (1, 2 or 3 a week, set under ⭐ Best times), however a post gets
+//    its day: the editor, dragging on the calendar, Batch Schedule, Plan my week, ⚡ Post next, Send to PostPilot,
+//    copies made for other platforms. A post that lands over the limit moves to the next good slot.
+//  • Best days and times: Thursdays and Fridays at 5:30 PM (Nextdoor's guidance: 5 to 7 PM, later in the week).
+//  • The editor flags hashtags and wording close to another Nextdoor post (Nextdoor treats repeats as spam).
+// ═════════════════════════════════════════════════════════════════
+const NXD_ID = 'nextdoor', NXD_MAX = 2000, NXD_CAP_KEY = 'pp_nd_week_cap';
+// Platforms whose weekly cap every planner keeps to, and whose caps are checked again on every save
+const PP_STRICT = new Set([NXD_ID]);
+if (!PLATFORMS[NXD_ID]) PLATFORMS[NXD_ID] = {
+  id: NXD_ID, name: 'Nextdoor', color: '#1B8751',
+  icon: `<svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" style="fill:#1B8751"/><path fill-rule="evenodd" style="fill:#fff;fill-rule:evenodd" d="M5 11.4 L12 5.4 L15.2 8.14 V6.2 H17.2 V9.86 L19 11.4 H17.2 V18.6 H6.8 V11.4 Z M10.4 12.6 H13.6 V15.8 H10.4 Z"/></svg>`,
+};
+
+// ── The caps: 1 post a day, and 2 a week unless this brand picked 1 or 3 ──
+DAILY_LIMITS[NXD_ID] = 1;
+function nxdWeekCap() { try { const v = parseInt(localStorage.getItem(wsKey(NXD_CAP_KEY)) || '', 10); return v >= 1 && v <= 3 ? v : 2; } catch (e) { return 2; } }
+Object.defineProperty(PP_WEEK_CAP, NXD_ID, { get: nxdWeekCap, enumerable: true, configurable: true });
+DAILY_LIMIT_INFO[NXD_ID] = { safe: '1', max: 1 };
+Object.defineProperty(DAILY_LIMIT_INFO[NXD_ID], 'note', { enumerable: true,
+  get: () => `Nextdoor: at most 1 post a day and ${nxdWeekCap()} a week (change the week's number under ⭐ Best times). Nextdoor treats business posts repeated more than once or twice a week as spam, so give every post its own wording.` });
+function ppSetNxdWeekCap(n) {
+  n = Math.max(1, Math.min(3, n | 0));
+  try { localStorage.setItem(wsKey(NXD_CAP_KEY), String(n)); } catch (e) {}
+  try { if (_ppCapNormalize()) savePosts(state.posts); } catch (e) {}   // a lower cap: the extra posts move on
+  render();
+}
+// The ⭐ Best times window: Nextdoor's posts a week, beside its days
+function ppNxdCapRow(pid) {
+  if (pid !== NXD_ID) return '';
+  const cap = nxdWeekCap();
+  return `<label class="bt-cap" title="Nextdoor treats business posts repeated more than once or twice a week as spam">Posts a week <select aria-label="Nextdoor posts a week" onchange="ppSetNxdWeekCap(+this.value)">${[1, 2, 3].map(n => `<option value="${n}" ${n === cap ? 'selected' : ''}>${n}</option>`).join('')}</select> · 1 a day</label>`;
+}
+
+// ── Best days and times: Thursdays and Fridays, 5 to 7 PM ──
+PP_BEST_DEFAULT[NXD_ID] = [[4, '17:30'], [5, '17:30']];
+BEST_TIMES[NXD_ID] = ['17:00', '17:30', '18:00', '18:30'];
+PP_TIME_DEFAULTS[NXD_ID] = '17:30';
+// ── Where Post ↗ opens, where the post text lives, and 📋 Copy beside its boxes ──
+PP_OPEN_URLS[NXD_ID] = 'https://nextdoor.com/';
+PP_TEXT_FIELD[NXD_ID] = 'nextdoorText';
+PP_COPY_FIELDS.push('f-nextdoor-text', 'f-nextdoor-link');
+
+// ── Every brand's data has a place for Nextdoor (and every platform has its lists, so a first post never fails) ──
+function _ppAddNextdoor(o) {
+  if (Array.isArray(o) && !o.includes(NXD_ID)) { const i = o.indexOf('alignable'); o.splice(i >= 0 ? i + 1 : o.length, 0, NXD_ID); }
+  return o;
+}
+function _nxdLists(obj) {
+  if (obj && typeof obj === 'object') Object.keys(PLATFORMS).forEach(pid => { if (!Array.isArray(obj[pid])) obj[pid] = []; });
+  return obj;
+}
+function _nxdEnsure() {
+  try {
+    _nxdLists(state.posts); _nxdLists(state.drafts);
+    if (state.streaks && !state.streaks[NXD_ID]) state.streaks[NXD_ID] = defaultStreakState();
+    if (Array.isArray(state.platformOrder)) _ppAddNextdoor(state.platformOrder);
+  } catch (e) {}
+}
+_nxdEnsure();
+if (typeof loadPosts === 'function') loadPosts = (function (orig) { return async function () { const r = await orig.apply(this, arguments); try { _nxdLists(r); } catch (e) {} return r; }; })(loadPosts);
+if (typeof loadDraftsAsync === 'function') loadDraftsAsync = (function (orig) { return async function () { const r = await orig.apply(this, arguments); try { _nxdLists(r); } catch (e) {} return r; }; })(loadDraftsAsync);
+if (typeof switchWorkspace === 'function') switchWorkspace = (function (orig) { return async function () { const r = await orig.apply(this, arguments); _nxdEnsure(); return r; }; })(switchWorkspace);
+if (typeof getOrderedPlatforms === 'function') getOrderedPlatforms = (function (orig) { return function () { try { if (Array.isArray(state.platformOrder)) _ppAddNextdoor(state.platformOrder); } catch (e) {} return orig.apply(this, arguments); }; })(getOrderedPlatforms);
+// Saving: the lists exist first; a copy made for Nextdoor ("Also post to") gets this post's text in its Nextdoor box
+if (typeof savePost === 'function') savePost = (function (orig) { return function () {
+  _nxdEnsure();
+  let text = '', had = null;
+  try {
+    if (state.form && state.activePlatform !== NXD_ID && state.multiPlatforms && state.multiPlatforms.has(NXD_ID)) {
+      try { syncFormFromDOM(); } catch (e) {}
+      text = String(_ppPostText(state.form, state.activePlatform) || '').trim();
+      had = new Set((state.posts[NXD_ID] || []).map(p => String(p.id)));
+    }
+  } catch (e) {}
+  const r = orig.apply(this, arguments);
+  const after = () => {
+    if (!had || !text) return;
+    try {
+      let n = 0;
+      (state.posts[NXD_ID] || []).forEach(p => { if (p && !had.has(String(p.id)) && !String(p.nextdoorText || '').trim()) { p.nextdoorText = text; n++; } });
+      if (n) savePosts(state.posts);
+    } catch (e) {}
+  };
+  if (r && typeof r.then === 'function') r.then(after, () => {}); else after();
+  return r;
+}; })(savePost);
+if (typeof defaultForm === 'function') defaultForm = (function (orig) { return function (platform) {
+  const f = orig.apply(this, arguments);
+  if (platform === NXD_ID && f && typeof f === 'object') { if (f.nextdoorText == null) f.nextdoorText = ''; if (f.nextdoorLink == null) f.nextdoorLink = ''; }
+  return f;
+}; })(defaultForm);
+
+// ── Text from the Post Creator: Nextdoor's own caption, or the main one without its closing line of hashtags ──
+function _nxdNoTagLine(t) {
+  const parts = String(t || '').split(/\n\s*\n/);
+  if (parts.length > 1 && /^\s*(#[\w-]+\s*)+$/.test(parts[parts.length - 1])) parts.pop();
+  return parts.join('\n\n').trim();
+}
+const _nxdOrigFieldsFor = _pcFieldsFor;
+_pcFieldsFor = function (pid, src) {
+  const out = _nxdOrigFieldsFor.apply(this, arguments);
+  if (pid !== NXD_ID || !out) return out;
+  const s = src || {}, caps = s.captions || {};
+  out.nextdoorText = caps.nextdoor || _nxdNoTagLine(caps.all) || [s.header, s.content].filter(Boolean).join('\n');
+  const link = (s.links && s.links.nextdoor) || s.link || '';
+  if (link) out.nextdoorLink = link;
+  return out;
+};
+const _nxdOrigAllText = _ppAllText;
+_ppAllText = function (p) { const t = _nxdOrigAllText.apply(this, arguments); return p && p.nextdoorText ? [t, p.nextdoorText].filter(Boolean).join(' ') : t; };
+const _nxdOrigSync = syncFormFromDOM;
+syncFormFromDOM = function () {
+  const r = _nxdOrigSync.apply(this, arguments);
+  try {
+    if (state.form && state.activePlatform === NXD_ID) {
+      const t = document.getElementById('f-nextdoor-text'), l = document.getElementById('f-nextdoor-link');
+      if (t) state.form.nextdoorText = t.value;
+      if (l) state.form.nextdoorLink = l.value;
+    }
+  } catch (e) {}
+  return r;
+};
+
+// ── Same or nearly the same wording as another Nextdoor post within 60 days ──
+const _nxdNorm = (t) => String(t || '').toLowerCase().replace(/https?:\/\/\S+|www\.\S+/g, ' ').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+function _nxdSimilar(text, exceptId, date) {
+  const a = _nxdNorm(text);
+  if (a.length < 25) return null;
+  const words = (s) => new Set(s.split(' ').filter(w => w.length > 2));
+  const aw = words(a), base = date ? _ppT(date, '12:00') : Date.now();
+  let best = null;
+  (state.posts[NXD_ID] || []).forEach(q => {
+    if (!q || String(q.id) === String(exceptId) || !q.scheduledDate) return;
+    if (Math.abs(_ppT(q.scheduledDate, '12:00') - base) > 60 * 864e5) return;
+    const b = _nxdNorm(_ppPostText(q, NXD_ID));
+    if (b.length < 25) return;
+    let score = 1;
+    if (a !== b) {
+      const bw = words(b);
+      if (aw.size < 8 || bw.size < 8) return;
+      let both = 0; aw.forEach(w => { if (bw.has(w)) both++; });
+      score = both / (aw.size + bw.size - both);
+    }
+    if (score >= 0.7 && (!best || score > best.score)) best = { post: q, score, same: a === b };
+  });
+  return best;
+}
+function _nxdWarnings(t, exceptId, date) {
+  t = String(t || '');
+  const w = [];
+  if (t.length > NXD_MAX) w.push(`This post is ${t.length.toLocaleString()} characters. Nextdoor business posts take up to ${NXD_MAX.toLocaleString()}.`);
+  if (/(^|\s)#\w/.test(t)) w.push('This post has hashtags. Nextdoor posts read better without them.');
+  const sim = _nxdSimilar(t, exceptId, date);
+  if (sim) w.push(`${sim.same ? 'Same wording as' : 'Wording close to'} your ${_ppNiceDay(sim.post.scheduledDate)} Nextdoor post. Nextdoor treats repeated posts as spam, so give this one its own wording.`);
+  return w;
+}
+// The night-before check (🌙 Tomorrow): hashtags, and wording close to another Nextdoor post
+function _nxdIssues(p, cap) {
+  const out = [];
+  if (/(^|\s)#\w/.test(cap)) out.push('Has hashtags (Nextdoor posts read better without them)');
+  const sim = _nxdSimilar(cap, p.id, p.scheduledDate);
+  // The exact same caption within two weeks is already on the list
+  const listed = sim && sim.same && _pdCaption(sim.post, NXD_ID).trim() === String(cap).trim() && Math.abs(_ppT(sim.post.scheduledDate, '12:00') - _ppT(p.scheduledDate, '12:00')) <= 14 * 864e5;
+  if (sim && !listed) out.push(`${sim.same ? 'Same wording as' : 'Wording close to'} your ${_ppNiceDay(sim.post.scheduledDate)} Nextdoor post (Nextdoor treats repeats as spam)`);
+  return out;
+}
+
+// ── The editor: the post, its counter and checks, and an optional link ──
+function _nxdWarnHtml(t) {
+  const f = state.form || {};
+  return _nxdWarnings(t, state.editingPostId, f.scheduledDate).map(x => `<div class="pp-al-warn" role="note">⚠ ${escapeHtml(x)}</div>`).join('');
+}
+function _nxdTip() {
+  return `Nextdoor shows business posts to neighbors near you. Keep it friendly and local, and end with a question that invites replies. PostPilot keeps Nextdoor to 1 post a day and ${nxdWeekCap()} a week so it isn't flagged as spam. Best: Thursday or Friday, 5 to 7 PM.`;
+}
+function renderNextdoorFields(form, platform) {
+  const t = form.nextdoorText || '', n = t.length;
+  return `
+    <div class="section-divider">Post Content</div>
+    <div class="form-group">
+      <label class="form-label" for="f-nextdoor-text">Nextdoor Post *</label>
+      <textarea id="f-nextdoor-text" placeholder="Share a helpful tip or a local update with your neighbors, then ask a question…"
+        oninput="nxdTextInput(this)" style="min-height:120px">${escapeHtml(t)}</textarea>
+      <div class="char-count" id="cc-nextdoor" style="color:${n > NXD_MAX ? '#ef4444' : 'var(--text-muted)'}">${n.toLocaleString()} / ${NXD_MAX.toLocaleString()}</div>
+      <div id="nxd-warn" aria-live="polite">${_nxdWarnHtml(t)}</div>
+      <div class="pp-al-tip">${escapeHtml(_nxdTip())}</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="f-nextdoor-link">Link URL <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+      <input type="text" id="f-nextdoor-link" inputmode="url" placeholder="https://…" value="${escapeHtml(form.nextdoorLink || '')}" oninput="updateFormField('nextdoorLink',this.value)"/>
+      <div class="pp-al-tip">Paste it at the end of your post on Nextdoor, and Nextdoor shows a preview of the page.</div>
+    </div>`;
+}
+let _nxdWarnT = 0;
+function nxdTextInput(el) {
+  updateFormField('nextdoorText', el.value);
+  const n = el.value.length, cc = document.getElementById('cc-nextdoor');
+  if (cc) { cc.textContent = `${n.toLocaleString()} / ${NXD_MAX.toLocaleString()}`; cc.style.color = n > NXD_MAX ? '#ef4444' : 'var(--text-muted)'; }
+  clearTimeout(_nxdWarnT);
+  _nxdWarnT = setTimeout(() => { const w = document.getElementById('nxd-warn'); if (w) w.innerHTML = _nxdWarnHtml(el.value); }, 250);
+}
+
+// ── The weekly cap in every planner (weeks run Monday to Sunday, like the rest of PostPilot) ──
+// The day cap straight from the table (getDailyLimit is lifted while the Posting Desk saves a live post)
+const _nxdDayCap = (pid) => DAILY_LIMITS[pid] || 1;
+function _nxdWeekKey(ds) { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return _ppDayStr(d); }
+// Posts in each week, from a day → { n } map (a set of "full days" counts the platform's real posts instead)
+function _nxdWeekBase(pid, taken) {
+  const occ = taken instanceof Map ? taken : _ppOcc(pid), m = new Map();
+  occ.forEach((o, ds) => { if (!o || !(o.n > 0) || o.n >= 1e8) return; const k = _nxdWeekKey(ds); m.set(k, (m.get(k) || 0) + o.n); });
+  return m;
+}
+const _nxdOrigBestPlan = ppBestPlan;
+ppBestPlan = function (pid, n, fromMs, days, taken) {
+  if (!PP_STRICT.has(pid)) return _nxdOrigBestPlan.apply(this, arguments);
+  const occ = _ppAsOcc(pid, taken), wk = _nxdWeekBase(pid, taken), cap = PP_WEEK_CAP[pid] || 99, out = [];
+  for (const s of ppSlotsFrom(pid, fromMs, days || 120)) {
+    if (out.length >= n) break;
+    const k = _nxdWeekKey(s.date);
+    if (!_ppFreeAt(pid, occ, s) || (wk.get(k) || 0) >= cap) continue;
+    out.push(s); _ppTakeAt(occ, s); wk.set(k, (wk.get(k) || 0) + 1);
+  }
+  return out;
+};
+const _nxdOrigNextFree = ppNextFree;
+ppNextFree = function (pid, fromMs, taken, days) {
+  if (!PP_STRICT.has(pid)) return _nxdOrigNextFree.apply(this, arguments);
+  const occ = _ppAsOcc(pid, taken), wk = _nxdWeekBase(pid, taken), cap = PP_WEEK_CAP[pid] || 99;
+  return ppSlotsFrom(pid, fromMs, days || 120).find(s => _ppFreeAt(pid, occ, s) && (wk.get(_nxdWeekKey(s.date)) || 0) < cap) || null;
+};
+// Batch Schedule, Plan my week and Send to PostPilot's open days: each day moves on to the first one with room that day and that week
+const _nxdOrigBatchPlan = _ppBatchPlan;
+_ppBatchPlan = function (pid, n, startDate, spacing, time) {
+  const out = _nxdOrigBatchPlan.apply(this, arguments);
+  if (!PP_STRICT.has(pid) || !startDate || spacing === 'best' || !Array.isArray(out)) return out;   // 'best' comes from ppBestPlan, which keeps to the caps
+  const occ = _ppOcc(pid), wk = _nxdWeekBase(pid, occ), lim = _nxdDayCap(pid), cap = PP_WEEK_CAP[pid] || 99, add = {};
+  const ok = (ds) => !_ppSkipDay(ds) && _ppDayOk(pid, ds) && ((occ.get(ds) || { n: 0 }).n + (add[ds] || 0)) < lim && (wk.get(_nxdWeekKey(ds)) || 0) < cap;
+  let floor = '';
+  const res = out.map(d0 => {
+    if (!d0) return d0;
+    const cur = new Date((d0 < floor ? floor : d0) + 'T12:00:00');
+    for (let g = 0; g < 400 && !ok(_ppDayStr(cur)); g++) cur.setDate(cur.getDate() + 1);
+    const d = _ppDayStr(cur);
+    if (!ok(d)) return null;
+    add[d] = (add[d] || 0) + 1;
+    const k = _nxdWeekKey(d); wk.set(k, (wk.get(k) || 0) + 1);
+    floor = d;
+    return d;
+  });
+  if (out.times) res.times = out.times;
+  return res;
+};
+// The Batch's ⚡ Schedule today: once Nextdoor has today's post (or the week is full), the rest go on its next good days
+const _nxdOrigItemOpen = _ppScheduleItemOpen;
+_ppScheduleItemOpen = async function (item, pid, fmt, sched) {
+  if (PP_STRICT.has(pid) && item && item.at && item.at.date) {
+    const occ = _ppOcc(pid), o = occ.get(item.at.date), wk = _nxdWeekBase(pid, occ);
+    if ((o && o.n >= _nxdDayCap(pid)) || (wk.get(_nxdWeekKey(item.at.date)) || 0) >= (PP_WEEK_CAP[pid] || 99)) item = Object.assign({}, item, { at: null });
+  }
+  return _nxdOrigItemOpen.call(this, item, pid, fmt, sched);
+};
+// ✨ Best fit: a move into a week that's already full goes to the next best slot with room (or is listed as stuck)
+const _nxdOrigFitPlan = _ppFitPlan;
+_ppFitPlan = function (opts) {
+  const out = _nxdOrigFitPlan.apply(this, arguments);
+  try {
+    (out || []).forEach(row => {
+      const pid = row && row.pl && row.pl.id;
+      if (!PP_STRICT.has(pid) || !Array.isArray(row.moves)) return;
+      const cap = PP_WEEK_CAP[pid] || 99, lim = _nxdDayCap(pid);
+      const moving = new Set(row.moves.filter(m => m.x && m.x.kind === 'post').map(m => String(m.x.ref.id)));
+      const occ = _ppOcc(pid, moving), wk = _nxdWeekBase(pid, occ), slots = ppSlotsFrom(pid, Date.now(), (opts && opts.days) || 60);
+      const fits = (s) => { const o = occ.get(s.date); return (!o || (o.n < lim && !o.times.has(s.time))) && (wk.get(_nxdWeekKey(s.date)) || 0) < cap; };
+      const kept = [];
+      row.moves.slice().sort((a, b) => a.s.t - b.s.t).forEach(m => {
+        const s = fits(m.s) ? m.s : slots.find(z => z.t >= m.s.t && fits(z));
+        if (!s) { (row.stuck = row.stuck || []).push({ x: m.x, note: `${row.pl.name} already has ${cap} posts a week through the planning window` }); return; }
+        _ppTakeAt(occ, s);
+        const k = _nxdWeekKey(s.date); wk.set(k, (wk.get(k) || 0) + 1);
+        kept.push(s === m.s ? m : Object.assign({}, m, { s }));
+      });
+      row.moves = kept;
+    });
+  } catch (e) {}
+  return out;
+};
+// The editor's open days leave out weeks that are already full
+const _nxdOrigOpenDays = _ppOpenDaysInner;
+_ppOpenDaysInner = function (form) {
+  const pid = state.activePlatform;
+  if (!PP_STRICT.has(pid) || !PLATFORMS[pid]) return _nxdOrigOpenDays.apply(this, arguments);
+  const dayOk = _ppDayOk, cap = PP_WEEK_CAP[pid] || 99, eid = state.editingPostId;
+  _ppDayOk = function (p, ds) { return dayOk.apply(this, arguments) && !(p === pid && _ppWeekCount(pid, ds, eid) >= cap); };
+  let html;
+  try { html = _nxdOrigOpenDays.apply(this, arguments); } finally { _ppDayOk = dayOk; }
+  return html + `<div class="od-def" style="margin-bottom:8px">📏 ${escapeHtml(PLATFORMS[pid].name)} keeps to 1 post a day and ${cap} a week, so it isn't flagged as spam.</div>`;
+};
+
+// ── On every save (savePosts calls this first): a Nextdoor post over the caps (a copy made for another platform,
+//    a post sent from the Post Creator, a lower weekly cap) moves to the next good slot on or after its day. The
+//    newest post moves first, and posts tied to their day (an event on its day, ⚡ Schedule today, a holiday post)
+//    move last; posts that are live, posted, scheduled on Nextdoor itself or already past never move. ──
+function _nxdSlotFor(pid, p) {
+  const occ = _ppOcc(pid, new Set([String(p.id)])), wk = _nxdWeekBase(pid, occ), cap = PP_WEEK_CAP[pid] || 99, lim = _nxdDayCap(pid);
+  const from = Math.max(Date.now() + PP_MISSED_GRACE, _ppT(p.scheduledDate, '00:00') - 1);
+  const ok = (s) => { const o = occ.get(s.date); return s.t > from && (!o || (o.n < lim && !o.times.has(s.time))) && (wk.get(_nxdWeekKey(s.date)) || 0) < cap && _ppDayOk(pid, s.date) && !_ppSkipDay(s.date); };
+  let s = ppSlotsFrom(pid, from, 200).find(ok);
+  const d = new Date(from); d.setHours(12, 0, 0, 0);
+  for (let i = 0; i < 200 && !s; i++, d.setDate(d.getDate() + 1)) { const c = { date: _ppDayStr(d), time: ppDefaultTime(pid) }; c.t = _ppT(c.date, c.time); if (ok(c)) s = c; }
+  return s || null;
+}
+function _ppCapNormalize() {
+  const now = Date.now(), moved = [];
+  // A copy made for Nextdoor ("Also post to") has its text in other boxes: it goes in Nextdoor's own box, as Post ↗ would copy it
+  try { (state.posts && state.posts[NXD_ID] || []).forEach(p => { if (p && !p.nextdoorText && (p.caption || p.content || p.description)) p.nextdoorText = _ppPostText(p, NXD_ID); }); } catch (e) {}
+  PP_STRICT.forEach(pid => {
+    const list = state.posts && state.posts[pid];
+    if (!Array.isArray(list) || list.length < 2) return;
+    const lim = _nxdDayCap(pid), cap = PP_WEEK_CAP[pid] || 99;
+    const stays = (p) => p.publishStatus === 'published' || p.publishStatus === 'publishing' || !!p.manualUpload || !!_ppLiveUrl(p) || !!p.platformScheduled
+      || _ppT(p.scheduledDate, p.scheduledTime || '00:00') < now;
+    const tied = (p) => { try { return !!p.pinnedDay || !!(p.eventDate && p.eventDate === p.scheduledDate) || !!_ppHolidayOf(_ppAllText(p), now); } catch (e) { return false; } };
+    list.filter(p => p && p.scheduledDate && !stays(p)).map(p => ({ p, tied: tied(p) }))
+      .sort((a, b) => (a.tied - b.tied) || ((Number(b.p.id) || 0) - (Number(a.p.id) || 0))).map(x => x.p).forEach(p => {
+      const wk = _nxdWeekKey(p.scheduledDate);
+      const day = list.filter(q => q !== p && q && q.scheduledDate === p.scheduledDate).length;
+      const week = list.filter(q => q !== p && q && q.scheduledDate && _nxdWeekKey(q.scheduledDate) === wk).length;
+      if (day < lim && week < cap) return;
+      const s = _nxdSlotFor(pid, p);
+      if (!s) return;
+      p.scheduledDate = s.date; p.scheduledTime = s.time;
+      moved.push({ pid, s });
+    });
+  });
+  if (moved.length) setTimeout(() => {
+    try {
+      const by = {};
+      moved.forEach(m => (by[m.pid] = by[m.pid] || []).push(m.s));
+      Object.keys(by).forEach(pid => {
+        const name = (PLATFORMS[pid] || {}).name || pid, n = by[pid].length, s0 = by[pid][0];
+        showToast(`Moved ${n} ${name} post${n === 1 ? '' : 's'}${n === 1 ? ` to ${_ppNiceDay(s0.date)} at ${_ppClock(s0.time)}` : ''}, so ${name} stays at 1 post a day and ${PP_WEEK_CAP[pid]} a week.`, 'info');
+      });
+    } catch (e) {}
+  }, 0);
+  return moved.length;
+}
+// The sidebar's ⚠ Gaps coming up: no gap for a capped platform that already has its posts for the coming week
+const _nxdOrigGaps = _ppGaps;
+_ppGaps = function () {
+  const out = _nxdOrigGaps.apply(this, arguments);
+  try {
+    const start = new Date(); start.setHours(12, 0, 0, 0);
+    const days = new Set(Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return _ppDayStr(d); }));
+    return (out || []).filter(g => {
+      const pid = g && g.pl && g.pl.id;
+      return !PP_STRICT.has(pid) || (state.posts[pid] || []).filter(p => days.has(p.scheduledDate)).length < (PP_WEEK_CAP[pid] || 99);
+    });
+  } catch (e) { return out; }
+};
+// The stats bar's "Safe: 1/day" adds the weekly cap where a platform has one
+function ppWeekCapNote(pid) { try { const c = PP_WEEK_CAP[pid]; return c ? ` · ${c}/week` : ''; } catch (e) { return ''; } }
 
 </scr_PPESC_ipt>
 
