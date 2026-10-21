@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-10-21T02:59:45.339Z",
+  "lastSaved": "2026-10-21T03:01:37.339Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -3288,30 +3288,32 @@
         },
         "_imageDims": "1000×1500",
         "unsplash": {
-          "id": "a4eENJLax5E",
-          "name": "Нина Насонова",
-          "user": "n2nn",
-          "link": "https://unsplash.com/@n2nn",
-          "page": "https://unsplash.com/photos/a-decorated-christmas-tree-with-warm-lights-and-ornaments-a4eENJLax5E",
-          "url": "https://images.unsplash.com/photo-1769855709413-d4cd72b5459c?ixid=M3wxMDg2MTkyfDB8MXxzZWFyY2h8N3x8Y296eSUyMGZhbWlseSUyMGhvbWV8ZW58MXwxfHx8MTc5MjQ2NTQyNnww&ixlib=rb-4.1.0&w=1000&h=1500&fit=crop&crop=entropy&q=85&fm=jpg",
-          "dl": "https://api.unsplash.com/photos/a4eENJLax5E/download?ixid=M3wxMDg2MTkyfDB8MXxzZWFyY2h8N3x8Y296eSUyMGZhbWlseSUyMGhvbWV8ZW58MXwxfHx8MTc5MjQ2NTQyNnww",
-          "q": "cozy family home",
+          "id": "8lYFDFw5epE",
+          "name": "Rota Alternativa",
+          "user": "rotaalternativa",
+          "link": "https://unsplash.com/@rotaalternativa",
+          "page": "https://unsplash.com/photos/man-sitting-inside-vehicle-while-playing-mandoline-8lYFDFw5epE",
+          "url": "https://images.unsplash.com/photo-1550700767-90f0579a1706?ixid=M3wxMDY4MTEyfDB8MXxzZWFyY2h8MTd8fG1vYmlsZSUyMGhvbWV8ZW58MXwxfHx8MTc5MjU1MTY1M3ww&ixlib=rb-4.1.0&w=1000&h=1500&fit=crop&crop=entropy&q=85&fm=jpg",
+          "raw": "https://images.unsplash.com/photo-1550700767-90f0579a1706?ixid=M3wxMDY4MTEyfDB8MXxzZWFyY2h8MTd8fG1vYmlsZSUyMGhvbWV8ZW58MXwxfHx8MTc5MjU1MTY1M3ww&ixlib=rb-4.1.0",
+          "dl": "https://api.unsplash.com/photos/8lYFDFw5epE/download?ixid=M3wxMDY4MTEyfDB8MXxzZWFyY2h8MTd8fG1vYmlsZSUyMGhvbWV8ZW58MXwxfHx8MTc5MjU1MTY1M3ww",
+          "q": "mobile home",
           "w": 1000,
           "h": 1500,
           "fmt": "png",
-          "at": 1792465463725,
-          "fp": "21csi-1wsoi1p",
-          "plainFp": "1rlam-1oyjl7z",
-          "raw": "https://images.unsplash.com/photo-1769855709413-d4cd72b5459c?ixid=M3wxMDg2MTkyfDB8MXxzZWFyY2h8N3x8Y296eSUyMGZhbWlseSUyMGhvbWV8ZW58MXwxfHx8MTc5MjQ2NTQyNnww&ixlib=rb-4.1.0&w=2000&h=2000&fit=max&q=85&fm=jpg"
+          "at": 1792551660130,
+          "fp": "21922-10rp38k",
+          "plainFp": "1udjm-1r4tm93"
         },
         "styled": {
-          "layout": 0,
+          "layout": 2,
           "title": "Hidden Costs of California Mobile Home Park Living: Budget Guide 🏡",
-          "at": 1792471574504,
+          "at": 1792551666852,
           "ws": "ws_a",
           "site": "YOUNGDOUGLASINSURANCE.COM",
           "logo": "h4q-1gr9xza"
-        }
+        },
+        "isVideo": false,
+        "isGif": false
       },
       {
         "id": 1790642665184,
