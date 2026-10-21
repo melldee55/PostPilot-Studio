@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-10-21T02:47:52.809Z",
+  "lastSaved": "2026-10-21T02:51:44.844Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -4115,9 +4115,9 @@
         "id": 1790629029161.487,
         "platform": "pinterest",
         "scheduledDate": "2026-10-20",
-        "scheduledTime": "21:00",
+        "scheduledTime": "19:48",
         "timezone": "America/Los_Angeles",
-        "publishStatus": "scheduled",
+        "publishStatus": "published",
         "publishError": "",
         "publishedAt": null,
         "imageName": "Open-enrollment-is-here_0005_Pinterest.png",
@@ -4158,7 +4158,7 @@
         "ytDriveUrl": "",
         "ytLiveUrl": "",
         "tags": [],
-        "liveUrl": "",
+        "liveUrl": "https://www.pinterest.com/pin/1104718983636874731/",
         "pinnedDay": false,
         "rescheduledFrom": {
           "date": "2026-10-08",
@@ -4189,6 +4189,12 @@
           "ws": "ws_a",
           "site": "YOUNGDOUGLASINSURANCE.COM",
           "logo": "h4q-1gr9xza"
+        },
+        "platformScheduled": false,
+        "liveAt": 1792550901083,
+        "plannedFor": {
+          "date": "2026-10-20",
+          "time": "21:00"
         }
       },
       {
@@ -4237,7 +4243,9 @@
         "ytText": "",
         "ytDriveUrl": "",
         "ytLiveUrl": "",
-        "tags": [],
+        "tags": [
+          "business"
+        ],
         "liveUrl": "",
         "rescheduledFrom": {
           "date": "2026-10-09",
