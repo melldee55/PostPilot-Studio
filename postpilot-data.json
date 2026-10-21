@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-10-21T03:01:37.339Z",
+  "lastSaved": "2026-10-21T03:03:51.884Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -3238,9 +3238,9 @@
         "id": 1790624543722.4556,
         "platform": "pinterest",
         "scheduledDate": "2026-10-20",
-        "scheduledTime": "22:00",
+        "scheduledTime": "20:03",
         "timezone": "America/Los_Angeles",
-        "publishStatus": "scheduled",
+        "publishStatus": "published",
         "publishError": "",
         "publishedAt": null,
         "imageName": "Hidden-costs-of-living-in-a-california-mobile-home-park_0023_pinterest.png",
@@ -3281,7 +3281,7 @@
         "ytDriveUrl": "",
         "ytLiveUrl": "",
         "tags": [],
-        "liveUrl": "",
+        "liveUrl": "https://www.pinterest.com/pin/1104718983636875800/",
         "rescheduledFrom": {
           "date": "2026-10-15",
           "time": "19:00"
@@ -3313,7 +3313,13 @@
           "logo": "h4q-1gr9xza"
         },
         "isVideo": false,
-        "isGif": false
+        "isGif": false,
+        "platformScheduled": false,
+        "liveAt": 1792551816860,
+        "plannedFor": {
+          "date": "2026-10-20",
+          "time": "22:00"
+        }
       },
       {
         "id": 1790642665184,
