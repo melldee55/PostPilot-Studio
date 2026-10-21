@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-10-21T00:54:52.871Z",
+  "lastSaved": "2026-10-21T00:56:52.879Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -14092,9 +14092,9 @@
       "missedDayPending": null
     },
     "instagram": {
-      "count": 1,
-      "lastDate": "2026-10-19",
-      "lastMilestone": 1,
+      "count": 0,
+      "lastDate": "",
+      "lastMilestone": 0,
       "freezeTokens": 0,
       "trophies": 0,
       "frozenDates": [],
