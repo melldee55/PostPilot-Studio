@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-10-22T03:00:47.511Z",
+  "lastSaved": "2026-10-22T03:03:31.599Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -6649,9 +6649,9 @@
         "id": 1791339517495.4636,
         "platform": "instagram",
         "scheduledDate": "2026-10-21",
-        "scheduledTime": "11:00",
+        "scheduledTime": "20:03",
         "timezone": "America/Los_Angeles",
-        "publishStatus": "scheduled",
+        "publishStatus": "published",
         "publishError": "",
         "publishedAt": null,
         "imageName": "Desert-stars-mountain-air-one-long-weekend-away_0070_Instagram.png",
@@ -6692,7 +6692,7 @@
         "ytDriveUrl": "",
         "ytLiveUrl": "",
         "tags": [],
-        "liveUrl": "",
+        "liveUrl": "https://www.instagram.com/p/Dex-Fxpm7B9/",
         "fromBrandCreator": true,
         "_imageDims": "1080×1080",
         "unsplash": {
@@ -6719,6 +6719,12 @@
           "ws": "ws_a",
           "site": "YOUNGDOUGLASINSURANCE.COM",
           "logo": "h4q-1gr9xza"
+        },
+        "platformScheduled": false,
+        "liveAt": 1792638201428,
+        "plannedFor": {
+          "date": "2026-10-21",
+          "time": "11:00"
         }
       },
       {
@@ -16133,9 +16139,9 @@
       "missedDayPending": null
     },
     "instagram": {
-      "count": 0,
-      "lastDate": "",
-      "lastMilestone": 0,
+      "count": 3,
+      "lastDate": "2026-10-21",
+      "lastMilestone": 3,
       "freezeTokens": 0,
       "trophies": 0,
       "frozenDates": [],
