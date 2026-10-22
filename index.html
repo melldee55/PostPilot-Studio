@@ -3385,7 +3385,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v120</span>
+              <span class="sb-version">v121</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -24126,7 +24126,7 @@ try { exports.GifWriter = GifWriter; exports.GifReader = GifReader } catch(e) {}
                     onmouseleave="this.style.background='rgba(255,255,255,.05)'">
                     ☁ Pull from GitHub
                   </button>
-                  <button onclick="bpcSyncToGitHub().then(()=>showPfToast('✅ Pushed to GitHub!')).catch(e=>showPfToast('❌ Push failed: '+e.message))"
+                  <button onclick="if (typeof ppSyncOn === 'function' && ppSyncOn()) { showPfToast('🔄 Sync between computers keeps the Post Creator in step now (Scheduler ⚙ Settings).'); return; } bpcSyncToGitHub().then(()=>showPfToast('✅ Pushed to GitHub!')).catch(e=>showPfToast('❌ Push failed: '+e.message))"
                     style="width:100%;padding:9px;border-radius:7px;border:none;
                            background:#5a4fcf;color:#fff;font-family:inherit;
                            font-size:12.5px;font-weight:700;cursor:pointer;transition:opacity .15s"
@@ -46229,6 +46229,1745 @@ _ppGaps = function () {
 // The stats bar's "Safe: 1/day" adds the weekly cap where a platform has one
 function ppWeekCapNote(pid) { try { const c = PP_WEEK_CAP[pid]; return c ? ` · ${c}/week` : ''; } catch (e) { return ''; } }
 
+// ═════════════════════════════════════════════════════════════════
+// SYNC BETWEEN COMPUTERS (v121)
+// Your posts, drafts, pictures and settings, the same on each computer you use, through a private GitHub
+// repository that only you can see. Each computer keeps its own full copy and works offline; whenever it can, it
+// sends what changed here and takes what changed on the other computer.
+//  • Each post and draft syncs on its own, so different posts edited on the two computers both stay. If the same
+//    post was changed on both, the newer change wins and the other version is kept in "Removed or replaced by
+//    sync" (⚙ Settings), where it can be put back. An edit beats a delete. Settings work the same way.
+//  • Pictures are stored once each, named by their exact contents, in the repository's ppsync/pics folder (they
+//    open on GitHub like any picture). Syncing never takes a picture away: a post whose picture went missing gets
+//    it back from the repository, and PostPilot's safety copies keep working as before.
+//  • A version is kept in 🗂 before syncing changes anything here, removing a lot of posts at once asks first, and
+//    the first sync on each computer keeps a snapshot of what was here before, so it can be undone.
+// ═════════════════════════════════════════════════════════════════
+const SN_CFG = 'postpilot_sync_cfg';
+const SN_SAVED = 'postpilot_sync_saved';
+const SN_DBN = 'postpilot_sync';
+const SN_PEND_FLAG = 'postpilot_sync_pending';
+const SN_DIR = 'ppsync';
+const SN_SHARDS = 16;
+const SN_TOMB_MS = 180 * 864e5;     // a deleted post's note stays in the repository 180 days
+const SN_JOURNAL_MS = 120 * 864e5;  // removed or replaced versions are kept here 120 days
+const SN_UNDO_MS = 30 * 864e5;      // the first sync can be undone for 30 days
+const SN_ANSWER_MS = 14 * 864e5;    // an answer about removing posts holds for 14 days
+const SN_PIC_MAX = 25e6;            // bigger pictures and videos stay on the computer that has them
+const SN_UP_HOUR = 420;             // GitHub takes about 80 new files a minute and 500 an hour; PostPilot stays under
+const _sn = {
+  db: null, st: null, pics: null, picsDirty: false, bySha: new Map(), byFp: new Map(), shardMem: new Map(), nest: new Map(),
+  running: false, again: false, againFull: false, timer: 0, due: 0, lastRun: 0, upNext: 0, holdUntil: 0, gap: 1100, ready: false,
+  leader: false, memDirty: false, saving: 0, applying: false, tree: null, form: {}, tab: 'new', kitSeen: '', oldPicsDone: false,
+  status: { s: 'off', msg: '', at: 0, upLeft: 0, downLeft: 0, waitPics: 0, big: 0 },
+};
+
+// ── Settings for this computer ──
+function _snCfg() { const c = _pdLS(SN_CFG, null); return c && typeof c === 'object' ? c : {}; }
+function _snSetCfg(patch) { const c = Object.assign(_snCfg(), patch); _pdSet(SN_CFG, c); return c; }
+const _snLinked = (c) => { c = c || _snCfg(); return !!(c.owner && c.repo && c.token); };
+const _snOn = () => { const c = _snCfg(); return !!(c.on && _snLinked(c)); };
+function _snDefaultName() {
+  const ua = navigator.userAgent || '';
+  return /Windows/i.test(ua) ? 'Windows computer' : /Macintosh|Mac OS/i.test(ua) ? 'Mac' : /CrOS/i.test(ua) ? 'Chromebook' : 'This computer';
+}
+function _snDev() {
+  let c = _snCfg();
+  if (!c.dev) c = _snSetCfg({ dev: 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) });
+  if (!c.name) c = _snSetCfg({ name: _snDefaultName() });
+  return { id: c.dev, name: c.name };
+}
+const _snRepoId = (c) => (String(c.owner) + '/' + String(c.repo) + '/' + String(c.branch || 'main')).toLowerCase();
+const _snR = (c) => '/repos/' + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo);
+const _snBrandName = (ws) => (getWorkspaceNames() || {})[ws] || ws;
+const _snYield = () => new Promise(r => setTimeout(r, 0));
+const _snSleep = (ms) => new Promise(r => setTimeout(r, ms));
+// When each brand was last saved here, and when each of its posts last changed (so a change is dated when it was
+// made, even offline)
+const SN_TIMES = 'postpilot_sync_times';
+function _snMarkSaved(ws) {
+  if (!_snLinked()) return;
+  const m = _pdLS(SN_SAVED, {}) || {}; m[ws] = Date.now(); _pdSet(SN_SAVED, m);
+  _sn.timesT = _sn.timesT || {};
+  clearTimeout(_sn.timesT[ws]); _sn.timesT[ws] = setTimeout(() => _snNoteTimes(ws), 1200);
+}
+const _snRecSig = (x) => _snH(JSON.stringify(x));
+function _snNoteTimes(ws) {
+  let G;
+  try { G = _snParse(_snRaw(ws)); } catch (e) { return; }
+  const all = _pdLS(SN_TIMES, {}) || {}, m = all[ws] || {}, now = Date.now(), keep = {};
+  _snRecs(G, false).forEach((e, key) => { const sig = _snRecSig(e.x); keep[key] = m[key] && m[key][0] === sig ? m[key] : [sig, now]; });
+  all[ws] = keep;
+  _pdSet(SN_TIMES, all);
+}
+
+// ── Small helpers: a hash of any value, written the same way every time ──
+function _snH(str) {
+  str = String(str);
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0, ch; i < str.length; i++) { ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507); h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507); h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+function _snCanon(v) {
+  if (v === null || v === undefined || typeof v !== 'object') return JSON.stringify(v === undefined ? null : v);
+  if (Array.isArray(v)) return '[' + v.map(x => (x === undefined ? 'null' : _snCanon(x))).join(',') + ']';
+  return '{' + Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => JSON.stringify(k) + ':' + _snCanon(v[k])).join(',') + '}';
+}
+function _snB64(b64) { const s = atob(b64); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+function _snTextB64(str) {
+  const u = new TextEncoder().encode(str);
+  let out = '';
+  for (let i = 0; i < u.length; i += 0x8000) out += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(out);
+}
+const _snSplit = (key) => { const i = key.indexOf('|'), j = key.indexOf('|', i + 1); return [key.slice(0, i), key.slice(i + 1, j), key.slice(j + 1)]; };
+const _snShard = (key) => { let h = 0x811c9dc5; for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0) % SN_SHARDS; };
+
+// ── This computer's sync notes: one small database PostPilot never clears by itself ──
+function _snDb() {
+  if (_sn.db) return Promise.resolve(_sn.db);
+  return new Promise((res, rej) => {
+    let r;
+    try { r = indexedDB.open(SN_DBN, 1); } catch (e) { return rej(e); }
+    r.onupgradeneeded = () => {
+      const db = r.result;
+      ['kv', 'pending', 'snap'].forEach(s => { if (!db.objectStoreNames.contains(s)) db.createObjectStore(s); });
+      if (!db.objectStoreNames.contains('journal')) db.createObjectStore('journal', { keyPath: 'n', autoIncrement: true });
+    };
+    r.onsuccess = () => { _sn.db = r.result; _sn.db.onversionchange = () => { try { _sn.db.close(); } catch (e) {} _sn.db = null; }; res(_sn.db); };
+    r.onerror = () => rej(r.error);
+    r.onblocked = () => rej(new Error('blocked'));
+  });
+}
+function _snReq(store, mode, fn) {
+  return _snDb().then(db => new Promise((res, rej) => {
+    const tx = db.transaction(store, mode), q = fn(tx.objectStore(store));
+    let out;
+    if (q) q.onsuccess = () => { out = q.result; };
+    tx.oncomplete = () => res(out);
+    tx.onerror = () => rej(tx.error);
+    tx.onabort = () => rej(tx.error || new Error('abort'));
+  }));
+}
+const _snGet = (store, key) => _snReq(store, 'readonly', s => s.get(key));
+const _snPut = (store, key, val) => _snReq(store, 'readwrite', s => (key === undefined ? s.put(val) : s.put(val, key)));
+const _snDel = (store, key) => _snReq(store, 'readwrite', s => s.delete(key));
+const _snAll = (store) => _snReq(store, 'readonly', s => s.getAll());
+const _snKeys = (store) => _snReq(store, 'readonly', s => s.getAllKeys());
+
+// What this computer knows about the repository it syncs with (kept per repository; read fresh each round, so
+// another tab's answers and put-backs count)
+async function _snLoadSt(fresh) {
+  const c = _snCfg(), id = _snRepoId(c);
+  if (!_sn.pics) {
+    _sn.pics = (await _snGet('kv', 'pics').catch(() => null)) || {};
+    Object.entries(_sn.pics).forEach(([id2, e]) => { if (e && e.s) _sn.bySha.set(e.s, id2); });
+  }
+  if (!fresh && _sn.st && _sn.st.id === id) return _sn.st;
+  const st = (await _snGet('kv', 'st:' + id).catch(() => null)) || {};
+  if (!_sn.st || _sn.st.id !== id) _sn.shardMem.clear();
+  _sn.st = Object.assign({ base: {}, seen: {}, setBase: {}, setSeen: {}, head: '', sig: {}, setSig: '', first: 0, mode: 'combine', ups: [], allow: {}, keep: {}, from: null, lastOk: 0, done: {}, bad: {}, upFail: {}, hist: 0 }, st, { id });
+  // answers about removing posts hold for two weeks
+  const now = Date.now();
+  ['allow', 'keep'].forEach(box => Object.values(_sn.st[box] || {}).forEach(b => ['in', 'out'].forEach(dir => {
+    if (Array.isArray(b[dir])) b[dir] = Object.fromEntries(b[dir].map(k => [k, now])); // (the first test build kept lists)
+    Object.entries(b[dir] || {}).forEach(([k, t]) => { if (now - t > SN_ANSWER_MS) delete b[dir][k]; });
+  })));
+  return _sn.st;
+}
+async function _snSaveSt() {
+  if (!_sn.st) return;
+  await _snPut('kv', 'st:' + _sn.st.id, _sn.st);
+  if (_sn.picsDirty) { _sn.picsDirty = false; await _snPut('kv', 'pics', _sn.pics); }
+}
+function _snLocked(fn) {
+  if (navigator.locks && navigator.locks.request) return navigator.locks.request('postpilot-sync', () => fn());
+  return fn();
+}
+// what's saved for the open brand, as this tab last loaded or saved it
+function _snMemNote() { if (!_snLinked()) { _sn.memSig = null; return; } try { _sn.memSig = { ws: getActiveWorkspace(), sig: _snRawSig(_snRaw(getActiveWorkspace())) }; } catch (e) {} }
+const _snMemBehind = (ws, sig) => !!(_sn.memSig && _sn.memSig.ws === ws && _sn.memSig.sig !== sig);
+const _snBox = (box, ws, dir) => { const st = _sn.st; st[box] = st[box] || {}; const b = st[box][ws] = st[box][ws] || {}; return (b[dir] = b[dir] && !Array.isArray(b[dir]) ? b[dir] : {}); };
+
+// ── GitHub ──
+function _snErr(kind, msg, status) { const e = new Error(msg); e.kind = kind; e.status = status || 0; return e; }
+async function _snApi(method, path, body, c) {
+  c = c || _snCfg();
+  const headers = { Authorization: 'Bearer ' + c.token, Accept: 'application/vnd.github+json' };
+  if (body) headers['Content-Type'] = 'application/json';
+  let res;
+  const text = body ? JSON.stringify(body) : undefined, ac = typeof AbortController === 'function' ? new AbortController() : null;
+  const limit = Math.max(60e3, text ? text.length / 40 : 0); // about 40 KB a second at the slowest
+  const timer = ac ? setTimeout(() => ac.abort(), limit) : 0;
+  try { res = await fetch('https://api.github.com' + path, { method, headers, body: text, cache: 'no-store', signal: ac ? ac.signal : undefined }); }
+  catch (e) { throw _snErr('net', 'PostPilot can’t reach GitHub right now. It tries again on its own when the internet is back.'); }
+  finally { clearTimeout(timer); }
+  let j = null;
+  try { j = await res.json(); } catch (e) {}
+  if (res.ok) return j || {};
+  const m = (j && j.message) || '';
+  if (res.status === 401) throw _snErr('auth', 'GitHub didn’t accept the key (token). It may have expired or been copied wrong.', 401);
+  if (res.status === 403 || res.status === 429) {
+    const ra = parseInt(res.headers.get('retry-after') || '', 10), rem = res.headers.get('x-ratelimit-remaining'), reset = parseInt(res.headers.get('x-ratelimit-reset') || '', 10);
+    if (res.status === 429 || /rate limit|abuse/i.test(m) || rem === '0') {
+      const wait = ra > 0 ? ra * 1000 : (rem === '0' && reset ? Math.max(60e3, reset * 1000 - Date.now()) : 120e3);
+      throw Object.assign(_snErr('rate', 'GitHub asked PostPilot to slow down for a little while. It carries on by itself.', res.status), { wait });
+    }
+    throw _snErr('perm', 'The key (token) can’t change this repository. Give it “Contents: Read and write” for the repository.', 403);
+  }
+  if (res.status === 404) throw _snErr('missing', m || 'Not Found', 404);
+  if (res.status === 409) throw _snErr('conflict', m || 'Conflict', 409);
+  if (res.status === 422) throw _snErr('invalid', m || 'Invalid', 422);
+  throw _snErr('server', 'GitHub had a problem (' + res.status + '). PostPilot tries again soon.', res.status);
+}
+const _snStop = (e) => ['rate', 'net', 'auth', 'perm', 'missing'].includes(e && e.kind);
+// Saving a file counts against GitHub's limit on new files: PostPilot spaces them out
+async function _snThrottle() {
+  const st = _sn.st, now = Date.now();
+  st.ups = (st.ups || []).filter(t => now - t < 3600e3);
+  if (st.ups.length >= SN_UP_HOUR) throw Object.assign(_snErr('rate', 'PostPilot sent as much as GitHub takes in an hour. It carries on by itself.'), { wait: st.ups[0] + 3600e3 - now + 2000 });
+  const wait = Math.max(0, _sn.upNext - now);
+  if (wait > 0) await _snSleep(wait);
+  st.ups.push(Date.now());
+  _sn.upNext = Date.now() + _sn.gap;
+}
+async function _snPutFile(c, path, b64, sha, msg) {
+  await _snThrottle();
+  const body = { message: msg, content: b64, branch: c.branch || 'main' };
+  if (sha) body.sha = sha;
+  const j = await _snApi('PUT', _snR(c) + '/contents/' + path.split('/').map(encodeURIComponent).join('/'), body, c);
+  return (j.content && j.content.sha) || '';
+}
+async function _snBlobB64(c, sha) {
+  const j = await _snApi('GET', _snR(c) + '/git/blobs/' + sha, null, c);
+  if (j.encoding && j.encoding !== 'base64') return _snTextB64(String(j.content || ''));
+  return String(j.content || '').replace(/\s+/g, '');
+}
+async function _snBlobJson(c, sha) { return JSON.parse(new TextDecoder().decode(_snB64(await _snBlobB64(c, sha)))); }
+// Every file in the repository's sync folder (with its version), or none yet
+async function _snReadTree(c, head) {
+  const cm = await _snApi('GET', _snR(c) + '/git/commits/' + head, null, c);
+  const files = new Map(), pics = new Map();
+  const add = (path, e) => {
+    if (!e || e.type !== 'blob' || !String(path).startsWith(SN_DIR + '/')) return;
+    const m = /^ppsync\/pics\/([0-9a-f]{40})\.[a-z0-9]+$/.exec(path);
+    if (m) pics.set(m[1], { path, sha: e.sha, size: e.size || 0 }); else files.set(path, e.sha);
+  };
+  const t = await _snApi('GET', _snR(c) + '/git/trees/' + cm.tree.sha + '?recursive=1', null, c);
+  if (!t.truncated) { (t.tree || []).forEach(e => add(e.path, e)); return { head, files, pics }; }
+  // a very big repository: the sync folder is read folder by folder
+  const kids = async (sha, prefix) => {
+    const x = await _snApi('GET', _snR(c) + '/git/trees/' + sha, null, c);
+    for (const e of x.tree || []) { const p = prefix ? prefix + '/' + e.path : e.path; if (e.type === 'tree') { if (p === SN_DIR || p.startsWith(SN_DIR + '/')) await kids(e.sha, p); } else add(p, e); }
+  };
+  await kids(cm.tree.sha, '');
+  return { head, files, pics };
+}
+// A sync file's contents (each version is read once, then kept here)
+async function _snFile(c, path, sha) {
+  const mem = _sn.shardMem.get(path);
+  if (mem && mem.sha === sha) return mem.data;
+  const kept = await _snGet('kv', 'sh:' + _sn.st.id + ':' + path).catch(() => null);
+  if (kept && kept.sha === sha) { _sn.shardMem.set(path, kept); return kept.data; }
+  const data = await _snBlobJson(c, sha);
+  const rec = { sha, data };
+  _sn.shardMem.set(path, rec);
+  await _snPut('kv', 'sh:' + _sn.st.id + ':' + path, rec).catch(() => {});
+  return data;
+}
+async function _snKeepFile(path, sha, data) {
+  const rec = { sha, data };
+  _sn.shardMem.set(path, rec);
+  if (_sn.tree) _sn.tree.files.set(path, sha);
+  await _snPut('kv', 'sh:' + _sn.st.id + ':' + path, rec).catch(() => {});
+}
+// The other computer's records for one brand, as last read
+function _snRemote(ws) {
+  const recs = new Map();
+  for (let n = 0; n < SN_SHARDS; n++) { const m = _sn.shardMem.get(`${SN_DIR}/${ws}/${n}.json`); if (m && m.data) Object.entries(m.data.recs || {}).forEach(([k, v]) => recs.set(k, v)); }
+  return recs;
+}
+
+// ── Pictures: each is known by its exact contents (SHA-256) ──
+const _snB64Url = (v) => typeof v === 'string' && v.startsWith('data:') && v.slice(0, 120).indexOf(';base64,') > 0;
+const _snIsPic = (v) => _snB64Url(v) && v.length > 2048;
+const SN_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg', 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov', 'font/woff2': 'woff2', 'font/woff': 'woff', 'font/ttf': 'ttf', 'font/otf': 'otf' };
+const _snExt = (t) => SN_EXT[(String(t || '').slice(5).split(';')[0] || '').toLowerCase()] || 'bin';
+function _snFp2(s) {
+  let h = 0x9e3779b9;
+  const n = s.length, step = Math.max(1, Math.floor(n / 4096));
+  for (let i = 0; i < n; i += step) { h = Math.imul(h ^ s.charCodeAt(i), 0x85ebca6b); h ^= h >>> 13; }
+  for (let i = Math.max(0, n - 64); i < n; i++) { h = Math.imul(h ^ s.charCodeAt(i), 0xc2b2ae35); h ^= h >>> 16; }
+  return (h >>> 0).toString(36);
+}
+async function _snSha(dataUrl) {
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', _snB64(dataUrl.slice(dataUrl.indexOf(',') + 1))));
+  let o = '';
+  for (let i = 0; i < 20; i++) o += d[i].toString(16).padStart(2, '0');
+  return o;
+}
+// A picture's identity, remembered by the place it's stored here (checked by two quick looks at it, every time)
+async function _snRefOf(data, id) {
+  const f = _ufFp(data), g = _snFp2(data), n = data.length, t = data.slice(0, data.indexOf(','));
+  const c = id ? _sn.pics[id] : null;
+  if (c && c.f === f && c.g === g && c.n === n) return { s: c.s, t: c.t || t };
+  const k = f + '.' + g + '.' + n;
+  let s = _sn.byFp.get(k);
+  if (!s) { s = await _snSha(data); if (_sn.byFp.size > 3000) _sn.byFp.clear(); _sn.byFp.set(k, s); }
+  if (id) { _sn.pics[id] = { f, g, n, s, t }; _sn.picsDirty = true; _sn.bySha.set(s, id); }
+  return { s, t };
+}
+// A picture this computer already has, by its contents: the picture store, a safety copy, or this round's own.
+// Always checked byte for byte (SHA-256) before it's used.
+async function _snLocalPic(s) {
+  const ok = async (d) => { if (!_snB64Url(d)) return false; try { return (await _snSha(d)) === s; } catch (e) { return false; } };
+  if (_sn.nest.has(s)) { const d = _sn.nest.get(s); if (await ok(d)) return d; }
+  const id = _sn.bySha.get(s);
+  if (!id) return null;
+  let d = null;
+  try { d = await imgLoad(id); } catch (e) {}
+  if (await ok(d)) return d;
+  if (d) { try { await _snRefOf(d, id); } catch (e) {} } // that place holds another picture now
+  try { d = await _bkLatest(id); } catch (e) { d = null; }
+  if (await ok(d)) return d;
+  const c = _sn.pics[id];
+  if (c && c.f) { try { d = await _bkGetPic(c.f); } catch (e) { d = null; } if (await ok(d)) return d; }
+  return null;
+}
+async function _snFetchPic(c, ref) {
+  const e = _sn.tree && _sn.tree.pics.get(ref.s);
+  if (!e || !e.sha || e.size > SN_PIC_MAX) return null;
+  const bad = (_sn.st.bad || {})[ref.s];
+  if (bad && bad.blob === e.sha && Date.now() - bad.at < 3600e3) return null; // checked recently: doesn't match
+  const data = (ref.t || 'data:application/octet-stream;base64') + ',' + (await _snBlobB64(c, e.sha));
+  if ((await _snSha(data)) !== ref.s) { (_sn.st.bad = _sn.st.bad || {})[ref.s] = { at: Date.now(), blob: e.sha }; return null; }
+  return data;
+}
+// A picture for a post here: this computer's own copy, or from the repository
+async function _snPicData(c, ref, ctx) {
+  let d = await _snLocalPic(ref.s);
+  if (d) return d;
+  if (ctx && ctx.downBudget <= 0) return null;
+  try { d = await _snFetchPic(c, ref); } catch (e) { if (_snStop(e)) throw e; d = null; }
+  if (d && ctx) { ctx.downBudget--; ctx.got++; }
+  return d;
+}
+const _snCanFetch = (s) => { const e = _sn.tree && _sn.tree.pics.get(s), bad = (_sn.st.bad || {})[s]; return !!(e && e.sha && e.size <= SN_PIC_MAX && !(bad && bad.blob === e.sha && Date.now() - bad.at < 3600e3)); };
+
+// ── Each post and draft, as it syncs ──
+// Picture slots: a post has one picture; a draft has its picture and a small copy
+const SN_SLOTS = {
+  p: [['main', ['imageOriginalId', 'imageId'], (x) => x.imageOriginal || x.image]],
+  d: [['full', ['imageFullId'], (x) => x.imageFull], ['thumb', ['imageThumbId'], (x) => x.imageThumb]],
+};
+// What stays on this computer only: the pictures themselves and where they're stored here
+const SN_LOCAL = new Set(['image', 'imageOriginal', 'imageFull', 'imageThumb', 'imageId', 'imageOriginalId', 'imageFullId', 'imageThumbId', 'imageFp', 'ppSyncPic']);
+function _snStrip(o) { const out = {}; Object.keys(o).forEach(k => { if (!SN_LOCAL.has(k) && k.charAt(0) !== '_') out[k] = o[k]; }); return out; }
+function _snClean(x) {
+  const o = _snStrip(x);
+  if (o.formSnapshot && typeof o.formSnapshot === 'object' && !Array.isArray(o.formSnapshot)) o.formSnapshot = _snStrip(o.formSnapshot);
+  return JSON.parse(JSON.stringify(o));
+}
+// Big pictures inside a record or a setting travel as files too
+async function _snNest(v) {
+  if (typeof v === 'string') {
+    if (!_snIsPic(v)) return v;
+    const r = await _snRefOf(v, null);
+    _sn.nest.set(r.s, v);
+    return { $pic: r.s, t: r.t };
+  }
+  if (Array.isArray(v)) { for (let i = 0; i < v.length; i++) v[i] = await _snNest(v[i]); return v; }
+  if (v && typeof v === 'object') { for (const k of Object.keys(v)) v[k] = await _snNest(v[k]); return v; }
+  return v;
+}
+function _snRefsIn(v, out) {
+  if (v && typeof v === 'object') {
+    if (typeof v.$pic === 'string') { out.push({ s: v.$pic, t: v.t }); return out; }
+    Object.values(v).forEach(x => _snRefsIn(x, out));
+  }
+  return out;
+}
+// The pictures back in place of their references (undefined while one isn't here yet)
+async function _snUnnest(c, v, ctx) {
+  if (v && typeof v === 'object') {
+    if (typeof v.$pic === 'string') return await _snPicData(c, { s: v.$pic, t: v.t }, ctx) || undefined;
+    const out = Array.isArray(v) ? [] : {};
+    for (const k of Object.keys(v)) { const x = await _snUnnest(c, v[k], ctx); if (x === undefined && v[k] !== undefined) return undefined; out[k] = x; }
+    return out;
+  }
+  return v;
+}
+// The picture a saved record has in one slot here (null when it has none, or it's gone)
+async function _snSlotRef(x, idk, mem, get) {
+  if (mem) { const d = get(x); if (_snB64Url(d)) return _snRefOf(d, idk.map(k => x[k]).find(v => v && !String(v).startsWith('data:')) || null); }
+  const id = idk.map(k => x[k]).find(v => v && !String(v).startsWith('data:'));
+  if (!id) return null;
+  const c = _sn.pics[id];
+  // a big picture is known again by the quick look its record carries; a small copy is simply looked at again
+  if (c && idk[0] !== 'imageThumbId' && x.imageFp && c.f === x.imageFp) return { s: c.s, t: c.t };
+  if (c && idk[0] !== 'imageThumbId' && !x.imageFp) return { s: c.s, t: c.t };
+  let d = null;
+  try { d = await imgLoad(id); } catch (er) {}
+  if (!_snB64Url(d)) { try { d = await _bkLatest(id); } catch (er) { d = null; } }
+  return _snB64Url(d) ? _snRefOf(d, id) : null;
+}
+async function _snItemOf(e, key, B, R) {
+  const r = _snClean(e.x);
+  if (JSON.stringify(r).indexOf('"data:') >= 0) await _snNest(r);
+  const p = {}, heal = [];
+  for (const [slot, idk, get] of SN_SLOTS[e.k]) {
+    let ref = null;
+    try { ref = await _snSlotRef(e.x, idk, !!e.mem, get); } catch (er) { ref = null; }
+    if (!ref) {
+      // No picture here: it keeps the one it had (syncing never takes a picture away) and gets it back
+      const pend = e.x.ppSyncPic && e.x.ppSyncPic[slot], b = B[key] && B[key].p && B[key].p[slot], rr = R && R.get(key), rp = rr && rr.p && rr.p[slot];
+      const inh = pend || b || rp;
+      if (inh && inh.s) { ref = { s: inh.s, t: inh.t }; heal.push(slot); }
+    }
+    if (ref) p[slot] = ref;
+  }
+  return { k: e.k, pid: e.pid, id: String(e.x.id), x: e.x, r, p, heal, f: e.x.imageFp || '', h: _snH(_snCanon({ r, p })) };
+}
+// One brand's posts and drafts as they are saved on this computer
+function _snRaw(ws) {
+  const g = (k) => { try { return localStorage.getItem(ws + '_' + k); } catch (e) { return null; } };
+  return { p: g(_STORAGE_KEY_BASE), d: g(_DRAFTS_STORAGE_KEY_BASE) };
+}
+const _snRawSig = (raw) => _snH((raw.p == null ? '\u0000' : raw.p) + '\u0001' + (raw.d == null ? '\u0000' : raw.d));
+function _snParse(raw) {
+  // an unreadable list stops the sync for that brand (it never counts as "empty")
+  const one = (v) => { if (v == null || v === '') return {}; const o = JSON.parse(v); if (!o || typeof o !== 'object' || Array.isArray(o)) throw _snErr('data', 'unreadable'); return o; };
+  return { p: one(raw.p), d: one(raw.d) };
+}
+function _snRecs(G, mem) {
+  const out = new Map();
+  [['p', G.p], ['d', G.d]].forEach(([k, all]) => Object.entries(all || {}).forEach(([pid, arr]) => (Array.isArray(arr) ? arr : []).forEach(x => {
+    if (!x || typeof x !== 'object' || x.id == null) return;
+    const key = k + '|' + pid + '|' + String(x.id);
+    if (!out.has(key)) out.set(key, { k, pid, x, mem });
+  })));
+  return out;
+}
+const _snCount = (G) => ['p', 'd'].reduce((n, k) => n + Object.values(G[k] || {}).reduce((m, a) => m + (Array.isArray(a) ? a.length : 0), 0), 0);
+function _snArrays() { const m = new Map(); [['p', state.posts], ['d', state.drafts]].forEach(([k, g]) => Object.entries(g || {}).forEach(([pid, a]) => m.set(k + pid, a))); return m; }
+function _snSameArrays(m0) { const m1 = _snArrays(); if (m1.size !== m0.size) return false; for (const [k, a] of m1) if (m0.get(k) !== a) return false; return true; }
+// Not while you're in the middle of something here
+function _snBusy() {
+  if (state.showComposer || (typeof _uf !== 'undefined' && (_uf.busy || _uf.switching)) || (typeof _ppPurging !== 'undefined' && _ppPurging)) return true;
+  const a = document.activeElement;
+  return !!(a && a !== document.body && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable));
+}
+const _snTitleOf = (k, pid, x) => {
+  const t = (x && (x.title || x.header || (typeof PP_TEXT_FIELD !== 'undefined' && x[PP_TEXT_FIELD[pid]]) || x.content || x.caption || x.description || x.imageName)) || '';
+  return String(t).replace(/\s+/g, ' ').trim().slice(0, 90) || (k === 'd' ? 'A draft' : 'A post');
+};
+// A record as it's kept here (no pictures inside it, only where they're stored)
+function _snStored(x) {
+  const o = Object.assign({}, x);
+  ['image', 'imageOriginal', 'imageFull', 'imageThumb', '_imageDims'].forEach(k => delete o[k]);
+  if (o.formSnapshot && typeof o.formSnapshot === 'object') { o.formSnapshot = Object.assign({}, o.formSnapshot); ['image', 'imageOriginal', '_imageDims'].forEach(k => delete o.formSnapshot[k]); }
+  return JSON.parse(JSON.stringify(o));
+}
+
+// ── Removed or replaced by sync: a copy is kept here first, so it can be put back ──
+async function _snJournal(list) {
+  if (!list.length) return true;
+  const now = Date.now();
+  // the same version of the same post (or setting) is kept once
+  try {
+    const have = new Set((await _snAll('journal')).filter(e => !e.back && now - (e.at || 0) < 7 * 864e5).map(e => (e.ws || '') + '|' + e.key + '|' + _snH(_snCanon(e.kind === 'set' ? e.old : e.rec))));
+    list = list.filter(e => !have.has((e.ws || '') + '|' + e.key + '|' + _snH(_snCanon(e.kind === 'set' ? e.old : e.rec))));
+    if (!list.length) return true;
+  } catch (e) {}
+  try {
+    const db = await _snDb();
+    await new Promise((res, rej) => { const tx = db.transaction('journal', 'readwrite'); list.forEach(e => tx.objectStore('journal').put(Object.assign({ at: now }, e))); tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error || new Error('abort')); });
+  } catch (e) { return false; }
+  // the oldest go after 120 days
+  try { const all = await _snAll('journal'); for (const e of all) if (now - (e.at || 0) > SN_JOURNAL_MS) await _snDel('journal', e.n); } catch (er) {}
+  return true;
+}
+
+// ── Working out what changed where ──
+function _snPlan(ws, L, R, B, seen, ctx) {
+  const plan = { take: [], drop: [], out: new Map(), tomb: new Map(), untomb: new Set(), lost: [], used: [] };
+  const keys = new Set([...L.keys(), ...R.recs.keys(), ...R.del.keys(), ...Object.keys(B)]);
+  const replace = ctx.mode === 'replace' && !(_sn.st.done || {})[ws], dev = _snDev(); // only until this brand's first sync is done
+  const allowOut = _snBox('allow', ws, 'out'), keepOut = _snBox('keep', ws, 'out'), keepIn = _snBox('keep', ws, 'in');
+  const outDel = [], gone = [];
+  for (const key of keys) {
+    const l = L.get(key), r = R.recs.get(key), d = R.del.get(key), b = B[key] ? B[key].h : undefined;
+    if (l && r) {
+      if (l.h === r.h) { if (d) plan.untomb.add(key); continue; }
+      const lc = l.h !== b, rc = r.h !== b;
+      if (b !== undefined && !lc) { plan.take.push({ key, it: r, l, why: 'edit' }); continue; }
+      if (b !== undefined && !rc) { plan.out.set(key, l); continue; }
+      // changed on both computers (or the first sync, and they differ): the newer change wins; on the first sync, the copy already shared does
+      if (b === undefined || ((seen[key] && seen[key].m) || 0) <= (r.m || 0)) { plan.take.push({ key, it: r, l, why: b === undefined ? 'first' : 'both' }); continue; }
+      plan.out.set(key, l);
+      plan.lost.push({ key, it: r });
+      continue;
+    }
+    if (l) {
+      if (d && (l.h === d.h || (b !== undefined && l.h === b))) {
+        // deleted on the other computer, unchanged here since (asked about there)
+        if (keepIn[key]) { plan.out.set(key, l); plan.untomb.add(key); plan.used.push(['keep', 'in', key]); continue; }
+        plan.drop.push({ key, l, why: 'deleted', by: d.by });
+        continue;
+      }
+      if (!d && b !== undefined && l.h === b && !keepIn[key]) { gone.push({ key, l }); continue; } // gone there long ago (its deletion note expired)
+      if (replace && b === undefined) { plan.drop.push({ key, l, why: 'replaced', by: '' }); continue; }
+      plan.out.set(key, l);
+      if (d) plan.untomb.add(key);
+      if (keepIn[key]) plan.used.push(['keep', 'in', key]);
+      continue;
+    }
+    if (r) {
+      if (b !== undefined && r.h === b) {
+        // deleted here, unchanged on the other computer since
+        if (keepOut[key]) { plan.take.push({ key, it: r, why: 'kept' }); plan.used.push(['keep', 'out', key]); continue; }
+        outDel.push({ key, t: { h: b, m: Date.now(), by: dev.name } });
+        continue;
+      }
+      plan.take.push({ key, it: r, why: b !== undefined ? 'kept' : 'new' });
+    }
+  }
+  // Removing a lot at once asks first (a computer whose posts didn't load mustn't empty the other one)
+  const nBase = Object.keys(B).length, big = (n) => n > Math.max(5, Math.ceil(nBase * 0.2));
+  const outOk = outDel.filter(x => allowOut[x.key]), outAsk = outDel.filter(x => !allowOut[x.key]);
+  if (outAsk.length && big(outAsk.length)) { ctx.ask.push({ ws, dir: 'out', keys: outAsk.map(x => x.key), titles: outAsk.slice(0, 6).map(x => { const it = R.recs.get(x.key); const [k, pid] = _snSplit(x.key); return _snTitleOf(k, pid, it && it.r); }) }); plan.asked = true; }
+  else outOk.push(...outAsk);
+  outOk.forEach(x => { plan.tomb.set(x.key, x.t); if (allowOut[x.key]) plan.used.push(['allow', 'out', x.key]); });
+  // Unchanged here but gone from the repository without a deletion note: a few were deleted long ago; a lot at once
+  // (or the brand's files gone altogether) means the repository lost them, so they're sent again
+  if (gone.length && (big(gone.length) || !R.files.some(f => f.data))) gone.forEach(x => plan.out.set(x.key, x.l));
+  else gone.forEach(x => plan.drop.push({ key: x.key, l: x.l, why: 'deleted', by: '' }));
+  return plan;
+}
+// A record from the other computer, ready to go in here (live: the copy on screen, for the open brand)
+function _snBuild(t, mem, pics, live) {
+  const it = t.it, k = t.key.charAt(0), old = t.l ? t.l.x : null, src = live || old;
+  const rec = JSON.parse(JSON.stringify(it.r));
+  if (src) Object.keys(src).forEach(f => { if (f.charAt(0) === '_' && f !== '_imageDims') rec[f] = src[f]; });
+  const pend = {};
+  let dims = '';
+  for (const [slot, idk] of SN_SLOTS[k]) {
+    const ref = it.p && it.p[slot], mine = t.l && t.l.p[slot];
+    const keepMine = old && mine && (!ref || ref.s === mine.s) && !t.l.heal.includes(slot);
+    if (keepMine) {
+      // the same picture (or theirs has none): it stays where it is here
+      idk.forEach(f => { if (old[f]) rec[f] = old[f]; });
+      if (mem && live) { if (k === 'p') { rec.image = live.image; rec.imageOriginal = live.imageOriginal; dims = live._imageDims || ''; } else if (slot === 'full') rec.imageFull = live.imageFull; else rec.imageThumb = live.imageThumb; }
+      if (k === 'p' || slot === 'full') { if (old.imageFp || it.f) rec.imageFp = old.imageFp || it.f; }
+      continue;
+    }
+    if (!ref) continue;
+    const g = mem ? pics.get(ref.s) : null;
+    if (g) {
+      if (k === 'p') { rec.image = rec.imageOriginal = g.data; dims = g.dims || ''; } else if (slot === 'full') rec.imageFull = g.data; else rec.imageThumb = g.data;
+      if (k === 'p' || slot === 'full') rec.imageFp = _ufFp(g.data);
+    } else {
+      pend[slot] = { s: ref.s, t: ref.t };
+      if ((k === 'p' || slot === 'full') && it.f) rec.imageFp = it.f;
+    }
+  }
+  if (Object.keys(pend).length) rec.ppSyncPic = pend; else delete rec.ppSyncPic;
+  if (mem) {
+    if (k === 'p') rec._imageDims = dims;
+    if (k === 'd' && rec.formSnapshot && typeof rec.formSnapshot === 'object') rec.formSnapshot = Object.assign({}, rec.formSnapshot, { image: rec.imageFull || null, imageOriginal: rec.imageFull || null });
+  }
+  return rec;
+}
+function _snEditLists(G, plan, build) {
+  const P = Object.assign({}, G.p), D = Object.assign({}, G.d), grp = (k) => (k === 'p' ? P : D);
+  for (const t of plan.take) {
+    const [k, pid, id] = _snSplit(t.key), g = grp(k), arr = Array.isArray(g[pid]) ? g[pid] : [];
+    const rec = build(t);
+    let hit = false;
+    const out = arr.map(o => { if (o && String(o.id) === id) { hit = true; return rec; } return o; });
+    if (!hit) out.push(rec);
+    g[pid] = out;
+  }
+  for (const x of plan.drop) {
+    const [k, pid, id] = _snSplit(x.key), g = grp(k);
+    if (Array.isArray(g[pid])) g[pid] = g[pid].filter(o => !(o && String(o.id) === id));
+  }
+  return { p: P, d: D };
+}
+// Which of the planned changes really are saved here now (a save that failed or was skipped doesn't count)
+function _snLanded(ws, plan) {
+  let G;
+  try { G = _snParse(_snRaw(ws)); } catch (e) { return { take: new Set(), drop: new Set() }; }
+  const has = _snRecs(G, false);
+  // a new one is there; a changed one is no longer saved exactly as it was (a save that failed leaves it as it was)
+  const took = (t) => { const e = has.get(t.key); return !!e && (!t.l || _snCanon(e.x) !== _snCanon(t.l.x)); };
+  return { take: new Set(plan.take.filter(took).map(t => t.key)), drop: new Set(plan.drop.filter(x => !has.has(x.key)).map(x => x.key)) };
+}
+
+// ── One brand: read both copies, bring this computer up to date, send what changed here ──
+// Each brand is read from where it's saved (the same on every computer); the open brand's changes go into what's
+// on screen, and only when nothing is being saved or edited at that moment.
+async function _snBrand(ws, ctx) {
+  const c = ctx.c, st = _sn.st, active = ws === getActiveWorkspace();
+  if (active && (_sn.saving || _snBusy())) { ctx.later = true; return; }
+  const memDirty = active && _sn.memDirty;
+  if (active) _sn.memDirty = false; // saves from now on count for the next round
+  const raw0 = _snRaw(ws), sig0 = _snRawSig(raw0);
+  if (!ctx.headChanged && !ctx.full && !memDirty && st.sig[ws] === sig0) return; // nothing new on either side
+  // the other computer's copy
+  const R = { recs: new Map(), del: new Map(), files: [] };
+  for (let n = 0; n < SN_SHARDS; n++) {
+    const path = `${SN_DIR}/${ws}/${n}.json`, sha = ctx.tree.files.get(path) || null;
+    const data = sha ? await _snFile(c, path, sha) : null;
+    R.files.push({ path, sha, data });
+    if (data) { Object.entries(data.recs || {}).forEach(([k, v]) => R.recs.set(k, v)); Object.entries(data.del || {}).forEach(([k, v]) => R.del.set(k, v)); st.hist = st.hist || Date.now(); }
+  }
+  // this computer's copy (an unreadable list is never taken for an empty one)
+  let G;
+  try { G = _snParse(raw0); } catch (e) { ctx.problems.push(_snBrandName(ws) + ': its posts couldn’t be read on this computer, so PostPilot left them alone.'); return; }
+  let P0 = null, D0 = null, arr0 = null;
+  if (active) {
+    if (!state.posts || typeof state.posts !== 'object') { ctx.later = true; return; }
+    P0 = state.posts; D0 = state.drafts || {}; arr0 = _snArrays();
+    if (!_snCount({ p: P0, d: D0 }) && _snCount(G)) { ctx.later = true; return; } // still loading
+    // another tab saved this brand since this tab loaded or saved it: read it again before going on
+    if (_snMemBehind(ws, sig0)) { ctx.later = true; ctx.reload = true; return; }
+  }
+  const B = st.base[ws] || (st.base[ws] = {});
+  const L = new Map();
+  let i = 0;
+  for (const [key, e] of _snRecs(G, false)) { L.set(key, await _snItemOf(e, key, B, R.recs)); if (++i % 40 === 0) await _snYield(); }
+  // each change here is dated when it was saved (that post's own time when known, otherwise the brand's last save)
+  const seen = st.seen[ws] || (st.seen[ws] = {}), now = Date.now(), savedAt = (_pdLS(SN_SAVED, {}) || {})[ws] || now, times = (_pdLS(SN_TIMES, {}) || {})[ws] || {};
+  L.forEach((l, key) => {
+    if (seen[key] && seen[key].h === l.h) return;
+    const t = times[key];
+    seen[key] = { h: l.h, m: t && t[0] === _snRecSig(l.x) ? Math.min(now, t[1]) : Math.min(now, savedAt) };
+  });
+  const plan = _snPlan(ws, L, R, B, seen, ctx);
+  // pictures for what comes into the open brand (shown right away; the rest arrive one by one after)
+  const pics = new Map();
+  if (active) for (const t of plan.take) for (const ref of Object.values(t.it.p || {})) {
+    if (pics.has(ref.s) || (t.l && Object.values(t.l.p).some(m => m.s === ref.s) && !t.l.heal.length)) continue;
+    if (ctx.downBudget <= 0 || pics.size >= 40) break;
+    const data = await _snPicData(c, ref, ctx);
+    if (data) pics.set(ref.s, { data, dims: await getImageSizeLabel(data).catch(() => '') });
+  }
+  // the pictures inside records (rare) must all be here before the record goes in
+  const ready = [];
+  for (const t of plan.take) {
+    if (!_snRefsIn(t.it.r, []).length) { ready.push(t); continue; }
+    const r2 = await _snUnnest(c, t.it.r, ctx);
+    if (r2 === undefined) { ctx.waiting++; continue; }
+    ready.push(Object.assign({}, t, { it: Object.assign({}, t.it, { r: r2 }) }));
+  }
+  plan.take = ready;
+  let applied = false;
+  if (plan.take.length || plan.drop.length) {
+    // a copy of everything this changes here goes into 🗂 first
+    const journal = [];
+    plan.drop.forEach(x => journal.push({ ws, key: x.key, why: x.why, by: x.by || '', rec: _snStored(x.l.x), p: x.l.p }));
+    plan.take.forEach(t => { if (t.l) journal.push({ ws, key: t.key, why: t.why === 'first' ? 'first' : 'replaced', by: t.it.by || '', rec: _snStored(t.l.x), p: t.l.p }); });
+    const live = new Map();
+    if (active) {
+      _snRecs({ p: P0, d: D0 }, true).forEach((e, key) => live.set(key, e));
+      // what's on screen is missing something that's saved (another tab saved it): read the brand again first
+      if ([..._snRecs(G, false).keys()].some(k => !live.has(k))) { ctx.later = true; ctx.reload = true; return; }
+      // what's on screen, when it's different from what's saved (not saved yet), is kept too
+      for (const t of [...plan.take.filter(t => t.l), ...plan.drop]) {
+        const e = live.get(t.key);
+        if (!e) continue;
+        const li = await _snItemOf(e, t.key, B, R.recs);
+        if (li.h !== (t.l || {}).h) journal.push({ ws, key: t.key, why: t.why === 'deleted' ? 'deleted' : 'replaced', by: (t.it && t.it.by) || t.by || '', rec: _snStored(e.x), p: li.p });
+      }
+    }
+    // nothing may have changed meanwhile: checked before the copy is kept, and again after
+    const still = () => (active
+      ? !_sn.saving && ws === getActiveWorkspace() && state.posts === P0 && (state.drafts || {}) === D0 && _snSameArrays(arr0) && !_snBusy() && _snRawSig(_snRaw(ws)) === sig0
+      : ws !== getActiveWorkspace() && _snRawSig(_snRaw(ws)) === sig0);
+    if (!still()) { ctx.later = true; return; }
+    if (!(await _snJournal(journal))) { ctx.problems.push('PostPilot couldn’t keep a copy of what syncing would change here, so it changed nothing. It tries again soon.'); return; }
+    // put it all in place
+    if (!still()) { ctx.later = true; return; }
+    if (active) {
+      const N = _snEditLists({ p: P0, d: D0 }, plan, (t) => _snBuild(t, true, pics, (live.get(t.key) || {}).x));
+      state.posts = N.p; state.drafts = N.d;
+      _sn.applying = true;
+      try { await savePosts(state.posts); await saveDrafts(state.drafts); } finally { _sn.applying = false; }
+      ctx.render = true;
+    } else {
+      const N = _snEditLists(G, plan, (t) => _snBuild(t, false, null, null));
+      try {
+        localStorage.setItem(ws + '_' + _STORAGE_KEY_BASE, JSON.stringify(N.p));
+        localStorage.setItem(ws + '_' + _DRAFTS_STORAGE_KEY_BASE, JSON.stringify(N.d));
+      } catch (e) {
+        // put back exactly what was there
+        try { if (raw0.p != null) localStorage.setItem(ws + '_' + _STORAGE_KEY_BASE, raw0.p); if (raw0.d != null) localStorage.setItem(ws + '_' + _DRAFTS_STORAGE_KEY_BASE, raw0.d); } catch (e2) {}
+        ctx.problems.push('This computer’s browser storage is full, so ' + _snBrandName(ws) + '’s changes from the other computer are waiting. Deleting old posts frees space.');
+        return;
+      }
+    }
+    // only what really is saved here now counts as in step
+    const landed = _snLanded(ws, plan);
+    if (landed.take.size < plan.take.length || landed.drop.size < plan.drop.length) ctx.later = true; // (tried again next round)
+    plan.take.forEach(t => { if (landed.take.has(t.key)) { B[t.key] = { h: t.it.h, p: t.it.p || {} }; seen[t.key] = { h: t.it.h, m: t.it.m || now }; } });
+    plan.drop.forEach(x => { if (landed.drop.has(x.key)) { delete B[x.key]; delete seen[x.key]; } });
+    plan.take = plan.take.filter(t => landed.take.has(t.key)); plan.drop = plan.drop.filter(x => landed.drop.has(x.key));
+    await _snSaveSt().catch(() => {});
+    applied = true;
+    ctx.inN += plan.take.length + plan.drop.filter(x => x.why === 'deleted').length;
+  }
+  plan.lost.forEach(x => { const [, pid, id] = _snSplit(x.key); ctx.journal.push({ ws, key: x.key, why: 'older', by: x.it.by || '', rec: Object.assign({ id, platform: pid }, x.it.r), p: x.it.p || {} }); });
+  // records both copies agree on
+  L.forEach((l, key) => { const r = R.recs.get(key); if (r && r.h === l.h) B[key] = { h: l.h, p: l.p }; });
+  // send what changed here
+  const dev = _snDev(), mod = new Set();
+  const files = R.files.map(f => ({ path: f.path, sha: f.sha, data: f.data ? JSON.parse(JSON.stringify(f.data)) : { v: 1, ws, recs: {}, del: {} } }));
+  plan.out.forEach((l, key) => {
+    const n = _snShard(key), f = files[n];
+    f.data.recs = f.data.recs || {}; f.data.del = f.data.del || {};
+    const item = { h: l.h, m: (seen[key] && seen[key].m) || now, by: dev.name, r: l.r, p: l.p };
+    if (l.f) item.f = l.f;
+    f.data.recs[key] = item;
+    delete f.data.del[key];
+    mod.add(n);
+  });
+  plan.untomb.forEach(key => { const n = _snShard(key); if (files[n].data.del && files[n].data.del[key]) { delete files[n].data.del[key]; mod.add(n); } });
+  plan.tomb.forEach((t, key) => { const n = _snShard(key), f = files[n]; f.data.recs = f.data.recs || {}; f.data.del = f.data.del || {}; delete f.data.recs[key]; f.data.del[key] = t; mod.add(n); });
+  files.forEach((f, n) => Object.entries(f.data.del || {}).forEach(([key, t]) => { if (!t || now - (t.m || 0) > SN_TOMB_MS) { delete f.data.del[key]; mod.add(n); } }));
+  // their pictures go up first, as many as fit in this round (one that won't go doesn't hold up the posts)
+  const need = [];
+  plan.out.forEach(l => { Object.values(l.p).forEach(ref => need.push(ref)); _snRefsIn(l.r, need); });
+  await _snSendPics(c, need, ctx);
+  for (const n of mod) {
+    const f = files[n];
+    f.data.v = 1; f.data.ws = ws; f.data.at = now; f.data.by = dev.name;
+    const nOut = [...plan.out.keys(), ...plan.tomb.keys()].filter(k => _snShard(k) === n).length;
+    try {
+      const sha = await _snPutFile(c, f.path, _snTextB64(JSON.stringify(f.data)), f.sha, `PostPilot sync: ${_snBrandName(ws)}${nOut ? ` (${nOut} change${nOut === 1 ? '' : 's'})` : ''} from ${dev.name}`);
+      await _snKeepFile(f.path, sha, f.data);
+      plan.out.forEach((l, key) => { if (_snShard(key) === n) B[key] = { h: l.h, p: l.p }; });
+      plan.tomb.forEach((t, key) => { if (_snShard(key) === n) { delete B[key]; delete seen[key]; } });
+      ctx.outN += nOut;
+      st.hist = st.hist || Date.now();
+    } catch (e) {
+      if (e.kind === 'conflict' || (e.kind === 'invalid' && /sha/i.test(e.message))) { ctx.conflict = true; continue; }
+      throw e;
+    }
+  }
+  // this brand is in step (a change made while it synced, or a question still open, shows up next round)
+  if (!ctx.conflict && !applied && !plan.asked) st.sig[ws] = sig0;
+  if (!ctx.conflict) {
+    (st.done = st.done || {})[ws] = st.done[ws] || Date.now();
+    // answers about removing posts are used once
+    plan.used.forEach(([box, dir, key]) => { delete _snBox(box, ws, dir)[key]; });
+  }
+  // the newest change from the other computer, for the status line
+  R.files.forEach(f => { if (f.data && f.data.by && f.data.by !== dev.name && (!st.from || (f.data.at || 0) > (st.from.at || 0))) st.from = { name: f.data.by, at: f.data.at || 0 }; });
+}
+
+// ── Pictures up: each one once; the ones a post here has and the repository doesn't ──
+async function _snSendPics(c, refs, ctx) {
+  const seen = new Set(), st = _sn.st;
+  st.upFail = st.upFail || {};
+  for (const ref of refs) {
+    if (!ref || !ref.s || seen.has(ref.s) || (_sn.tree && _sn.tree.pics.has(ref.s))) continue;
+    seen.add(ref.s);
+    if (!_sn.bySha.has(ref.s) && !_sn.nest.has(ref.s)) continue; // not on this computer (the other one sends it)
+    const fail = st.upFail[ref.s];
+    if (fail && Date.now() - fail.at < Math.min(6 * 3600e3, 60e3 * Math.pow(4, fail.n))) { ctx.upHeld++; continue; } // it didn't go last time: tried again later
+    if (ctx.upBudget <= 0) { ctx.upLeft++; continue; }
+    const d = await _snLocalPic(ref.s);
+    if (!d) continue;
+    const b64 = d.slice(d.indexOf(',') + 1);
+    if (b64.length * 0.75 > SN_PIC_MAX) { ctx.big++; continue; }
+    const path = `${SN_DIR}/pics/${ref.s}.${_snExt(ref.t || d.slice(0, d.indexOf(',')))}`;
+    try {
+      const sha = await _snPutFile(c, path, b64, null, 'PostPilot picture');
+      _sn.tree.pics.set(ref.s, { path, sha, size: Math.round(b64.length * 0.75) });
+      delete st.upFail[ref.s];
+    } catch (e) {
+      // already there (the other computer sent the same picture); the next full look at the repository confirms it
+      if (e.kind === 'invalid' || e.kind === 'conflict') { _sn.tree.pics.set(ref.s, { path, sha: '', size: 0 }); continue; }
+      if (e.kind === 'rate' || e.kind === 'auth' || e.kind === 'perm') throw e;
+      // this one picture didn't go (too big for the connection, or GitHub hiccuped): the rest carry on
+      st.upFail[ref.s] = { at: Date.now(), n: ((st.upFail[ref.s] || {}).n || 0) + 1 };
+      ctx.upHeld++;
+      continue;
+    }
+    ctx.upBudget--; ctx.sent++;
+  }
+}
+
+// ── Pictures down: posts here waiting for theirs, and posts whose picture went missing ──
+// (whether the picture store has a picture, without reading it)
+async function _snHasPic(id) {
+  try {
+    const db = await openImageDb();
+    return await new Promise(res => { const q = db.transaction(IMG_STORE, 'readonly').objectStore(IMG_STORE).getKey(id); q.onsuccess = () => res(q.result !== undefined); q.onerror = () => res(true); });
+  } catch (e) { return true; }
+}
+async function _snHeal(ws, ctx) {
+  const c = ctx.c, active = ws === getActiveWorkspace(), B = _sn.st.base[ws] || {}, RR = _snRemote(ws);
+  if (active && _snBusy()) return;
+  let G, sig0 = '';
+  if (active) G = { p: state.posts, d: state.drafts };
+  else { const raw = _snRaw(ws); sig0 = _snRawSig(raw); try { G = _snParse(raw); } catch (e) { return; } }
+  const work = [], mark = [];
+  for (const [key, e] of _snRecs(G, active)) {
+    for (const [slot, idk, get] of SN_SLOTS[e.k]) {
+      const pend = e.x.ppSyncPic && e.x.ppSyncPic[slot];
+      if (active && _snB64Url(get(e.x))) { if (pend) { delete e.x.ppSyncPic[slot]; if (!Object.keys(e.x.ppSyncPic).length) delete e.x.ppSyncPic; } continue; }
+      const ids = idk.map(k => e.x[k]).filter(v => v && !String(v).startsWith('data:'));
+      const rr = RR.get(key), ref = pend || (B[key] && B[key].p && B[key].p[slot]) || (rr && rr.p && rr.p[slot]);
+      if (!ref || !ref.s) continue;
+      let stored = false;
+      if (!pend) {
+        if (ids.length) {
+          // a picture this record keeps here: only when it really is gone
+          stored = await _snHasPic(ids[0]);
+          if (stored && !active) continue;
+        } else mark.push({ key, k: e.k, pid: e.pid, id: String(e.x.id), slot, ref }); // no picture here at all: it waits for this one (and the photo fill leaves it be)
+      }
+      work.push({ key, k: e.k, pid: e.pid, id: String(e.x.id), slot, idk, get, ref, ids, stored });
+    }
+  }
+  if (!work.length) return;
+  const done = [];
+  const isIt = async (d, ref) => { if (!_snB64Url(d)) return false; try { return (await _snSha(d)) === ref.s; } catch (e) { return false; } };
+  for (const w of work) {
+    let d = null;
+    // this computer's own copy first (the picture store, then its safety copy), then the repository
+    if (w.ids.length) {
+      try { d = await imgLoad(w.ids[0]); } catch (e) {}
+      if (d && !(await isIt(d, w.ref))) { if (w.stored) continue; d = null; } // a newer picture of its own: it goes up next round
+      if (!d) { try { d = await _bkLatest(w.ids[0]); } catch (e) {} if (!(await isIt(d, w.ref))) d = null; }
+    }
+    if (!d) {
+      const have = _sn.bySha.has(w.ref.s) || _sn.nest.has(w.ref.s);
+      if (!have && !_snCanFetch(w.ref.s)) { ctx.waitPics++; continue; } // the other computer hasn't sent it (yet)
+      if (!have && ctx.downBudget <= 0) { ctx.downLeft++; continue; }
+      try { d = await _snPicData(c, w.ref, ctx); } catch (e) { if (_snStop(e)) throw e; }
+      if (!d) { if (!have) ctx.waitPics++; continue; }
+    }
+    // into the record's own place when it's empty there, otherwise a new place
+    let ids = w.ids, fresh = [];
+    if (ids.length) {
+      if (!(await _snHasPic(ids[0]))) for (const id of ids) { try { await _ufPutMain(id, d); } catch (e) {} }
+    } else {
+      const id = await imgStore(d);
+      ids = w.idk.map(() => id); fresh = [id];
+    }
+    try { await _snRefOf(d, ids[0]); } catch (e) {}
+    try { _bkSave(ids[0], d, { ws, pid: w.pid, kind: w.k === 'p' ? 'post' : 'draft', post: w.id, name: '' }); } catch (e) {}
+    done.push(Object.assign(w, { ids, fresh, fp: _ufFp(d), d: active ? d : null }));
+    if (active && done.length >= 20) break; // a few at a time on screen
+    await _snYield();
+  }
+  if (!done.length && !mark.length) return;
+  // the records point to their pictures now (changed in place; nothing else about them changes)
+  const fix = (x, w) => {
+    w.idk.forEach((f, i) => { x[f] = w.ids[i] || w.ids[0]; });
+    if (x.ppSyncPic) { delete x.ppSyncPic[w.slot]; if (!Object.keys(x.ppSyncPic).length) delete x.ppSyncPic; }
+    if (w.k === 'p' || w.slot === 'full') x.imageFp = w.fp;
+  };
+  const wait = (x, m) => { if (!(x.ppSyncPic && x.ppSyncPic[m.slot])) x.ppSyncPic = Object.assign({}, x.ppSyncPic || {}, { [m.slot]: { s: m.ref.s, t: m.ref.t } }); };
+  const doneKeys = new Set(done.map(w => w.key + '#' + w.slot));
+  if (active) {
+    if (ws !== getActiveWorkspace() || _snBusy()) return;
+    for (const m of mark) { if (doneKeys.has(m.key + '#' + m.slot)) continue; const g = m.k === 'p' ? state.posts : state.drafts, x = ((g || {})[m.pid] || []).find(o => o && String(o.id) === m.id); if (x && !_snB64Url(SN_SLOTS[m.k].find(s => s[0] === m.slot)[2](x))) wait(x, m); }
+    for (const w of done) {
+      const g = w.k === 'p' ? state.posts : state.drafts, x = ((g || {})[w.pid] || []).find(o => o && String(o.id) === w.id);
+      if (!x || _snB64Url(w.get(x))) continue; // gone, or it has a picture of its own now
+      fix(x, w);
+      if (w.k === 'p') { x.image = x.imageOriginal = w.d; x._imageDims = await getImageSizeLabel(w.d).catch(() => ''); }
+      else if (w.slot === 'full') { x.imageFull = w.d; if (x.formSnapshot) x.formSnapshot = Object.assign({}, x.formSnapshot, { image: w.d, imageOriginal: w.d }); }
+      else x.imageThumb = w.d;
+    }
+    _sn.applying = true;
+    try { await savePosts(state.posts); await saveDrafts(state.drafts); } finally { _sn.applying = false; }
+    ctx.render = true;
+  } else {
+    if (ws === getActiveWorkspace()) return;
+    let G2;
+    try { G2 = _snParse(_snRaw(ws)); } catch (e) { return; }
+    const find = (w) => { const g = w.k === 'p' ? G2.p : G2.d; return (g[w.pid] || []).find(o => o && String(o.id) === w.id); };
+    mark.forEach(m => { if (!doneKeys.has(m.key + '#' + m.slot)) { const x = find(m); if (x) wait(x, m); } });
+    done.forEach(w => { const x = find(w); if (x) fix(x, w); });
+    try { localStorage.setItem(ws + '_' + _STORAGE_KEY_BASE, JSON.stringify(G2.p)); localStorage.setItem(ws + '_' + _DRAFTS_STORAGE_KEY_BASE, JSON.stringify(G2.d)); }
+    catch (e) {
+      // not saved: the pictures just stored for it go again (nothing points to them)
+      for (const w of done) for (const id of w.fresh) { try { imgDelete(id); } catch (er) {} }
+      ctx.problems.push('This computer’s browser storage is full, so some pictures from the other computer are waiting. Deleting old posts frees space.');
+      return;
+    }
+    // only where pictures are kept changed, so the brand is still in step
+    if (_sn.st.sig[ws] === sig0) _sn.st.sig[ws] = _snRawSig(_snRaw(ws));
+  }
+  ctx.healed += done.filter(w => !w.stored).length;
+  if (active && done.length >= 20) ctx.downLeft++;
+}
+
+// ── Settings ──
+// Each one: [where it's kept ('*' is each brand), 1 used right away or 0 used the next time PostPilot opens,
+//  'map' when both computers' entries are combined, or the fields that sync]
+const SN_LOOK = ['font', 'hFont', 'cFont', 'sFont', 'hAlign', 'cAlign', 'sAlign', 'hLineH', 'cLineH', 'hLetterS', 'cLetterS', 'sLetterS', 'hColorOv', 'cColorOv', 'hSize', 'cSize', 'lSize', 'lOpacity',
+  'overlay', 'tShadow', 'colors', 'smartFit', 'hAuto', 'cAuto', 'platFormats', 'photoCreditOn', 'logo2On', 'wmOn', 'wmStyle', 'wmShow', 'wmColor', 'wmOpacity', 'wmSize', 'wmBrands', 'wmLogoSrc',
+  'logo2Pos', 'logo2Size', 'logo2Back', 'logo2Aspect', 'logo2Brands', 'palIdx', 'fnPrefix', 'siteURL', 'siteTagBg', 'siteTagPos', 'hDropShadow', 'bDropShadow', 'hOutline', 'bOutline', 'hOutlineColor',
+  'bOutlineColor', 'ovBg', 'ovPrimary', 'ovAccent', 'ovHighlight', 'ovShapes', 'ovOverlay', 'logoPosPreset', 'logoX', 'logoY'];
+const SN_SETTINGS = [
+  ['*_pp_best_slots', 1], ['*_pp_default_times', 1], ['*_pp_weekends_off', 1], ['*_pp_pin_cap', 1], ['*_pp_nd_week_cap', 1], ['*_pp_al_rotation', 1],
+  ['*_postpilot_pd_comment_tpl', 1], ['*_postpilot_sales_days', 1], ['*_postpilot_uf_credit_comment', 1], ['*_pp_layout_look', 1], ['*_postpilot_brand_logo', 1],
+  ['*_postflow_custom_tags', 1], ['*_postpilot_hashtag_sets', 1], ['*_postpilot_analytics', 1, 'map'], ['*_postpilot_hidden_platforms', 1], ['*_postpilot_platform_order', 1],
+  ['postpilot_workspace_names', 1], ['postpilot_default_tz', 1], ['postpilot_pd_ahead_days', 1], ['postpilot_pd_ahead_plats', 1], ['postpilot_pd_pin_board', 1],
+  ['postpilot_live_holidays_enabled', 1], ['postpilot_pd_reply_on', 1], ['postpilot_unsplash_credits', 1, 'map'], ['bpc_blog_used_v1', 1, 'map'], ['bpc_blog_photos', 1], ['bpc_blog_site:*', 1, ['site']],
+  // the Post Creator's brand kit
+  ...[0, 1, 2, 3, 4, 5].map(i => ['*_bpc_slogo_' + i, 0]), ['*_bpc_pal_slots', 0], ['bpc_logo', 0], ['bpc_logo2', 0], ['bpc_wm_logo', 0], ['pp_icon_alignable', 0],
+  ['bpc_custom_fonts_meta', 0], ...Array.from({ length: 20 }, (_, i) => ['bpc_custom_fonts_' + i, 0]), ['bpc_blog_plats', 0], ['bpc_settings', 0, SN_LOOK],
+];
+let _snItemsMemo = null;
+function _snItems() {
+  if (_snItemsMemo) return _snItemsMemo;
+  const out = [];
+  SN_SETTINGS.forEach(([k, live, how]) => (k.indexOf('*') >= 0 ? WS_IDS.map(ws => [k.replace('*', ws), ws]) : [[k, '']]).forEach(([key, ws]) => {
+    const base = k.replace('*_', '').replace(':*', '');
+    if (Array.isArray(how)) how.forEach(f => out.push({ name: key + '#' + f, key, field: f, live: !!live, ws, base }));
+    else out.push({ name: key, key, live: !!live, ws, base, map: how === 'map' ? base : '' });
+  }));
+  return (_snItemsMemo = out);
+}
+const _snLS = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+function _snSetVal(it) {
+  const raw = _snLS(it.key);
+  if (it.field) { let o = null; try { o = raw ? JSON.parse(raw) : null; } catch (e) { return undefined; } return o && typeof o === 'object' && o[it.field] !== undefined ? o[it.field] : null; }
+  if (it.map) { try { const o = raw ? JSON.parse(raw) : null; return o && typeof o === 'object' ? o : null; } catch (e) { return undefined; } }
+  return raw;
+}
+// How each one looks for the start-up check (the same in the Post Creator's part)
+const _snBootH = (it) => { const raw = _snLS(it.key); if (!it.field) return _snH(raw == null ? '\u0000' : raw); let o = {}; try { o = raw ? JSON.parse(raw) || {} : {}; } catch (e) { return ''; } return _snH(JSON.stringify(o[it.field] === undefined ? null : o[it.field])); };
+const _snSetSig = () => _snH(_snItems().map(it => { const r = _snLS(it.key); return r == null ? '\u0000' : r; }).join('\u0001'));
+const SN_MERGE = {
+  postpilot_analytics: (a, b) => (String((a && a.recordedAt) || '') > String((b && b.recordedAt) || '') ? a : b),
+  postpilot_unsplash_credits: (a, b) => b || a,
+  bpc_blog_used_v1: (a, b) => { const o = Object.assign({}, a || {}); Object.entries(b || {}).forEach(([p, d]) => { if (!o[p] || String(d) > String(o[p])) o[p] = d; }); return o; },
+};
+function _snMergeMap(name, a, b) {
+  const pick = SN_MERGE[name] || ((x, y) => y);
+  const out = Object.assign({}, a || {});
+  Object.entries(b || {}).forEach(([k, v]) => { out[k] = k in out ? pick(out[k], v) : v; });
+  return out;
+}
+// After a setting comes in: anything PostPilot holds in memory reads it again
+const SN_HOOK = {
+  postflow_custom_tags: () => { if (typeof _ptSaved === 'function') POST_TAGS = _ptSaved(getActiveWorkspace()) || DEFAULT_POST_TAGS.slice(); },
+  postpilot_hashtag_sets: () => { state.hashtagSets = []; loadHashtagSets(); },
+  postpilot_analytics: () => { state.analytics = {}; loadAnalytics(); },
+  postpilot_hidden_platforms: () => { const v = _pdLS(wsKey('postpilot_hidden_platforms'), null); if (Array.isArray(v)) state.hiddenPlatforms = new Set(v); },
+  postpilot_platform_order: () => { const v = _pdLS(wsKey('postpilot_platform_order'), null); if (Array.isArray(v)) state.platformOrder = typeof _ppAddAlignable === 'function' ? _ppAddAlignable(v) : v; },
+  postpilot_live_holidays_enabled: () => { state.liveHolidayFeedEnabled = isLiveHolidayFeedEnabled(); },
+};
+const SN_SET_NAMES = { pp_best_slots: 'Best times', pp_default_times: 'Default times', pp_weekends_off: 'Weekends', pp_pin_cap: 'Pins per day', pp_nd_week_cap: 'Nextdoor posts a week', pp_al_rotation: 'Alignable rotation',
+  postpilot_pd_comment_tpl: 'First comment template', postpilot_sales_days: 'Sales days', postpilot_uf_credit_comment: 'Photo credit comment', pp_layout_look: 'Layout look', postpilot_brand_logo: 'Brand logo',
+  postflow_custom_tags: 'Tags', postpilot_hashtag_sets: 'Hashtag sets', postpilot_hidden_platforms: 'Hidden platforms', postpilot_platform_order: 'Platform order', postpilot_workspace_names: 'Brand names',
+  postpilot_default_tz: 'Time zone', bpc_pal_slots: 'Brand kit colors', bpc_logo: 'Post Creator logo', bpc_logo2: 'Second logo', bpc_wm_logo: 'Watermark logo', pp_icon_alignable: 'Alignable icon',
+  bpc_custom_fonts_meta: 'Custom fonts', bpc_blog_plats: 'Blog platforms', bpc_blog_photos: 'Blog photos', bpc_blog_site: 'Blog website', bpc_settings: 'Post Creator look' };
+const _snSetLabel = (it) => {
+  const b = it.base || '', slot = /^bpc_slogo_(\d)$/.exec(b), font = /^bpc_custom_fonts_(\d+)$/.exec(b);
+  const what = slot ? 'Brand kit logo ' + (+slot[1] + 1) : font ? 'Custom font ' + (+font[1] + 1) : (SN_SET_NAMES[b] || b) + (it.field ? ' (' + it.field + ')' : '');
+  return what + (it.ws ? ' · ' + _snBrandName(it.ws) : '');
+};
+function _snWrite(it, v) {
+  if (it.field) {
+    const raw = _snLS(it.key);
+    let o = {};
+    try { o = raw ? JSON.parse(raw) || {} : {}; } catch (e) { return false; }
+    if (v === null) delete o[it.field]; else o[it.field] = v;
+    localStorage.setItem(it.key, JSON.stringify(o));
+  } else if (it.map) localStorage.setItem(it.key, JSON.stringify(v));
+  else if (v === null) localStorage.removeItem(it.key);
+  else localStorage.setItem(it.key, String(v));
+  return true;
+}
+async function _snSettings(ctx) {
+  const c = ctx.c, st = _sn.st, dev = _snDev(), now = Date.now();
+  const path = SN_DIR + '/settings.json', sha = ctx.tree.files.get(path) || null;
+  const sig = _snSetSig();
+  if (!ctx.headChanged && st.setSig === sig && !ctx.full) return;
+  const remote = sha ? await _snFile(c, path, sha) : null;
+  const items = (remote && remote.items) || {}, B = st.setBase, seen = st.setSeen, out = {}, kit = [], journal = [];
+  const firstSet = !Object.keys(B).length;
+  let live = 0, held = false;
+  for (const it of _snItems()) {
+    const lv = _snSetVal(it);
+    if (lv === undefined) continue; // unreadable here: left alone
+    const lref = await _snNest(lv && typeof lv === 'object' ? JSON.parse(JSON.stringify(lv)) : lv);
+    const lh = _snH(_snCanon(lref));
+    if (!seen[it.name] || seen[it.name].h !== lh) seen[it.name] = { h: lh, m: now };
+    const r = items[it.name], b = B[it.name];
+    let take = null;
+    if (it.map) {
+      const rv = r ? r.v : null;
+      if (lv === null && rv === null) continue;
+      const merged = _snMergeMap(it.map, lref, rv), mh = _snH(_snCanon(merged));
+      if (!r || r.h !== mh) out[it.name] = { v: merged, h: mh, m: now, by: dev.name };
+      if (mh !== lh) take = { v: merged, h: mh };
+      else B[it.name] = mh;
+    } else if (!r) {
+      if (lv !== null) out[it.name] = { v: lref, h: lh, m: seen[it.name].m, by: dev.name };
+      continue;
+    } else if (r.h === lh) { B[it.name] = lh; continue; }
+    else {
+      const lc = lh !== b, rc = r.h !== b;
+      if (b !== undefined && !rc) { out[it.name] = { v: lref, h: lh, m: seen[it.name].m, by: dev.name }; continue; }
+      if (b === undefined && lv === null) take = r;
+      else if (b !== undefined && !lc) take = r;
+      else if (b === undefined || seen[it.name].m <= (r.m || 0)) take = r; // both changed (or the first sync): newer wins, or the copy already shared
+      else { out[it.name] = { v: lref, h: lh, m: seen[it.name].m, by: dev.name }; continue; }
+    }
+    if (!take) continue;
+    if (!it.live) { const w = await _snGet('pending', it.name).catch(() => null); if (w && w.h === take.h) { held = true; continue; } } // already waiting for the next start
+    const v = await _snUnnest(c, take.v, ctx);
+    if (v === undefined) { ctx.waiting++; continue; } // a picture still on its way
+    // the value it replaces here is kept in 🗂 first (pictures included)
+    if (lv !== null && !it.map) journal.push({ kind: 'set', key: it.name, name: it.name, why: 'replaced', by: take.by || r && r.by || '', label: _snSetLabel(it), old: lv, ws: it.ws });
+    if (it.live) {
+      if (journal.length && !(await _snJournal(journal.splice(0)))) { ctx.problems.push('PostPilot couldn’t keep a copy of a setting it would change, so it left it as it is.'); continue; }
+      try { _snWrite(it, v); } catch (e) { ctx.problems.push('This computer’s browser storage is full, so some settings from the other computer are waiting.'); continue; }
+      B[it.name] = take.h;
+      seen[it.name] = { h: take.h, m: take.m || now };
+      if (!it.ws || it.ws === getActiveWorkspace()) { const hook = SN_HOOK[it.base]; if (hook) { try { hook(); } catch (e) {} } }
+      live++;
+    } else {
+      // the Post Creator has these open: they go in place the next time PostPilot opens (it keeps the old one in 🗂 then)
+      journal.length = 0;
+      kit.push({ name: it.name, key: it.key, field: it.field || '', value: v, localH: _snBootH(it), h: take.h, by: take.by || '', label: _snSetLabel(it) });
+    }
+  }
+  if (kit.length) {
+    for (const k of kit) await _snPut('pending', k.name, k);
+    try { localStorage.setItem(SN_PEND_FLAG, '1'); } catch (e) {}
+    const tag = kit.map(k => k.name + k.h).join(',');
+    if (tag !== _sn.kitSeen) { _sn.kitSeen = tag; ctx.kit = kit.length; }
+  }
+  if (live) { ctx.render = true; ctx.inN += live; }
+  if (Object.keys(out).length) {
+    const need = [];
+    Object.values(out).forEach(o => _snRefsIn(o.v, need));
+    await _snSendPics(c, need, ctx);
+    const data = { v: 1, at: now, by: dev.name, items: Object.assign({}, items, out) };
+    try {
+      const nsha = await _snPutFile(c, path, _snTextB64(JSON.stringify(data)), sha, `PostPilot sync: settings from ${dev.name}`);
+      await _snKeepFile(path, nsha, data);
+      Object.entries(out).forEach(([n, o]) => { B[n] = o.h; });
+      if (!firstSet) ctx.outN += Object.keys(out).length;
+    } catch (e) {
+      if (e.kind === 'conflict' || (e.kind === 'invalid' && /sha/i.test(e.message))) { ctx.conflict = true; return; }
+      throw e;
+    }
+  }
+  if (!ctx.conflict && !held && !kit.length && !ctx.waiting) st.setSig = _snSetSig();
+}
+
+// ── A sync round ──
+function _snSoon(ms) {
+  if (!_snOn()) return;
+  const due = Date.now() + Math.max(300, ms || 0);
+  if (_sn.timer && _sn.due <= due) return;
+  clearTimeout(_sn.timer);
+  _sn.due = due;
+  _sn.timer = setTimeout(() => { _sn.timer = 0; _snRun('soon'); }, due - Date.now());
+}
+async function _snRun(why, opts) {
+  opts = opts || {};
+  if (!_snOn() || !_sn.ready) return;
+  if (!_sn.leader) { _snStatus('tab', ''); return; }
+  if (_sn.running) { _sn.again = true; if (opts.full) _sn.againFull = true; return; }
+  if (Date.now() < _sn.holdUntil && why !== 'now') { _snSoon(_sn.holdUntil - Date.now() + 500); return; }
+  if (_sn.againFull) { opts = Object.assign({}, opts, { full: true }); _sn.againFull = false; }
+  _sn.running = true;
+  clearTimeout(_sn.timer); _sn.timer = 0;
+  try {
+    const go = () => _snRound(why, opts);
+    if (navigator.locks && navigator.locks.request) await navigator.locks.request('postpilot-sync', { ifAvailable: true }, async (lock) => { if (lock) await go(); else _sn.again = true; });
+    else await go();
+  } catch (e) { _snFail(e); }
+  finally {
+    _sn.running = false; _sn.lastRun = Date.now();
+    if (_sn.again) { _sn.again = false; if (_sn.againFull) { _sn.againFull = false; setTimeout(() => _snRun('now', { full: true }), 300); } else _snSoon(5000); }
+    _snPaint();
+  }
+}
+async function _snRound(why, opts) {
+  try { await _snRound2(why, opts); }
+  finally { await _snSaveSt().catch(() => {}); }
+}
+async function _snRound2(why, opts) {
+  const c = _snCfg();
+  await _snLoadSt(true);
+  _snStatus('syncing', 'Checking for changes…');
+  let ctx;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    ctx = { c, why, full: !!opts.full || attempt > 0, later: false, conflict: false, ask: [], problems: [], journal: [], mode: _sn.st.mode || 'combine',
+      upBudget: opts.upBudget || 60, downBudget: opts.downBudget || 80, upLeft: 0, upHeld: 0, downLeft: 0, waiting: 0, waitPics: 0, sent: 0, got: 0, healed: 0, big: 0, inN: 0, outN: 0, render: false, kit: 0 };
+    _sn.nest = new Map();
+    // one small look first: has anything changed in the repository?
+    let ref = null;
+    try { ref = await _snApi('GET', _snR(c) + '/git/ref/heads/' + encodeURIComponent(c.branch || 'main'), null, c); }
+    catch (e) {
+      if (e.kind !== 'missing' && e.kind !== 'conflict') throw e;
+      // an empty repository is only expected before anything was ever sent
+      if (_sn.st.hist) throw _snErr('missing', 'gone');
+    }
+    const head = (ref && ref.object && ref.object.sha) || '';
+    ctx.headChanged = head !== _sn.st.head || !_sn.tree || attempt > 0;
+    if (ctx.headChanged) _sn.tree = head ? await _snReadTree(c, head) : { head: '', files: new Map(), pics: new Map() };
+    ctx.tree = _sn.tree;
+    if (!_sn.st.first) await _snSnapshot();
+    const step = async (label, fn) => {
+      try { await fn(); }
+      catch (e) {
+        if (_snStop(e)) throw e;
+        console.warn('Sync step', label, e);
+        ctx.problems.push('Part of the sync (' + label + ') didn’t finish. PostPilot tries again soon.');
+      }
+    };
+    for (const ws of WS_IDS) {
+      _snStatus('syncing', 'Syncing ' + _snBrandName(ws) + '…');
+      await step(_snBrandName(ws), () => _snBrand(ws, ctx));
+      if (ctx.conflict) break;
+    }
+    if (!ctx.conflict) await step('settings', () => _snSettings(ctx));
+    if (!ctx.conflict) {
+      // pictures still to go up (for posts already sent) and to come down
+      const need = [];
+      WS_IDS.forEach(ws => _snRemote(ws).forEach(it => { Object.values(it.p || {}).forEach(r => need.push(r)); _snRefsIn(it.r, need); }));
+      const sm = _sn.shardMem.get(SN_DIR + '/settings.json');
+      if (sm && sm.data) Object.values(sm.data.items || {}).forEach(o => _snRefsIn(o.v, need));
+      _snStatus('syncing', 'Sending pictures…');
+      await step('pictures', () => _snSendPics(c, need, ctx));
+      for (const ws of WS_IDS) { _snStatus('syncing', 'Bringing in pictures for ' + _snBrandName(ws) + '…'); await step('pictures for ' + _snBrandName(ws), () => _snHeal(ws, ctx)); }
+    }
+    if (ctx.journal.length) await _snJournal(ctx.journal);
+    if (!ctx.conflict) _sn.st.head = head;
+    await _snSaveSt();
+    if (ctx.conflict) { _sn.st.head = ''; continue; } // the other computer saved at the same moment: read again
+    break;
+  }
+  ctx.problems = ctx.problems.filter(Boolean);
+  if (ctx.reload) { _sn.reloadWanted = true; _snReloadSoon(500); }
+  if (ctx.render) { try { if (!_snBusy()) render(); else _sn.needRender = true; } catch (e) {} }
+  if (!_sn.st.first && !ctx.later && !ctx.conflict && !ctx.problems.length && WS_IDS.every(ws => (_sn.st.done || {})[ws])) { _sn.st.first = Date.now(); await _snSaveSt(); }
+  Object.assign(_sn.status, { upLeft: ctx.upLeft, downLeft: ctx.downLeft, big: ctx.big, waitPics: ctx.waitPics });
+  if (ctx.ask.length) _snAsk(ctx.ask);
+  const more = ctx.upLeft || ctx.downLeft || ctx.later || ctx.conflict;
+  if (ctx.problems.length) _snStatus('error', ctx.problems[0]);
+  else if (more) _snStatus('syncing', _snMoreMsg(ctx));
+  else if (ctx.waitPics || ctx.waiting) _snStatus('idle', `Up to date (${ctx.waitPics || ctx.waiting} picture${(ctx.waitPics || ctx.waiting) === 1 ? '' : 's'} still to come from your other computer)`);
+  else if (ctx.upHeld) _snStatus('idle', `Up to date (${ctx.upHeld} picture${ctx.upHeld === 1 ? '' : 's'} couldn’t be sent yet; PostPilot tries again later)`);
+  else _snStatus('idle', 'Up to date');
+  if (!more && !ctx.problems.length) _sn.st.lastOk = Date.now();
+  _sn.status.at = Date.now();
+  if (more) _snSoon(ctx.later ? 20000 : 6000);
+  else if (ctx.problems.length) _snSoon(5 * 60e3);
+  _snReport(ctx);
+}
+function _snMoreMsg(ctx) {
+  if (ctx.upLeft) return `Sending pictures: ${ctx.upLeft} still to go (GitHub takes them a few at a time).`;
+  if (ctx.downLeft) return 'Bringing in pictures from your other computer…';
+  return 'Waiting for you to finish here…';
+}
+function _snReport(ctx) {
+  const bits = [];
+  if (ctx.inN) bits.push(`${ctx.inN} change${ctx.inN === 1 ? '' : 's'} from ${_sn.st.from ? _pdE(_sn.st.from.name) : 'your other computer'}`);
+  if (ctx.healed) bits.push(`${ctx.healed} picture${ctx.healed === 1 ? '' : 's'} brought in`);
+  const kit = ctx.kit ? `🎨 Brand kit changes from your other computer are ready: they show in the Post Creator the next time you open PostPilot. <button type="button" class="pd-btn" onclick="window.parent.location.reload()">Open them now</button>` : '';
+  if (bits.length || kit) _ppToast((bits.length ? '🔄 Synced: ' + bits.join(', ') + '.' + (kit ? '<br>' : '') : '') + kit, kit ? 15000 : 6000);
+}
+function _snFail(e) {
+  console.warn('Sync:', e);
+  if (e && e.kind === 'rate') { _sn.holdUntil = Date.now() + (e.wait || 120e3); _snStatus('syncing', e.message); _snSoon((e.wait || 120e3) + 1000); return; }
+  if (e && e.kind === 'net') { _snStatus('offline', e.message); _snSoon(60e3); return; }
+  if (e && e.kind === 'auth') { _snStatus('error', e.message + ' Make a new key and paste it in ⚙ Settings → Sync between computers.'); return; }
+  if (e && e.kind === 'perm') { _snStatus('error', e.message); return; }
+  if (e && e.kind === 'missing') { _snStatus('error', 'GitHub can’t find the repository’s files (or the key can’t see them). Check the repository in ⚙ Settings → Sync between computers. Nothing here was changed.'); _snSoon(10 * 60e3); return; }
+  _snStatus('error', (e && e.kind && e.message) || 'Something went wrong while syncing. PostPilot tries again soon.');
+  _snSoon(5 * 60e3);
+}
+function _snStatus(s, msg) { _sn.status.s = s; _sn.status.msg = msg || ''; _snPaint(); }
+
+// ── The open brand read again from what's saved (when another tab saved it): never while you're editing ──
+async function _snReloadOpen() {
+  if (_snBusy() || _sn.saving || _sn.applying) return false;
+  const ws = getActiveWorkspace(), P0 = state.posts, D0 = state.drafts, sig = _snRawSig(_snRaw(ws));
+  if (_sn.memSig && _sn.memSig.ws === ws && _sn.memSig.sig === sig) return true; // already the same
+  let posts, drafts;
+  try { posts = await loadPosts(); drafts = await loadDraftsAsync(); } catch (e) { return false; }
+  if (ws !== getActiveWorkspace() || state.posts !== P0 || state.drafts !== D0 || _sn.saving || _sn.applying || _snBusy() || _snRawSig(_snRaw(ws)) !== sig) return false;
+  state.posts = posts; state.drafts = drafts;
+  _sn.memSig = { ws, sig };
+  try { render(); } catch (e) {}
+  return true;
+}
+function _snReloadSoon(ms) {
+  clearTimeout(_sn.reloadT);
+  _sn.reloadT = setTimeout(async () => {
+    if (!_sn.reloadWanted) return;
+    if (await _snReloadOpen()) { _sn.reloadWanted = false; _sn.reloadGap = 0; if (_snOn() && _sn.leader) _snSoon(1500); }
+    else { _sn.reloadGap = Math.min(30000, (_sn.reloadGap || 1000) * 2); _snReloadSoon(_sn.reloadGap); }
+  }, ms || 1500);
+}
+window.addEventListener('storage', (e) => {
+  if (!e.key || !_snLinked()) return;
+  const ws = getActiveWorkspace();
+  if (e.key === ws + '_' + _STORAGE_KEY_BASE || e.key === ws + '_' + _DRAFTS_STORAGE_KEY_BASE) { _sn.reloadWanted = true; _snReloadSoon(); }
+});
+
+// ── The first sync here keeps a snapshot first ──
+async function _snSnapshot() {
+  const key = 'first:' + _sn.st.id;
+  if (await _snGet('snap', key).catch(() => null)) return;
+  const keys = new Set();
+  WS_IDS.forEach(ws => { keys.add(ws + '_' + _STORAGE_KEY_BASE); keys.add(ws + '_' + _DRAFTS_STORAGE_KEY_BASE); });
+  _snItems().forEach(it => keys.add(it.key));
+  const data = {};
+  keys.forEach(k => { data[k] = _snLS(k); });
+  await _snPut('snap', key, { at: Date.now(), data });
+}
+
+// ── 🗂 Removed or replaced by sync ──
+const SN_WHY = { deleted: 'Deleted on {by}', replaced: 'Replaced by a newer version from {by}', first: 'Replaced by the shared copy on the first sync', older: 'An older edit from {by} (this computer’s newer edit was kept)', both: 'Replaced by a newer version from {by}' };
+const _snWhy = (e) => (SN_WHY[e.why] || 'Changed by sync').replace('{by}', e.by ? _pdE(e.by) : 'your other computer');
+async function snJournalOpen() {
+  let all = [];
+  try { all = (await _snAll('journal')).sort((a, b) => b.at - a.at || b.n - a.n); } catch (e) {}
+  const names = getWorkspaceNames() || {};
+  const groups = [];
+  all.slice(0, 400).forEach(e => { const g = groups[groups.length - 1]; if (g && g.at === e.at) g.list.push(e); else groups.push({ at: e.at, list: [e] }); });
+  const row = (e) => {
+    const btn = e.back ? '<span class="sn-jd">✓ Put back</span>' : `<button type="button" class="pd-btn" onclick="snPutBack(${e.n})">↩ Put back</button>`;
+    if (e.kind === 'set') return `<div class="sn-jr"><div class="sn-jt"><b>⚙ ${_pdE(e.label || e.name)}</b><div class="sn-jw">${_snWhy(e)}</div></div>${btn}</div>`;
+    const [k, pid] = _snSplit(e.key), pl = PLATFORMS[pid];
+    return `<div class="sn-jr"><div class="sn-jt"><b style="color:${pl ? pl.color : 'inherit'}">${_pdE(pl ? pl.name : pid)}</b> ${k === 'd' ? '(draft) ' : ''}· ${_pdE(names[e.ws] || e.ws)}${e.rec && e.rec.scheduledDate ? ' · ' + _pdE(e.rec.scheduledDate) : ''}<div class="sn-jx">${_pdE(_snTitleOf(k, pid, e.rec))}</div><div class="sn-jw">${_snWhy(e)}</div></div>${btn}</div>`;
+  };
+  const html = groups.map(g => {
+    const when = new Date(g.at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const open = g.list.filter(e => !e.back && e.kind !== 'set');
+    return `<div class="sn-jg"><div class="sn-jgh"><span>${_pdE(when)} · ${g.list.length} ${g.list.length === 1 ? 'item' : 'items'}</span>${open.length > 1 ? `<button type="button" class="pd-btn" onclick="snPutBackAll(${g.at})">↩ Put back all ${open.length}</button>` : ''}</div>${g.list.map(row).join('')}</div>`;
+  }).join('');
+  _pdModal('sn-journal', `<div class="pd-mh"><h2>🗂 Removed or replaced by sync</h2><button type="button" class="pd-x" aria-label="Close" onclick="pdCloseModal('sn-journal')">✕</button></div>
+    <div class="pd-mb"><p class="pd-note">Before syncing removes a post here (because it was deleted on your other computer) or replaces a post or setting with a newer version, a copy of this computer’s version is kept here for 120 days, with its pictures. ↩ Put back brings it back on both computers.</p>
+    ${html || '<p class="pd-note">Nothing here yet.</p>'}</div>
+    <div class="pd-mf"><button type="button" class="pd-btn" onclick="pdCloseModal('sn-journal')">Close</button></div>`, true);
+}
+async function snPutBackAll(at) {
+  let all = [];
+  try { all = (await _snAll('journal')).filter(e => e.at === at && !e.back && e.kind !== 'set'); } catch (e) {}
+  const seen = new Set();
+  let n = 0;
+  _ppToast(`↩ Putting back ${all.length} posts…`, 60000);
+  for (const e of all.sort((a, b) => b.n - a.n)) { if (seen.has(e.ws + e.key)) continue; seen.add(e.ws + e.key); if (await snPutBack(e.n, true)) n++; }
+  render();
+  _ppToast(`↩ Put back ${n} post${n === 1 ? '' : 's'}. They go to your other computer on the next sync.`, 6000);
+  snJournalOpen();
+  _snSoon(2000);
+}
+// A picture for a record being put back: where it's stored here if that still is this picture, otherwise this
+// computer's copy of it or the repository's, always into a place of its own
+async function _snPutBackPic(ref, ids) {
+  let d = null;
+  if (ids.length) { try { d = await imgLoad(ids[0]); } catch (e) {} if (d && ref && (await _snSha(d).catch(() => '')) !== ref.s) d = null; if (!d && !ref) { try { d = await _bkLatest(ids[0]); } catch (e) {} } }
+  if (!d && ref) d = await _snLocalPic(ref.s).catch(() => null);
+  if (!d && ref && _snOn() && _sn.tree && _snCanFetch(ref.s)) { try { d = await _snFetchPic(_snCfg(), ref); } catch (e) { d = null; } }
+  return d;
+}
+function snPutBack(n, many) { return _snLocked(() => _snPutBack1(n, many)); }
+async function _snPutBack1(n, many) {
+  const e = await _snGet('journal', n).catch(() => null);
+  if (!e || e.back) return false;
+  await _snLoadSt(true);
+  if (e.kind === 'set') return _snPutBackSetting(e);
+  const [k, pid, id] = _snSplit(e.key), ws = e.ws;
+  const quiet = async () => { for (let i = 0; i < 400 && (_sn.saving || _sn.applying || (typeof _uf !== 'undefined' && _uf.switching)); i++) await _snSleep(50); };
+  await quiet();
+  const rec = Object.assign({}, e.rec, { id: e.rec.id != null ? e.rec.id : id });
+  // its pictures, each in a place of its own (never shared with another version)
+  const pend = {}, got = {};
+  for (const [slot, idk] of SN_SLOTS[k]) {
+    const ref = e.p && e.p[slot], ids = idk.map(f => rec[f]).filter(v => v && !String(v).startsWith('data:'));
+    idk.forEach(f => { delete rec[f]; });
+    if (!ref && !ids.length) continue;
+    const d = await _snPutBackPic(ref, ids);
+    if (d) { const nid = await imgStore(d); idk.forEach(f => { rec[f] = nid; }); try { await _snRefOf(d, nid); } catch (er) {} try { _bkSave(nid, d, { ws, pid, kind: k === 'p' ? 'post' : 'draft', post: String(rec.id), name: rec.imageName || '' }); } catch (er) {} got[slot] = d; if (k === 'p' || slot === 'full') rec.imageFp = _ufFp(d); }
+    else if (ref) pend[slot] = ref;
+  }
+  if (Object.keys(pend).length) rec.ppSyncPic = pend; else delete rec.ppSyncPic;
+  // the version it replaces is kept too (with its pictures), before anything changes
+  let G;
+  try { G = _snParse(_snRaw(ws)); } catch (er) { showToast('That brand’s posts couldn’t be read here.', 'error'); return false; }
+  const cur = ((k === 'p' ? G.p : G.d)[pid] || []).filter(o => o && String(o.id) === String(rec.id));
+  const keep = [];
+  for (const o of cur) { const it = await _snItemOf({ k, pid, x: o }, e.key, (_sn.st.base || {})[ws] || {}, _snRemote(ws)); keep.push({ ws, key: e.key, why: 'replaced', by: 'Put back', rec: _snStored(o), p: it.p }); }
+  if (!(await _snJournal(keep))) { showToast('PostPilot couldn’t keep a copy of the current version, so nothing was changed.', 'error'); return false; }
+  // a post deleted on the other computer comes back there too (noted first, so a sync in between can't drop it again)
+  if (e.why === 'deleted') { _snBox('keep', ws, 'in')[e.key] = Date.now(); await _snSaveSt(); }
+  // what goes on screen, ready before the one step below
+  const mem = Object.assign({}, rec);
+  if (k === 'p') { if (got.main) { mem.image = mem.imageOriginal = got.main; mem._imageDims = await getImageSizeLabel(got.main).catch(() => ''); } }
+  else { if (got.full) mem.imageFull = got.full; if (got.thumb) mem.imageThumb = got.thumb; if (mem.formSnapshot && got.full) mem.formSnapshot = Object.assign({}, mem.formSnapshot, { image: got.full, imageOriginal: got.full }); }
+  await quiet();
+  // into that brand's saved posts, and on screen if it's the open brand: one step, nothing in between
+  let G2;
+  try { G2 = _snParse(_snRaw(ws)); } catch (er) { return false; }
+  const g2 = k === 'p' ? G2.p : G2.d;
+  g2[pid] = (Array.isArray(g2[pid]) ? g2[pid] : []).filter(o => !(o && String(o.id) === String(rec.id))).concat([rec]);
+  try { localStorage.setItem(ws + '_' + (k === 'p' ? _STORAGE_KEY_BASE : _DRAFTS_STORAGE_KEY_BASE), JSON.stringify(g2)); } catch (er) { showToast('This computer’s browser storage is full.', 'error'); return false; }
+  if (ws === getActiveWorkspace() && !(typeof _uf !== 'undefined' && _uf.switching)) {
+    const grp = k === 'p' ? 'posts' : 'drafts', list = ((state[grp] || {})[pid] || []).filter(o => !(o && String(o.id) === String(rec.id))).concat([mem]);
+    state[grp] = Object.assign({}, state[grp], { [pid]: list });
+    _snMemNote();
+  }
+  _snMarkSaved(ws);
+  e.back = Date.now();
+  await _snPut('journal', undefined, e).catch(() => {});
+  if (many) return true;
+  render();
+  showToast('↩ Put back. It goes to your other computer on the next sync.');
+  snJournalOpen();
+  _snSoon(2000);
+  return true;
+}
+async function _snPutBackSetting(e) {
+  const it = _snItems().find(x => x.name === e.name);
+  if (!it) return false;
+  const cur = _snSetVal(it);
+  if (cur !== undefined && cur !== null && _snCanon(cur) !== _snCanon(e.old)) await _snJournal([{ kind: 'set', key: it.name, name: it.name, why: 'replaced', by: 'Put back', label: _snSetLabel(it), old: cur, ws: it.ws }]);
+  if (it.live) {
+    try { _snWrite(it, e.old); } catch (er) { showToast('This computer’s browser storage is full.', 'error'); return false; }
+    if (!it.ws || it.ws === getActiveWorkspace()) { const hook = SN_HOOK[it.base]; if (hook) { try { hook(); } catch (er) {} } }
+  } else {
+    await _snPut('pending', it.name, { name: it.name, key: it.key, field: it.field || '', value: e.old, localH: _snBootH(it), h: 'putback' + Date.now(), by: 'Put back', label: _snSetLabel(it) });
+    try { localStorage.setItem(SN_PEND_FLAG, '1'); } catch (er) {}
+    _ppToast('↩ Put back. The Post Creator shows it the next time you open PostPilot. <button type="button" class="pd-btn" onclick="window.parent.location.reload()">Open it now</button>', 12000);
+  }
+  e.back = Date.now();
+  await _snPut('journal', undefined, e).catch(() => {});
+  render();
+  snJournalOpen();
+  _snSoon(2000);
+  return true;
+}
+
+// ── Asking before a lot is removed ──
+function _snAsk(list) {
+  const a = list[0];
+  if (!a || document.getElementById('sn-ask')) return;
+  const n = a.keys.length;
+  _sn.askNow = a;
+  _pdModal('sn-ask', `<div class="pd-mh"><h2>⚠ Remove ${n} posts on your other computer too?</h2></div>
+    <div class="pd-mb"><p class="pd-note">${n} posts and drafts of ${_pdE(_snBrandName(a.ws))} aren’t on this computer any more since the last sync. Did you delete them here? If you say yes, your other computer keeps them in 🗂 Removed or replaced by sync, where they can be put back.</p>
+    <ul class="sn-al">${a.titles.map(t => `<li>${_pdE(t)}</li>`).join('')}${n > a.titles.length ? `<li>and ${n - a.titles.length} more</li>` : ''}</ul></div>
+    <div class="pd-mf"><button type="button" class="pd-btn" onclick="snAnswer(false)">No, bring them back here</button><button type="button" class="pd-btn pd-primary" onclick="snAnswer(true)">Yes, remove them there too</button></div>`);
+}
+async function snAnswer(yes) {
+  const a = _sn.askNow;
+  pdCloseModal('sn-ask');
+  if (!a) return;
+  _sn.askNow = null;
+  await _snLocked(async () => {
+    await _snLoadSt(true);
+    const box = _snBox(yes ? 'allow' : 'keep', a.ws, 'out'), now = Date.now();
+    a.keys.forEach(k => { box[k] = now; });
+    await _snSaveSt();
+  });
+  _snRun('now', { full: true });
+}
+
+// ── Starting, pausing and the connection ──
+function _snParseRepo(owner, repo) {
+  owner = String(owner || '').trim(); repo = String(repo || '').trim();
+  const m = /github\.com\/([^/\s]+)\/([^/\s#?]+)/i.exec(repo) || /github\.com\/([^/\s]+)\/([^/\s#?]+)/i.exec(owner) || /^([^/\s]+)\/([^/\s]+)$/.exec(repo);
+  if (m) { owner = m[1]; repo = m[2]; }
+  return { owner: owner.replace(/^@/, ''), repo: repo.replace(/\.git$/i, '') };
+}
+function _snCode() { const c = _snCfg(); return 'PPSYNC1.' + btoa(JSON.stringify({ o: c.owner, r: c.repo, b: c.branch || 'main', t: c.token })); }
+function _snReadCode(s) {
+  const m = /PPSYNC1\.([A-Za-z0-9+/=]+)/.exec(String(s || '').replace(/\s+/g, ''));
+  if (!m) return null;
+  try { const j = JSON.parse(atob(m[1])); return j && j.o && j.r && j.t ? { owner: j.o, repo: j.r, branch: j.b || 'main', token: j.t } : null; } catch (e) { return null; }
+}
+async function snConnect() {
+  const f = _sn.form, msg = (t, bad) => { const el = document.getElementById('sn-msg'); if (el) { el.textContent = t; el.className = 'sn-msg' + (bad ? ' bad' : ''); } };
+  let c;
+  if (_sn.tab === 'code') { c = _snReadCode(f.code); if (!c) return msg('That doesn’t look like a connection code. Copy it again on your other computer (⚙ Settings → Sync between computers → 📋 Copy connection code).', true); }
+  else {
+    const r = _snParseRepo(f.owner != null ? f.owner : ((state.githubSync || {}).username || ''), f.repo);
+    c = { owner: r.owner, repo: r.repo, token: String(f.token || '').trim() };
+    if (!c.owner || !c.repo || !c.token) return msg('Fill in your GitHub account name, the repository’s name and the key (token).', true);
+  }
+  msg('Checking the repository…');
+  let j;
+  try { j = await _snApi('GET', _snR(c), null, c); }
+  catch (e) {
+    if (e.kind === 'missing') return msg(`GitHub can’t find ${c.owner}/${c.repo}. Check the names, and that the key (token) was made for this repository.`, true);
+    return msg(e.message, true);
+  }
+  if (!j.private) return msg('That repository is public, so anyone could see your posts. Please make a private repository for syncing (see the steps), then connect to that one.', true);
+  c.branch = j.default_branch || 'main';
+  const name = String(f.name || '').trim() || _snCfg().name || _snDefaultName();
+  // Is there already a copy in the repository, and does this computer have posts of its own?
+  let tree, ref = null;
+  try { ref = await _snApi('GET', _snR(c) + '/git/ref/heads/' + encodeURIComponent(c.branch), null, c); } catch (e) { if (e.kind !== 'missing' && e.kind !== 'conflict') return msg(e.message, true); }
+  try { tree = ref ? await _snReadTree(c, ref.object.sha) : { files: new Map(), pics: new Map() }; } catch (e) { return msg(e.message, true); }
+  const remoteHas = [...tree.files.keys()].some(p => /^ppsync\/ws_[abc]\/\d+\.json$/.test(p));
+  const localHas = WS_IDS.some(ws => { try { return _snCount(_snParse(_snRaw(ws))) > 0; } catch (e) { return true; } });
+  // the other computer's brand names, to check the brands line up
+  let theirNames = null;
+  const sp = tree.files.get(SN_DIR + '/settings.json');
+  if (sp) { try { const sj = await _snBlobJson(c, sp); const it = sj && sj.items && sj.items.postpilot_workspace_names; theirNames = it && typeof it.v === 'string' ? JSON.parse(it.v) : null; } catch (e) {} }
+  _snSetCfg(Object.assign({}, c, { name, on: false }));
+  _snDev();
+  _sn.st = null; _sn.tree = null;
+  await _snLoadSt();
+  if (remoteHas && localHas && !_sn.st.first) { msg(''); return _snFirstChoice(theirNames); }
+  _sn.st.mode = 'combine';
+  await _snSaveSt();
+  _snStart(remoteHas ? 'Bringing in your posts from the other computer…' : 'Sending your posts to GitHub…');
+}
+function _snFirstChoice(theirNames) {
+  const mine = getWorkspaceNames() || {}, def = { ws_a: 'Brand A', ws_b: 'Brand B', ws_c: 'Brand C' };
+  const norm = (v) => String(v || '').trim().toLowerCase();
+  // in a different order: a brand of theirs carries the name of another of mine (a plain rename isn't flagged)
+  const clash = theirNames ? WS_IDS.filter(ws => theirNames[ws] && theirNames[ws] !== def[ws] && norm(theirNames[ws]) !== norm(mine[ws]) && WS_IDS.some(o => o !== ws && mine[o] !== def[o] && norm(mine[o]) === norm(theirNames[ws]))) : [];
+  const warn = clash.length ? `<div class="sn-warn">⚠ The brands are in a different order on the two computers: ${clash.map(ws => `the other computer’s <b>${_pdE(theirNames[ws])}</b> is in the place of <b>${_pdE(mine[ws] || def[ws])}</b> here`).join('; ')}. Combining would mix those brands’ posts. Choose below, or press “Not now” and ask for help first.</div>` : '';
+  _pdModal('sn-first', `<div class="pd-mh"><h2>🔄 This computer has posts too</h2><button type="button" class="pd-x" aria-label="Close" onclick="pdCloseModal('sn-first')">✕</button></div>
+    <div class="pd-mb"><p class="pd-note">Your other computer already sent its posts to GitHub, and this computer has posts of its own. How should PostPilot start?</p>${warn}
+    <label class="sn-ch"><input type="radio" name="sn-mode" value="combine" ${clash.length ? '' : 'checked'}> <span><b>Combine them${clash.length ? '' : ' (recommended)'}</b><br>Everything from both computers stays. Where the same post differs, the other computer’s version is used, and this computer’s version is kept in 🗂 Removed or replaced by sync.</span></label>
+    <label class="sn-ch"><input type="radio" name="sn-mode" value="replace"> <span><b>Use the other computer’s posts</b><br>This computer’s posts and drafts are replaced by the other computer’s. What’s here now is kept in a snapshot, so this can be undone.</span></label></div>
+    <div class="pd-mf"><button type="button" class="pd-btn" onclick="pdCloseModal('sn-first')">Not now</button><button type="button" class="pd-btn pd-primary" onclick="snFirstGo()">Start syncing</button></div>`);
+}
+async function snFirstGo() {
+  const pick = document.querySelector('input[name="sn-mode"]:checked');
+  if (!pick) { showToast('Choose how to start first.', 'error'); return; }
+  const v = pick.value === 'replace' ? 'replace' : 'combine';
+  pdCloseModal('sn-first');
+  await _snLoadSt();
+  _sn.st.mode = v;
+  await _snSaveSt();
+  _snStart('Syncing for the first time…');
+}
+function _snStart(msg) {
+  _snSetCfg({ on: true });
+  _snMemNote();
+  _sn.form = {};
+  _snStatus('syncing', msg);
+  if (state.showSettings) render();
+  _snOldPics().catch(() => {}).then(() => _snRun('now', { full: true }));
+}
+function snPause(on) { _snSetCfg({ on: !!on }); if (on) _snRun('now', { full: true }); else { clearTimeout(_sn.timer); _sn.timer = 0; _snStatus('paused', 'Paused'); } render(); }
+function snSyncNow() { if (!_snOn()) return; _snRun('now', { full: true }); }
+async function snDisconnect() {
+  if (!confirm('Stop syncing this computer? Everything stays here as it is, and nothing is removed from GitHub. You can connect again later.')) return;
+  const c = _snCfg();
+  _pdSet(SN_CFG, { dev: c.dev, name: c.name });
+  _sn.tree = null; _sn.st = null;
+  _snStatus('off', '');
+  render();
+}
+async function snCopyCode() {
+  const ok = await _ppCopy(_snCode());
+  showToast(ok ? 'Connection code copied. Keep it private: it works like a password.' : 'Couldn’t copy. Select the code and copy it instead.', ok ? 'success' : 'error');
+}
+function snRename(v) { v = String(v || '').trim().slice(0, 40); if (v) _snSetCfg({ name: v }); }
+function snForm(k, v) { _sn.form[k] = v; }
+function snTab(t) { _sn.tab = t; render(); }
+function snUndoFirst() { return _snLocked(_snUndoFirst1); }
+async function _snUndoFirst1() {
+  await _snLoadSt(true);
+  const s = await _snGet('snap', 'first:' + _sn.st.id).catch(() => null);
+  if (!s) return;
+  if (!confirm('Put this computer back the way it was before its first sync? Its posts, drafts and settings go back to how they were then, and syncing pauses here. Your other computer and GitHub stay as they are.')) return;
+  if (typeof _uf !== 'undefined') _uf.switching = true; // nothing here saves over it on the way out
+  try { if (window.parent && window.parent !== window && typeof window.parent.saveToStorage === 'function') window.parent.saveToStorage = function () {}; } catch (e) {}
+  _snSetCfg({ on: false });
+  Object.entries(s.data || {}).forEach(([k, v]) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} });
+  try { await _snDel('kv', 'st:' + _sn.st.id); await _snDel('snap', 'first:' + _sn.st.id); for (const k of await _snKeys('pending')) await _snDel('pending', k); localStorage.removeItem(SN_PEND_FLAG); } catch (e) {}
+  (window.parent && window.parent !== window ? window.parent : window).location.reload();
+}
+
+// ── Pictures from the old GitHub Sync's "Image Storage" (kept only as links): saved onto this computer, so they
+//    sync like any other picture and stay safe ──
+async function _snOldPics() {
+  if (_sn.oldPicsDone) return;
+  const g = state.githubSync || {};
+  if (!_snOn() || !g.username || !g.repo || !g.token) return;
+  _sn.oldPicsDone = true;
+  const isGh = (v) => typeof v === 'string' && v.startsWith('https://raw.githubusercontent.com/');
+  const get = async (url, opt) => { const ac = typeof AbortController === 'function' ? new AbortController() : null, t = ac ? setTimeout(() => ac.abort(), 30e3) : 0; try { return await fetch(url, Object.assign({ cache: 'no-store', signal: ac ? ac.signal : undefined }, opt || {})); } catch (e) { return null; } finally { clearTimeout(t); } };
+  let data = null;
+  try {
+    const r = await get(`https://api.github.com/repos/${encodeURIComponent(g.username)}/${encodeURIComponent(g.repo)}/contents/postpilot-data.json?ref=${encodeURIComponent(g.branch || 'main')}`,
+      { headers: { Authorization: 'Bearer ' + g.token, Accept: 'application/vnd.github.raw+json' } });
+    if (!r || !r.ok) return;
+    data = JSON.parse(await r.text());
+  } catch (e) { return; }
+  const ws = data && data.workspace;
+  if (!ws || !WS_IDS.includes(ws)) return;
+  const read = (b, url) => { const ext = (/\.(png|jpe?g|webp|gif)$/i.exec(url) || [])[1] || ''; const type = /^image\//.test(b.type || '') ? b.type : ext ? 'image/' + (/jpe?g/i.test(ext) ? 'jpeg' : ext.toLowerCase()) : ''; if (!type) return null; return new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(b.type === type ? b : new Blob([b], { type })); }); };
+  const toData = async (url) => {
+    const r = await get(url);
+    if (r && r.ok) { const d = await read(await r.blob(), url); if (d) return d; }
+    // a private repository's link: the same file through GitHub, with the old key
+    const m = /^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/.exec(url);
+    if (!m) return null;
+    const r2 = await get(`https://api.github.com/repos/${m[1]}/${m[2]}/contents/${m[4]}?ref=${encodeURIComponent(m[3])}`, { headers: { Authorization: 'Bearer ' + g.token, Accept: 'application/vnd.github.raw' } });
+    return r2 && r2.ok ? await read(await r2.blob(), url) : null;
+  };
+  const found = [];
+  Object.entries(data.posts || {}).forEach(([pid, arr]) => (arr || []).forEach(p => { const u = isGh(p.imageOriginal) ? p.imageOriginal : isGh(p.image) ? p.image : null; if (u && p.id != null) found.push({ k: 'p', pid, id: String(p.id), u }); }));
+  Object.entries(data.drafts || {}).forEach(([pid, arr]) => (arr || []).forEach(d => { const u = isGh(d.imageFull) ? d.imageFull : isGh(d.imageThumb) ? d.imageThumb : null; if (u && d.id != null) found.push({ k: 'd', pid, id: String(d.id), u }); }));
+  let n = 0;
+  const lacks = async (f) => {
+    let G;
+    try { G = _snParse(_snRaw(ws)); } catch (e) { return null; }
+    const x = ((f.k === 'p' ? G.p : G.d)[f.pid] || []).find(o => o && String(o.id) === f.id);
+    if (!x || x.ppSyncPic) return null;
+    const ids = (f.k === 'p' ? [x.imageOriginalId, x.imageId] : [x.imageFullId]).filter(v => v && !String(v).startsWith('data:'));
+    return ids.length && (await _snHasPic(ids[0])) ? null : x;
+  };
+  for (const f of found) {
+    // only for a post here that has no picture of its own
+    const x = await lacks(f);
+    if (!x) continue;
+    const d = await toData(f.u);
+    if (!_snB64Url(d)) continue;
+    const id = await imgStore(d), thumbId = f.k === 'd' && !x.imageThumbId ? await imgStore(d) : null;
+    try { _bkSave(id, d, { ws, pid: f.pid, kind: f.k === 'p' ? 'post' : 'draft', post: f.id, name: x.imageName || '' }); } catch (e) {}
+    const dims = f.k === 'p' ? await getImageSizeLabel(d).catch(() => '') : '';
+    // into the saved post (and on screen, for the open brand), in one step, taking its turn with syncing
+    const done = await _snLocked(async () => {
+      for (let i = 0; i < 400 && (_sn.saving || _sn.applying || (typeof _uf !== 'undefined' && _uf.switching)); i++) await _snSleep(50);
+      if (!(await lacks(f))) return false;
+      let G2;
+      try { G2 = _snParse(_snRaw(ws)); } catch (e) { return false; }
+      const y = ((f.k === 'p' ? G2.p : G2.d)[f.pid] || []).find(o => o && String(o.id) === f.id);
+      if (!y) return false;
+      if (f.k === 'p') { y.imageOriginalId = y.imageId = id; } else { y.imageFullId = id; if (!y.imageThumbId && thumbId) y.imageThumbId = thumbId; }
+      y.imageFp = _ufFp(d);
+      try { localStorage.setItem(ws + '_' + (f.k === 'p' ? _STORAGE_KEY_BASE : _DRAFTS_STORAGE_KEY_BASE), JSON.stringify(f.k === 'p' ? G2.p : G2.d)); } catch (e) { return false; }
+      if (ws === getActiveWorkspace() && !(typeof _uf !== 'undefined' && _uf.switching)) {
+        const grp = f.k === 'p' ? state.posts : state.drafts, m = ((grp || {})[f.pid] || []).find(o => o && String(o.id) === f.id);
+        if (m && !_snB64Url(f.k === 'p' ? (m.imageOriginal || m.image) : m.imageFull)) {
+          if (f.k === 'p') { m.image = m.imageOriginal = d; m.imageOriginalId = m.imageId = id; m._imageDims = dims; } else { m.imageFull = d; m.imageFullId = id; if (!m.imageThumb) { m.imageThumb = d; m.imageThumbId = y.imageThumbId; } }
+          m.imageFp = y.imageFp;
+        }
+        _snMemNote();
+      }
+      _snMarkSaved(ws);
+      return true;
+    });
+    if (done) n++;
+    else { for (const i2 of [id, thumbId].filter(Boolean)) { try { imgDelete(i2); } catch (e) {} } } // not used after all
+  }
+  if (n) { render(); _ppToast(`🖼 ${n} picture${n === 1 ? '' : 's'} from the old GitHub image storage ${n === 1 ? 'is' : 'are'} now saved on this computer too, so ${n === 1 ? 'it syncs' : 'they sync'} and ${n === 1 ? 'stays' : 'stay'} safe.`, 9000); _snSoon(3000); }
+}
+
+// ── What you see ──
+function _snAgo(t) {
+  if (!t) return '';
+  const s = Math.round((Date.now() - t) / 1000);
+  if (s < 50) return 'just now';
+  if (s < 3600) return Math.round(s / 60) + ' min ago';
+  if (s < 86400) return Math.round(s / 3600) + ' hr ago';
+  return new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+function _snLine() {
+  const s = _sn.status, st = _sn.st || {};
+  if (!_snLinked()) return { cls: 'off', t: 'Off' };
+  if (!_snCfg().on) return { cls: 'paused', t: '⏸ Paused' };
+  if (!_sn.leader) return { cls: 'warn', t: 'PostPilot is open in another tab or window too. Syncing runs there; close this one so the two don’t save over each other.' };
+  if (s.s === 'syncing') return { cls: 'busy', t: '⟳ ' + (s.msg || 'Syncing…') };
+  if (s.s === 'error') return { cls: 'bad', t: '⚠ ' + s.msg };
+  if (s.s === 'offline') return { cls: 'warn', t: '☁ Offline: syncs when the internet is back' };
+  const at = st.lastOk || s.at;
+  return { cls: 'ok', t: '✓ ' + (s.msg && s.msg !== 'Up to date' ? s.msg : 'Up to date') + (at ? ' · synced ' + _snAgo(at) : '') };
+}
+function _snChipText(l) {
+  if (!_sn.leader && _snOn()) return '☁ Open in another tab';
+  if (l.cls === 'ok') return '☁ Synced' + (((_sn.st || {}).lastOk) ? ' · ' + _snAgo(_sn.st.lastOk) : '');
+  if (l.cls === 'busy') return '☁ Syncing…';
+  if (l.cls === 'bad') return '⚠ Sync needs you';
+  if (l.cls === 'warn') return '☁ Offline';
+  if (l.cls === 'paused') return '⏸ Sync paused';
+  return '';
+}
+function _snPaint() {
+  const l = _snLine();
+  document.querySelectorAll('.sn-chip').forEach(el => { el.className = 'sn-chip ' + l.cls; el.textContent = _snChipText(l); });
+  const el = document.getElementById('sn-status');
+  if (el) { el.className = 'sn-status ' + l.cls; el.textContent = l.t; }
+}
+function snOpen() { openSettings(); setTimeout(() => { const d = document.getElementById('sn-sec'); if (d) { d.open = true; d.scrollIntoView({ block: 'start', behavior: 'smooth' }); } }, 120); }
+function _snSection() {
+  const c = _snCfg(), linked = _snLinked(c), f = _sn.form, l = _snLine(), st = _sn.st || {};
+  const head = `<summary class="sn-sum"><span style="font-size:16px">🔄</span><span class="sn-h">Sync between computers</span><span class="sn-pill ${l.cls}">${linked ? (c.on ? '● On' : '⏸ Paused') : '○ Off'}</span><span style="margin-left:auto;font-size:11px;color:var(--text-muted)">click to open</span></summary>`;
+  const what = `<div class="sn-what"><b>What syncs:</b> every brand’s scheduled and posted posts, drafts and their pictures, brand names, tags, hashtag sets, best times, caps, templates, sales days, layouts, brand logos, and the Post Creator’s brand kit (logos, colors, fonts and look).<br><b>What stays on each computer:</b> keys and passwords (AI, Unsplash, Bluesky and the like), batches you’re still building, the photo library, posting streaks and sounds.</div>`;
+  if (!linked) {
+    if (f.owner == null && state.githubSync && state.githubSync.username) f.owner = state.githubSync.username;
+    const tabs = `<div class="sn-tabs" role="tablist"><button type="button" role="tab" aria-selected="${_sn.tab !== 'code'}" class="${_sn.tab !== 'code' ? 'on' : ''}" onclick="snTab('new')">Set up with GitHub</button><button type="button" role="tab" aria-selected="${_sn.tab === 'code'}" class="${_sn.tab === 'code' ? 'on' : ''}" onclick="snTab('code')">I have a connection code</button></div>`;
+    const form = _sn.tab === 'code'
+      ? `<label class="sn-l">Connection code from your other computer<textarea rows="3" spellcheck="false" placeholder="PPSYNC1.…" oninput="snForm('code', this.value)">${_pdE(f.code || '')}</textarea></label>`
+      : `<label class="sn-l">GitHub account name<input type="text" autocomplete="off" spellcheck="false" placeholder="e.g. melldee55" value="${_pdE(f.owner || '')}" oninput="snForm('owner', this.value)"></label>
+         <label class="sn-l">Private repository name<input type="text" autocomplete="off" spellcheck="false" placeholder="e.g. postpilot-data" value="${_pdE(f.repo || '')}" oninput="snForm('repo', this.value)"></label>
+         <label class="sn-l">Key (fine-grained token)<input type="password" autocomplete="off" placeholder="github_pat_…" value="${_pdE(f.token || '')}" oninput="snForm('token', this.value)"></label>`;
+    return `<details id="sn-sec" open class="sn-sec">${head}<div class="sn-body">
+      <div class="sn-note">Keep your posts, drafts, pictures and settings the same on each computer you use. PostPilot keeps them in a private GitHub repository that only you can see, and syncs by itself every few minutes and after each change.</div>
+      ${tabs}${form}
+      <label class="sn-l">This computer’s name<input type="text" maxlength="40" placeholder="e.g. Office computer" value="${_pdE(f.name != null ? f.name : (c.name || _snDefaultName()))}" oninput="snForm('name', this.value)"></label>
+      <button type="button" class="btn-save" onclick="snConnect()">🔗 Connect and sync</button>
+      <div id="sn-msg" class="sn-msg" role="status"></div>
+      ${what}</div></details>`;
+  }
+  const snapOk = st.first && Date.now() - st.first < SN_UNDO_MS;
+  const from = st.from && st.from.at ? `<div class="sn-sub">Last change from ${_pdE(st.from.name)} · ${_snAgo(st.from.at)}</div>` : '';
+  const pics = _sn.status.big ? `<div class="sn-sub">${_sn.status.big} picture${_sn.status.big === 1 ? ' is' : 's are'} over 25 MB, so ${_sn.status.big === 1 ? 'it stays' : 'they stay'} on the computer that has ${_sn.status.big === 1 ? 'it' : 'them'}.</div>` : '';
+  return `<details id="sn-sec" open class="sn-sec">${head}<div class="sn-body">
+    <div id="sn-status" class="sn-status ${l.cls}" role="status">${_pdE(l.t)}</div>${from}${pics}
+    <div class="sn-sub">Repository: <b>${_pdE(c.owner)}/${_pdE(c.repo)}</b> (private)</div>
+    <div class="sn-row">${c.on ? `<button type="button" class="btn-save" onclick="snSyncNow()">🔄 Sync now</button><button type="button" class="btn-cancel" onclick="snPause(false)">⏸ Pause</button>` : `<button type="button" class="btn-save" onclick="snPause(true)">▶ Resume syncing</button>`}</div>
+    <label class="sn-l">This computer’s name<input type="text" maxlength="40" value="${_pdE(c.name || '')}" onchange="snRename(this.value)"></label>
+    <div class="sn-row"><button type="button" class="btn-cancel" onclick="snCopyCode()">📋 Copy connection code</button><span class="sn-sub">for your other computer (it works like a password: keep it private)</span></div>
+    <div class="sn-row"><button type="button" class="btn-cancel" onclick="snJournalOpen()">🗂 Removed or replaced by sync</button>${snapOk ? `<button type="button" class="btn-cancel" onclick="snUndoFirst()">↩ Undo this computer’s first sync</button>` : ''}</div>
+    ${what}
+    <button type="button" class="sn-link" onclick="snDisconnect()">Stop syncing this computer</button></div></details>`;
+}
+// The old GitHub Sync: still holds the 📱 phone and Pinterest spreadsheet settings, but no longer copies posts around
+function _snOldNote(h) {
+  return h.replace(/<details\s+open\b/, '<details')
+    .replace('>GitHub Sync</span>', '>GitHub for 📱 phone posting and the Pinterest spreadsheet</span>')
+    .replace(/(<div style="padding:16px;border-top:1px solid var\(--border-light\);display:flex;flex-direction:column;gap:12px">)/, '$1<div class="sn-note">🔄 Sync between computers (above) keeps your posts in step now, so the old Pull and Push (and its image storage) are turned off. These settings are still used for 📱 phone posting and the Pinterest spreadsheet.</div>')
+    .replace('onclick="pullFromGitHub()"', 'disabled title="Sync between computers does this now"')
+    .replace('onclick="syncToGitHub(false)"', 'disabled title="Sync between computers does this now"');
+}
+const _snPrevGhSection = renderGithubSyncSection;
+renderGithubSyncSection = function () {
+  let old = '';
+  try { old = _snPrevGhSection.apply(this, arguments); } catch (e) {}
+  if (_snOn()) old = _snOldNote(old);
+  let mine = '';
+  try { mine = _snSection(); } catch (e) { console.warn('Sync section', e); }
+  return mine + old;
+};
+// While the new sync is on, the old one stays quiet (it replaced whole lists and could put older posts back), and
+// new pictures stay on this computer (as pictures, not links) so they sync and stay safe
+const _snPrevSyncGh = syncToGitHub, _snPrevPullGh = pullFromGitHub, _snPrevSchedGh = scheduleSyncToGitHub, _snPrevImgReady = ghImgReady;
+syncToGitHub = async function () { if (_snOn()) return; return _snPrevSyncGh.apply(this, arguments); };
+pullFromGitHub = async function () { if (_snOn()) return; return _snPrevPullGh.apply(this, arguments); };
+scheduleSyncToGitHub = function () { if (_snOn()) return; return _snPrevSchedGh.apply(this, arguments); };
+ghImgReady = function () { if (_snOn()) return false; return _snPrevImgReady.apply(this, arguments); };
+// The sidebar shows how syncing is going
+const _snPrevComingUp = renderComingUp;
+renderComingUp = function () {
+  const h = _snPrevComingUp.apply(this, arguments);
+  if (!_snLinked()) return h;
+  const l = _snLine();
+  return h.replace(/<\/div>\s*$/, `<button type="button" class="sn-chip ${l.cls}" onclick="snOpen()" title="Sync between computers">${_pdE(_snChipText(l))}</button></div>`);
+};
+// Posts waiting for their picture from the other computer aren't "missing" one, and the photo fill leaves them be
+const _snWaiting = (x) => !!(x && x.ppSyncPic && Object.keys(x.ppSyncPic).length) && _snLinked();
+const _snPrevMissing = _piMissing;
+_piMissing = function () {
+  const m = _snPrevMissing.apply(this, arguments) || { posts: [], drafts: [], n: 0 };
+  const posts = (m.posts || []).filter(e => !_snWaiting(e.p)), drafts = (m.drafts || []).filter(e => !_snWaiting(e.d));
+  return Object.assign({}, m, { posts, drafts, n: posts.length + drafts.length });
+};
+const _snPrevCollect = _ufCollect;
+_ufCollect = function () { return (_snPrevCollect.apply(this, arguments) || []).filter(it => !_snWaiting(it.x)); };
+const _snPrevIssues = _pdIssues;
+_pdIssues = function (p) {
+  const out = _snPrevIssues.apply(this, arguments);
+  return _snWaiting(p) && Array.isArray(out) ? out.map(t => (t === 'No image' ? 'The picture is still on its way from your other computer' : t)) : out;
+};
+// Every save here is dated, and brings the next sync closer (a few seconds after you stop)
+const _snPrevSavePosts = savePosts, _snPrevSaveDrafts = saveDrafts;
+savePosts = async function () {
+  _sn.saving++;
+  const ws = getActiveWorkspace();
+  try { return await _snPrevSavePosts.apply(this, arguments); }
+  finally { _sn.saving--; if (ws === getActiveWorkspace() && !_sn.saving) _snMemNote(); if (!_sn.applying) { _snMarkSaved(ws); _sn.memDirty = true; _snSoon(12000); } }
+};
+saveDrafts = async function () {
+  _sn.saving++;
+  const ws = getActiveWorkspace();
+  try { return await _snPrevSaveDrafts.apply(this, arguments); }
+  finally { _sn.saving--; if (ws === getActiveWorkspace() && !_sn.saving) _snMemNote(); if (!_sn.applying) { _snMarkSaved(ws); _sn.memDirty = true; _snSoon(12000); } }
+};
+// A brand switch waits for a sync's changes to land
+const _snPrevSwitch = switchWorkspace;
+switchWorkspace = async function () {
+  for (let i = 0; (_sn.applying || _sn.saving) && i < 200; i++) await _snSleep(50);
+  const r = await _snPrevSwitch.apply(this, arguments);
+  _snMemNote();
+  _snSoon(3000);
+  return r;
+};
+window.switchWorkspace = switchWorkspace;
+(function () {
+  const st = document.createElement('style');
+  st.textContent = `.sn-sec { border: 1px solid var(--border-light); border-radius: var(--radius-md); overflow: hidden; margin-bottom: 18px; }
+    .sn-sum { cursor: pointer; padding: 12px 16px; background: var(--bg-elevated); display: flex; align-items: center; gap: 10px; list-style: none; user-select: none; }
+    .sn-h { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+    .sn-pill { font-size: 11px; font-weight: 600; color: var(--text-muted); } .sn-pill.ok, .sn-pill.busy { color: #4ade80; } .sn-pill.bad { color: #fc7e7e; }
+    .sn-body { padding: 16px; border-top: 1px solid var(--border-light); display: flex; flex-direction: column; gap: 10px; }
+    .sn-note, .sn-what { font-size: 11.5px; color: var(--text-muted); line-height: 1.6; background: var(--bg-elevated); border-radius: 6px; padding: 10px 12px; }
+    .sn-warn { font-size: 12px; line-height: 1.55; background: rgba(245, 158, 11, .12); border: 1px solid rgba(245, 158, 11, .45); border-radius: 6px; padding: 10px 12px; margin: 8px 0; }
+    .sn-l { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
+    .sn-l input, .sn-l textarea { font: inherit; font-weight: 400; font-size: 13px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-light); background: var(--bg-card); color: var(--text-primary); }
+    .sn-tabs { display: flex; gap: 6px; flex-wrap: wrap; } .sn-tabs button { font: inherit; font-size: 12px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border-light); background: var(--bg-card); color: var(--text-secondary); cursor: pointer; }
+    .sn-tabs button.on { background: var(--accent, #7b3499); border-color: transparent; color: #fff; }
+    .sn-msg { font-size: 12px; min-height: 16px; color: var(--text-muted); } .sn-msg.bad { color: #fc7e7e; }
+    .sn-status { font-size: 13px; font-weight: 600; } .sn-status.ok { color: #4ade80; } .sn-status.busy { color: #f59e0b; } .sn-status.bad { color: #fc7e7e; } .sn-status.warn, .sn-status.paused { color: var(--text-muted); }
+    .sn-sub { font-size: 11.5px; color: var(--text-muted); }
+    .sn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .sn-link { background: none; border: none; color: var(--text-muted); font: inherit; font-size: 11px; cursor: pointer; text-align: left; padding: 0; text-decoration: underline; }
+    .sn-chip { display: block; width: 100%; margin-top: 4px; font: inherit; font-size: 11px; text-align: left; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border-light); background: transparent; color: var(--text-muted); cursor: pointer; }
+    .sn-chip.ok { color: #4ade80; } .sn-chip.busy { color: #f59e0b; } .sn-chip.bad { color: #fc7e7e; border-color: #fc7e7e; }
+    .sn-jg { margin-top: 10px; } .sn-jgh { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 700; color: var(--text-secondary); padding: 6px 0; border-bottom: 1px solid var(--border-light); }
+    .sn-jr { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border-light); }
+    .sn-jt { font-size: 12px; min-width: 0; } .sn-jx { font-size: 12.5px; color: var(--text-primary); margin-top: 2px; overflow-wrap: anywhere; } .sn-jw { font-size: 11px; color: var(--text-muted); margin-top: 2px; } .sn-jd { font-size: 11.5px; color: #4ade80; white-space: nowrap; }
+    .sn-ch { display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; line-height: 1.5; padding: 10px 0; cursor: pointer; } .sn-ch input { margin-top: 4px; }
+    .sn-al { font-size: 12px; margin: 6px 0 0 18px; padding: 0; color: var(--text-secondary); }`;
+  document.head.appendChild(st);
+})();
+// Only one tab syncs (with two open, the other says so)
+if (navigator.locks && navigator.locks.request) navigator.locks.request('postpilot-sync-leader', () => { _sn.leader = true; _snPaint(); if (_snOn() && _sn.ready) _snSoon(2000); return new Promise(() => {}); }).catch(() => { _sn.leader = true; });
+else _sn.leader = true;
+// Syncing starts once PostPilot has loaded, then runs every few minutes, after changes and when you come back
+document.addEventListener('DOMContentLoaded', () => {
+  const t0 = Date.now();
+  const wait = () => {
+    const app = document.getElementById('app');
+    if (app && app.style.display === 'flex' && state.posts && typeof state.posts === 'object') {
+      _sn.ready = true; _snMemNote(); _snPaint();
+      if (_snOn()) { _snSoon(4000); setTimeout(() => { if (_sn.leader) _snOldPics().catch(() => {}); }, 15000); }
+    } else if (Date.now() - t0 < 180e3) setTimeout(wait, 1000);
+  };
+  setTimeout(wait, 1500);
+});
+setInterval(() => {
+  if (!_snOn() || !_sn.ready) return;
+  if (_sn.needRender && !_snBusy()) { _sn.needRender = false; try { render(); } catch (e) {} }
+  const gap = document.hidden ? 10 * 60e3 : 3 * 60e3;
+  if (Date.now() - _sn.lastRun > gap && !_sn.running) _snRun('tick');
+  _snPaint();
+}, 30e3);
+const _snBack = () => { if (_snOn() && _sn.ready && Date.now() - _sn.lastRun > 60e3) _snSoon(1500); };
+window.addEventListener('focus', _snBack);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) _snBack(); });
+window.addEventListener('online', () => { if (_snOn()) _snSoon(2000); });
+try { if (window.parent && window.parent !== window) window.parent.addEventListener('focus', _snBack); } catch (e) {}
+
 </scr_PPESC_ipt>
 
   <!_PPESC_-- ── Floating action button (new post) ─────────────────────── -->
@@ -47120,6 +48859,113 @@ function ppWeekCapNote(pid) { try { const c = PP_WEEK_CAP[pid]; return c ? ` · 
         });
         return ranked;
       }
+
+      // ═════════════════════════════════════════════════════════════════
+      // SYNC BETWEEN COMPUTERS (v121): the Post Creator's part
+      // Brand kit changes (logos, colors, fonts and look) that arrived from your other computer while PostPilot was
+      // open go in place here, before the Post Creator loads them. A setting you changed on this computer since then
+      // stays as you left it (the next sync sorts out which is newer). While Sync between computers is on, the
+      // Post Creator's old GitHub Sync stays quiet: it would put an older copy back.
+      // ═════════════════════════════════════════════════════════════════
+      function ppSyncOn() {
+        try {
+          const c = JSON.parse(localStorage.getItem("postpilot_sync_cfg") || "null");
+          return !!(c && c.on && c.owner && c.repo && c.token);
+        } catch (e) {
+          return false;
+        }
+      }
+      // the same quick hash the Scheduler's part uses
+      function _psH(str) {
+        str = String(str);
+        let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+        for (let i = 0, ch; i < str.length; i++) { ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+        h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507); h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+        h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507); h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+        return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+      }
+      function ppSyncBootNeeded() {
+        try { return localStorage.getItem("postpilot_sync_pending") === "1"; } catch (e) { return false; }
+      }
+      function _psDb() {
+        return new Promise((res, rej) => {
+          let r;
+          try { r = indexedDB.open("postpilot_sync", 1); } catch (e) { return rej(e); }
+          r.onupgradeneeded = () => {
+            const db = r.result;
+            ["kv", "pending", "snap"].forEach((s) => { if (!db.objectStoreNames.contains(s)) db.createObjectStore(s); });
+            if (!db.objectStoreNames.contains("journal")) db.createObjectStore("journal", { keyPath: "n", autoIncrement: true });
+          };
+          r.onsuccess = () => res(r.result);
+          r.onerror = () => rej(r.error);
+          r.onblocked = () => rej(new Error("blocked"));
+        });
+      }
+      async function ppSyncBoot() {
+        const db = await _psDb();
+        try {
+          const all = await new Promise((res) => { const q = db.transaction("pending", "readonly").objectStore("pending").getAll(); q.onsuccess = () => res(q.result || []); q.onerror = () => res([]); });
+          const done = [], kept = [];
+          for (const p of all) {
+            if (!p || !p.key) continue;
+            done.push(p.name);
+            try {
+              const raw = localStorage.getItem(p.key);
+              let o = {}, old = raw;
+              if (p.field) {
+                try { o = raw ? JSON.parse(raw) || {} : {}; } catch (e) { continue; } // unreadable here: left alone
+                old = o[p.field] === undefined ? null : o[p.field];
+                if (_psH(JSON.stringify(old)) !== p.localH) continue; // changed here since
+              } else if (_psH(raw == null ? "\u0000" : raw) !== p.localH) continue; // changed here since
+              // the value it replaces is kept in 🗂 Removed or replaced by sync first (logos and fonts included)
+              if (old !== null && JSON.stringify(old) !== JSON.stringify(p.value)) {
+                const ok = await new Promise((res) => { const tx = db.transaction("journal", "readwrite"); tx.objectStore("journal").put({ at: Date.now(), kind: "set", key: p.name, name: p.name, why: "replaced", by: p.by || "", label: p.label || p.name, old, ws: "" }); tx.oncomplete = () => res(true); tx.onerror = () => res(false); tx.onabort = () => res(false); });
+                if (!ok) { done.pop(); continue; } // no copy, no change (tried again next time)
+                kept.push(p.name);
+              }
+              if (p.field) {
+                if (p.value === null) delete o[p.field];
+                else o[p.field] = p.value;
+                localStorage.setItem(p.key, JSON.stringify(o));
+              } else if (p.value === null) localStorage.removeItem(p.key);
+              else localStorage.setItem(p.key, String(p.value));
+            } catch (e) {} // a full storage leaves the old value; the next sync tries again
+          }
+          await new Promise((res) => { const tx = db.transaction("pending", "readwrite"); done.forEach((n) => tx.objectStore("pending").delete(n)); tx.oncomplete = res; tx.onerror = res; tx.onabort = res; });
+          localStorage.removeItem("postpilot_sync_pending");
+        } finally {
+          try { db.close(); } catch (e) {}
+        }
+      }
+      // Start the Post Creator after the brand kit is in place (never waiting more than a few seconds)
+      function ppSyncThenStart(go) {
+        let started = false;
+        const once = () => { if (!started) { started = true; go(); } };
+        if (!ppSyncBootNeeded()) return once();
+        setTimeout(once, 4000);
+        ppSyncBoot().catch((e) => console.warn("Brand kit from your other computer:", e)).then(once);
+      }
+      // The Post Creator's old GitHub Sync stays quiet while Sync between computers is on
+      (function () {
+        const quiet = (name, say) => {
+          const f = window[name];
+          if (typeof f !== "function") return;
+          window[name] = function () {
+            if (ppSyncOn()) {
+              if (say && typeof showPfToast === "function") showPfToast("🔄 Sync between computers keeps the Post Creator in step now (Scheduler ⚙ Settings).");
+              return Promise.resolve();
+            }
+            return f.apply(this, arguments);
+          };
+        };
+        quiet("bpcSyncToGitHub", false); // (its button says it)
+        quiet("bpcAutoPullOnStartup", false);
+        quiet("bpcScheduleSync", false);
+        quiet("bpcPullFromGitHub", true);
+        // and new backgrounds and logos stay on this computer as pictures (not links in the old image storage)
+        const cfg = window.bpcGetGhConfig;
+        if (typeof cfg === "function") window.bpcGetGhConfig = function () { return ppSyncOn() ? null : cfg.apply(this, arguments); };
+      })();
     </script>
     <script>
       // ══════════════════════════════════════════
@@ -47168,9 +49014,14 @@ function ppWeekCapNote(pid) { try { const c = PP_WEEK_CAP[pid]; return c ? ` · 
         // On a phone with #phone: just today's posts, ready to share (the full Studio doesn't load)
         if (typeof ppPhoneWanted === "function" && ppPhoneWanted()) return ppPhoneStart();
         if (typeof ppPhoneHint === "function") setTimeout(ppPhoneHint, 1500);
-        _init(); // the Post Creator
-        // Start the Scheduler in the background so posts you send land right away
-        document.getElementById("sched-frame").srcdoc = _schedulerSource();
+        // Brand kit changes from your other computer go in first (v121), then the Post Creator and the Scheduler start
+        const go = () => {
+          _init(); // the Post Creator
+          // Start the Scheduler in the background so posts you send land right away
+          document.getElementById("sched-frame").srcdoc = _schedulerSource();
+        };
+        if (typeof ppSyncThenStart === "function") ppSyncThenStart(go);
+        else go();
       }
 
       // Highlights a tab (the Pinterest batch uses this when it opens or closes itself)
