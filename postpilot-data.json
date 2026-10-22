@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-10-22T03:34:03.379Z",
+  "lastSaved": "2026-10-22T03:35:24.275Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -3239,7 +3239,7 @@
       {
         "id": 1792633506013.0715,
         "platform": "pinterest",
-        "scheduledDate": "2026-10-21",
+        "scheduledDate": "2026-10-26",
         "scheduledTime": "19:35",
         "timezone": "America/Los_Angeles",
         "publishStatus": "scheduled",
@@ -3349,7 +3349,7 @@
       {
         "id": 1792633506013.5278,
         "platform": "pinterest",
-        "scheduledDate": "2026-10-21",
+        "scheduledDate": "2026-10-22",
         "scheduledTime": "19:55",
         "timezone": "America/Los_Angeles",
         "publishStatus": "scheduled",
@@ -4013,7 +4013,7 @@
       {
         "id": 1792633506013.422,
         "platform": "pinterest",
-        "scheduledDate": "2026-10-21",
+        "scheduledDate": "2026-10-22",
         "scheduledTime": "20:35",
         "timezone": "America/Los_Angeles",
         "publishStatus": "scheduled",
