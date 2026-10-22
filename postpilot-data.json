@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSaved": "2026-10-22T02:53:36.343Z",
+  "lastSaved": "2026-10-22T02:56:36.467Z",
   "workspace": "ws_a",
   "posts": {
     "pinterest": [
@@ -3911,9 +3911,9 @@
         "id": 1792633506013.2485,
         "platform": "pinterest",
         "scheduledDate": "2026-10-21",
-        "scheduledTime": "20:15",
+        "scheduledTime": "19:56",
         "timezone": "America/Los_Angeles",
-        "publishStatus": "scheduled",
+        "publishStatus": "published",
         "publishError": "",
         "publishedAt": null,
         "imageName": "Php2shell-just-put-most-california-business-websites-at-risk_0070_Pinterest.png",
@@ -3955,9 +3955,15 @@
         "ytDriveUrl": "",
         "ytLiveUrl": "",
         "tags": [],
-        "liveUrl": "",
+        "liveUrl": "https://www.pinterest.com/pin/1104718983636962402/",
         "fromBrandCreator": true,
-        "pinnedDay": true
+        "pinnedDay": true,
+        "platformScheduled": false,
+        "liveAt": 1792637784819,
+        "plannedFor": {
+          "date": "2026-10-21",
+          "time": "20:15"
+        }
       },
       {
         "id": 1792633506013.422,
