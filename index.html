@@ -3385,7 +3385,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 6px">
               <div class="sb-title">PostPilot Post Creator</div>
-              <span class="sb-version">v121</span>
+              <span class="sb-version">v122</span>
               <button
                 class="settings-btn"
                 onclick="openSettings()"
@@ -36024,7 +36024,7 @@ function renderPlanWeek() {
   return `<div class="overlay" onclick="ppClosePlanWeek()" style="z-index:820"><div class="modal" style="max-width:680px" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="pw-title">
     <div class="modal-header"><h2 class="modal-title" id="pw-title">🗓 Plan my week</h2><button class="close-btn" onclick="ppClosePlanWeek()" aria-label="Close">×</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;max-height:68vh;overflow-y:auto">
-      <div class="pw-top"><span>Each platform's drafts go onto its best days and times: one post a day (Pinterest: up to ${ppDailyCap('pinterest')} a day)${ppWeekendsOff() ? ', weekdays only' : ''}. <button type="button" class="od-mk" onclick="ppOpenBestTimes()">⭐ Edit best times</button></span>
+      <div class="pw-top"><span>Each platform's drafts go onto its best days and times, up to its posts a day and spaced through the day${ppWeekendsOff() ? ', weekdays only' : ''}${typeof ppCapSummary === 'function' ? ': ' + ppCapSummary(rows.map(r => r.pl.id)) : ''}. <button type="button" class="od-mk" onclick="ppOpenBestTimes()">⭐ Edit best times</button></span>
         <label>Plan <select aria-label="How far ahead to plan" onchange="state.planWeek.days = +this.value; render()">${[7, 14, 30].map(d => `<option value="${d}" ${d === pw.days ? 'selected' : ''}>${d === 7 ? 'this week (7 days)' : 'the next ' + d + ' days'}</option>`).join('')}</select></label></div>
       ${rows.length ? rows.map(sec).join('') : `<div class="pw-empty">No drafts to plan yet. Send posts to Drafts from the Post Creator (🗂 Save to Drafts), then come back here.</div>`}
     </div>
@@ -36330,7 +36330,7 @@ function renderBestTimes() {
   return `<div class="overlay" onclick="ppCloseBestTimes()" style="z-index:830"><div class="modal" style="max-width:760px" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="bt-title">
     <div class="modal-header"><h2 class="modal-title" id="bt-title">⭐ Best days and times</h2><button class="close-btn" onclick="ppCloseBestTimes()" aria-label="Close">×</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;max-height:68vh;overflow-y:auto">
-      <div class="pw-top"><span>Plan my week, Batch Schedule, ⚡ Post next and ✨ Best fit use these. They start from general industry guidance; tune them to when your audience is most active.</span></div>
+      <div class="pw-top"><span>Plan my week, Batch Schedule, ⚡ Post next and ✨ Best fit use these, filling each best day up to its posts a day, spaced a few hours apart. They start from general industry guidance; tune them to when your audience is most active.</span></div>${typeof ppDayCapNote === 'function' ? ppDayCapNote() : ''}
       ${pls.map(pl => { const list = ppBestSlots(pl.id); const custom = !!_ppBestStore()[pl.id];
         return `<div class="pw-sec bt-row" style="border-left-color:${pl.color}"><div class="pw-head"><span style="color:${pl.color};font-weight:700;min-width:110px">${escapeHtml(pl.name)}</span>
           <span class="bt-days">${[1, 2, 3, 4, 5, 6, 0].map(d => { const on = list.find(([w]) => w === d);
@@ -36416,7 +36416,7 @@ function _ppAsOcc(pid, taken) {
   if (taken instanceof Set) { const m = new Map(); taken.forEach(d => m.set(d, { n: 1e9, times: new Set() })); return m; } // a set of days: those days are full
   return _ppOcc(pid);
 }
-const _ppFreeAt = (pid, occ, s) => { const o = occ.get(s.date); return !o || (o.n < ppDailyCap(pid) && !o.times.has(s.time)); };
+const _ppFreeAt = (pid, occ, s) => ppSlotFree(pid, occ, s); // room that day (and week), spaced from the posts already there
 const _ppTakeAt = (occ, s) => { const o = occ.get(s.date) || { n: 0, times: new Set() }; o.n++; o.times.add(s.time); occ.set(s.date, o); };
 function _ppTaken(pid, exclude) { return _ppOcc(pid, exclude); }
 function ppNextFree(pid, fromMs, taken, days) { const occ = _ppAsOcc(pid, taken); return ppSlotsFrom(pid, fromMs, days || 120).find(s => _ppFreeAt(pid, occ, s)) || null; }
@@ -36445,7 +36445,7 @@ function _ppBatchPlan(pid, n, startDate, spacing, time) {
     const late = time && new Date(today + 'T' + time) <= new Date();
     for (let g = 0; out.length < n && g < 800; g++) {
       const s = _ppDayStr(cur), o = occ.get(s);
-      if ((!o || (o.n < cap && !o.times.has(time))) && !_ppSkipDay(s) && !(s === today && late)) out.push(s);
+      if (_ppFreeAt(pid, occ, { date: s, time: time || '' }) && !_ppSkipDay(s) && _ppDayOk(pid, s) && !(s === today && late)) { out.push(s); _ppTakeAt(occ, { date: s, time: time || '' }); }
       cur.setDate(cur.getDate() + 1);
     }
     return out;
@@ -36636,12 +36636,12 @@ function renderBestTimes() {
       <div class="bt-brand" role="group" aria-label="Weekends for ${escapeHtml(_ppBrand())}">🌙 Weekends for <b>${escapeHtml(_ppBrand())}</b>:
         <button type="button" class="${off ? '' : 'on'}" aria-pressed="${off ? 'false' : 'true'}" onclick="ppSetWeekendsOff(false)">Post on weekends</button>
         <button type="button" class="${off ? 'on' : ''}" aria-pressed="${off ? 'true' : 'false'}" onclick="ppSetWeekendsOff(true)">Keep weekends clear</button></div>
-      <div class="pw-top"><span>Plan my week, Batch Schedule, ⚡ Post next and ✨ Best fit use these. They start from general industry guidance; tune them to when your audience is most active.</span></div>
+      <div class="pw-top"><span>Plan my week, Batch Schedule, ⚡ Post next and ✨ Best fit use these, filling each best day up to its posts a day, spaced a few hours apart. They start from general industry guidance; tune them to when your audience is most active.</span></div>${typeof ppDayCapNote === 'function' ? ppDayCapNote() : ''}
       ${pls.map(pl => { const list = ppBestSlots(pl.id); const custom = !!_ppBestStore()[pl.id];
         return `<div class="pw-sec bt-row" style="border-left-color:${pl.color}"><div class="pw-head"><span style="color:${pl.color};font-weight:700;min-width:110px">${escapeHtml(pl.name)}</span>
           <span class="bt-days">${[1, 2, 3, 4, 5, 6, 0].map(d => { const on = list.find(([w]) => w === d), wk = off && (d === 0 || d === 6);
             return `<span class="bt-day${on ? ' on' : ''}${wk ? ' off' : ''}"><button type="button" aria-pressed="${on ? 'true' : 'false'}" ${wk ? `disabled title="${escapeHtml(_ppBrand())} keeps weekends clear"` : ''} onclick="ppToggleBestDay('${pl.id}', ${d})">${_PP_DOW[d]}</button>${on && !wk ? `<select aria-label="${escapeHtml(pl.name)} ${_PP_DOW[d]} time" onchange="ppSetBestTime('${pl.id}', ${d}, this.value)">${_ppTimeOpts(on[1]).map(t => `<option value="${t}" ${t === on[1] ? 'selected' : ''}>${_ppClock(t)}</option>`).join('')}</select>` : ''}</span>`; }).join('')}</span>
-          ${pl.id === 'pinterest' ? `<label class="bt-cap">Pins per day <select aria-label="Pinterest pins per day" onchange="ppSetPinCap(+this.value)">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${n === ppDailyCap('pinterest') ? 'selected' : ''}>${n}</option>`).join('')}</select></label>` : ''}
+          ${typeof ppDayCapRow === 'function' ? ppDayCapRow(pl.id) : ''}
           ${typeof ppNxdCapRow === 'function' ? ppNxdCapRow(pl.id) : ''}
           ${custom ? `<button type="button" class="od-mk" onclick="ppResetBestTimes('${pl.id}')">Reset</button>` : ''}</div></div>`; }).join('')}
     </div>
@@ -36677,7 +36677,7 @@ function _ppCalLegend(list) {
   if (!list.length && !f) return `<span style="font-size:11px;color:var(--text-muted);font-style:italic">No scheduled posts yet</span>`;
   const chips = [`<button type="button" class="cal-flt${f ? '' : ' on'}" aria-pressed="${f ? 'false' : 'true'}" onclick="ppCalFilter('')" title="Show every platform">All</button>`]
     .concat(list.map(p => `<button type="button" class="cal-flt${f === p.id ? ' on' : ''}" aria-pressed="${f === p.id ? 'true' : 'false'}" style="--pc:${p.color}" onclick="ppCalFilter('${p.id}')" title="Show only ${escapeHtml(p.name)} on the calendar"><span class="cal-legend-dot" style="background:${p.color}"></span>${escapeHtml(p.name)}</button>`));
-  const cap = f === 'pinterest' ? `<label class="cal-cap-set">Pins per day <select aria-label="Pinterest pins per day" onchange="ppSetPinCap(+this.value)">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${n === ppDailyCap('pinterest') ? 'selected' : ''}>${n}</option>`).join('')}</select></label>` : '';
+  const cap = typeof ppCalCapSet === 'function' ? ppCalCapSet(f) : '';
   return chips.join('') + cap;
 }
 function _ppCalCap(ds, n) {
@@ -37303,7 +37303,7 @@ function _ppRedistPlan(onlyDay, off) {
       let s = ppSlotsFrom(o.pid, from, 180).find(x => _ppFreeAt(o.pid, occ, x) && (!h || x.date <= h.end)) || null, earlier = false;
       if (!s && h) {
         const cands = ppSlotsFrom(o.pid, Math.max(now, _ppT(h.start, '00:00')), 120).filter(x => x.date < o.date && _ppFreeAt(o.pid, occ, x));
-        s = cands.length ? cands[cands.length - 1] : null; earlier = !!s;
+        s = cands.length ? cands.reduce((a, b) => (b.t > a.t ? b : a)) : null; earlier = !!s;
       }
       if (s) _ppTakeAt(occ, s);
       moves.push({ pid: o.pid, day: o.date, p, to: s, earlier, hname: h ? h.name : '', holiday: h && !s ? h.name : '' });
@@ -37347,7 +37347,7 @@ function renderRedistribute() {
     const stayN = o.locked.length + o.keep.length, atCap = stayN >= o.cap;
     const rows = o.list.map(p => {
       const id = String(p.id), locked = _ppLocked(p, now), stays = keepIds.has(id), m = to.get(id), w = why(p);
-      const state_ = locked ? `<span class="rd-pill lock">🔒 ${p.publishStatus === 'published' ? 'live' : 'time has passed'}</span>`
+      const state_ = locked ? `<span class="rd-pill lock">🔒 ${p.publishStatus === 'published' || _ppLiveUrl(p) ? 'live' : p.platformScheduled ? 'scheduled on ' + escapeHtml(pl.name) : p.publishStatus === 'publishing' ? 'posting now' : 'time has passed'}</span>`
         : stays ? `<span class="rd-pill stay">📌 Stays${p.pinnedDay ? ' (held)' : ''}</span>`
         : `<span class="bf-when rd-to">→ <b>${m && m.to ? _ppSlotLabel(m.to) : 'no free best time'}</b></span>${m && m.earlier ? `<span class="bf-why">earlier in the ${escapeHtml(m.hname)} lead-up</span>` : ''}`;
       const btns = locked || !on ? '' : (stays
@@ -39173,7 +39173,7 @@ function savePost(addToQueue = false) {
     const postsOnDate = platformPosts.filter(p =>
       p.scheduledDate === form.scheduledDate && (!isNew ? String(p.id) !== String(state.editingPostId) : true)
     ).length;
-    if (postsOnDate >= dailyLimit) {
+    if (postsOnDate >= dailyLimit && !(typeof ppSameDayEdit === 'function' && ppSameDayEdit(isNew, form))) {
       showToast(`Daily limit reached! Max ${dailyLimit} post${dailyLimit !== 1 ? 's' : ''}/day on ${PLATFORMS[state.activePlatform].name}.`, 'error');
       return;
     }
@@ -47118,7 +47118,7 @@ const SN_LOOK = ['font', 'hFont', 'cFont', 'sFont', 'hAlign', 'cAlign', 'sAlign'
   'logo2Pos', 'logo2Size', 'logo2Back', 'logo2Aspect', 'logo2Brands', 'palIdx', 'fnPrefix', 'siteURL', 'siteTagBg', 'siteTagPos', 'hDropShadow', 'bDropShadow', 'hOutline', 'bOutline', 'hOutlineColor',
   'bOutlineColor', 'ovBg', 'ovPrimary', 'ovAccent', 'ovHighlight', 'ovShapes', 'ovOverlay', 'logoPosPreset', 'logoX', 'logoY'];
 const SN_SETTINGS = [
-  ['*_pp_best_slots', 1], ['*_pp_default_times', 1], ['*_pp_weekends_off', 1], ['*_pp_pin_cap', 1], ['*_pp_nd_week_cap', 1], ['*_pp_al_rotation', 1],
+  ['*_pp_best_slots', 1], ['*_pp_default_times', 1], ['*_pp_weekends_off', 1], ['*_pp_pin_cap', 1], ['*_pp_day_caps', 1], ['*_pp_nd_week_cap', 1], ['*_pp_al_rotation', 1],
   ['*_postpilot_pd_comment_tpl', 1], ['*_postpilot_sales_days', 1], ['*_postpilot_uf_credit_comment', 1], ['*_pp_layout_look', 1], ['*_postpilot_brand_logo', 1],
   ['*_postflow_custom_tags', 1], ['*_postpilot_hashtag_sets', 1], ['*_postpilot_analytics', 1, 'map'], ['*_postpilot_hidden_platforms', 1], ['*_postpilot_platform_order', 1],
   ['postpilot_workspace_names', 1], ['postpilot_default_tz', 1], ['postpilot_pd_ahead_days', 1], ['postpilot_pd_ahead_plats', 1], ['postpilot_pd_pin_board', 1],
@@ -47168,7 +47168,7 @@ const SN_HOOK = {
   postpilot_platform_order: () => { const v = _pdLS(wsKey('postpilot_platform_order'), null); if (Array.isArray(v)) state.platformOrder = typeof _ppAddAlignable === 'function' ? _ppAddAlignable(v) : v; },
   postpilot_live_holidays_enabled: () => { state.liveHolidayFeedEnabled = isLiveHolidayFeedEnabled(); },
 };
-const SN_SET_NAMES = { pp_best_slots: 'Best times', pp_default_times: 'Default times', pp_weekends_off: 'Weekends', pp_pin_cap: 'Pins per day', pp_nd_week_cap: 'Nextdoor posts a week', pp_al_rotation: 'Alignable rotation',
+const SN_SET_NAMES = { pp_best_slots: 'Best times', pp_default_times: 'Default times', pp_weekends_off: 'Weekends', pp_pin_cap: 'Pins per day', pp_day_caps: 'Posts a day', pp_nd_week_cap: 'Nextdoor posts a week', pp_al_rotation: 'Alignable rotation',
   postpilot_pd_comment_tpl: 'First comment template', postpilot_sales_days: 'Sales days', postpilot_uf_credit_comment: 'Photo credit comment', pp_layout_look: 'Layout look', postpilot_brand_logo: 'Brand logo',
   postflow_custom_tags: 'Tags', postpilot_hashtag_sets: 'Hashtag sets', postpilot_hidden_platforms: 'Hidden platforms', postpilot_platform_order: 'Platform order', postpilot_workspace_names: 'Brand names',
   postpilot_default_tz: 'Time zone', bpc_pal_slots: 'Brand kit colors', bpc_logo: 'Post Creator logo', bpc_logo2: 'Second logo', bpc_wm_logo: 'Watermark logo', pp_icon_alignable: 'Alignable icon',
@@ -47967,6 +47967,694 @@ window.addEventListener('focus', _snBack);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) _snBack(); });
 window.addEventListener('online', () => { if (_snOn()) _snSoon(2000); });
 try { if (window.parent && window.parent !== window) window.parent.addEventListener('focus', _snBack); } catch (e) {}
+
+// ═════════════════════════════════════════════════════════════════
+// POSTS A DAY (v122): every platform fills its best days up to its own daily limit, spaced through the day
+//  • Each brand picks "Posts a day" for each platform under ⭐ Best times (and on the calendar when it shows one
+//    platform). It starts at the most each platform takes without being treated as spam, the top of its safe range:
+//    Facebook 2, Instagram 3, LinkedIn 2, Google Business 1, Pinterest 10, X 5, Bluesky 5, TikTok 4, YouTube 3,
+//    Tumblr 5, Ko-fi 2, Patreon 2, Alignable 2, Shopify 1 and Nextdoor 1, and it never goes over the platform's
+//    limit. Alignable keeps 6 a week and Nextdoor 1 to 3 a week.
+//  • That one number is the day limit everywhere: Plan my week, Batch Schedule, ⚡ Post next, Send to PostPilot,
+//    missed posts, ⚖️ Redistribute, the editor's check, the calendar and the stats. A best day fills up to it, the
+//    posts spaced out (3 hours apart on most platforms, 2 on Bluesky and Tumblr, 1 on X and Pinterest) at the
+//    platform's next good times of day. A post dragged next to another one that day moves to a free good time.
+//  • ✨ Best fit can fill each best day: later posts move up into the room, in the same order (a post only moves
+//    later when its own day or time doesn't work), and posts tied to their day stay put. Every change shows first,
+//    any one can be kept as is, and ↩ Undo puts it all back.
+//  • ⚠ Needs attention says when a platform has room for more this week. Only dates and times change: every
+//    picture stays with its post or draft.
+// ═════════════════════════════════════════════════════════════════
+// (Kept with var and function declarations: the Scheduler can ask for these before this part has run.)
+var PP_CAP_DEF = { instagram: 3, facebook: 2, linkedin: 2, google: 1, twitter: 5, bluesky: 5, tiktok: 4, youtube: 3, tumblr: 5, kofi: 2, patreon: 2, alignable: 2, shopify: 1, nextdoor: 1, pinterest: 10 };
+// Good times of day after the best one, in order (general guidance for each platform)
+var PP_GOOD_TIMES = {
+  facebook: ['13:00', '15:00', '11:00', '19:00', '17:00'],
+  instagram: ['14:00', '19:00', '11:00', '17:00', '09:00', '21:00'],
+  linkedin: ['12:00', '17:00', '10:00', '14:00'],
+  google: ['14:00', '12:00'],
+  twitter: ['12:00', '15:00', '17:00', '19:00', '11:00', '14:00', '08:00', '21:00'],
+  bluesky: ['12:00', '15:00', '18:00', '20:00', '14:00'],
+  tiktok: ['12:00', '21:00', '15:00', '09:00', '07:00'],
+  youtube: ['18:00', '14:00', '20:00', '12:00', '09:00'],
+  shopify: ['14:00', '18:00'],
+  tumblr: ['22:00', '16:00', '13:00', '10:00', '21:00', '15:00'],
+  kofi: ['12:00', '20:00', '15:00'],
+  patreon: ['12:00', '20:00', '15:00'],
+  alignable: ['12:00', '09:00', '15:00'],
+  nextdoor: ['18:30', '17:00'],
+  pinterest: ['20:00', '21:00', '14:00', '22:00', '15:00', '19:00', '16:00', '12:00', '10:00', '18:00'],
+};
+// How far apart two posts on one platform's day stay, in minutes (3 hours unless listed)
+var PP_GAP_MIN = { twitter: 60, pinterest: 60, bluesky: 120, tumblr: 120 };
+// Filling never moves a post into the next hour
+var PP_FILL_LEAD = 60 * 60e3;
+var _dcMemo = null, _dcRoomMemo = null;
+
+function _dcLS(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+// This brand's picks ({ facebook: 2, … }); Pinterest keeps its own "pins per day" setting
+function _dcStore() {
+  const raw = _dcLS(wsKey('pp_day_caps'));
+  if (_dcMemo && _dcMemo.raw === raw) return _dcMemo.obj;
+  let o = null;
+  try { o = JSON.parse(raw || '{}'); } catch (e) {}
+  if (!o || typeof o !== 'object' || Array.isArray(o)) o = {};
+  _dcMemo = { raw, obj: o };
+  return o;
+}
+// The most a brand can pick: the platform's limit (Shopify has none, so up to 3 planned a day)
+function ppCapMax(pid) {
+  if (pid === 'nextdoor') return 1;
+  if (pid === 'shopify') return 3;
+  const m = (typeof DAILY_LIMITS === 'object' && DAILY_LIMITS && DAILY_LIMITS[pid]) || 1;
+  return Math.max(1, Math.min(10, m));
+}
+// Posts a day for a platform, for this brand
+function ppDailyCap(pid) {
+  const max = ppCapMax(pid);
+  const v = parseInt(pid === 'pinterest' ? _dcLS(wsKey('pp_pin_cap')) : _dcStore()[pid], 10);
+  if (v >= 1 && v <= max) return v;
+  return Math.max(1, Math.min(max, (PP_CAP_DEF && PP_CAP_DEF[pid]) || 1));
+}
+// The day limit in the editor, the calendar and ⚖️ Redistribute is the same number (Shopify keeps no limit)
+function ppDayLimit(pid) {
+  if (pid === 'shopify') return (typeof DAILY_LIMITS === 'object' && DAILY_LIMITS && DAILY_LIMITS.shopify) || 999;
+  return ppDailyCap(pid);
+}
+function ppGapMin(pid) { return (PP_GAP_MIN && PP_GAP_MIN[pid]) || 180; }
+function _dcMin(t) { const m = /^(\d{1,2}):(\d\d)/.exec(String(t || '')); return m ? +m[1] * 60 + +m[2] : null; }
+// Far enough from every time already on the day
+function _dcFar(times, t, gap) {
+  const x = _dcMin(t);
+  if (x === null) return true;
+  for (const c of times) { const y = _dcMin(c); if (y !== null && Math.abs(x - y) < gap) return false; }
+  return true;
+}
+// The day's best times, as set under ⭐ Best times
+function _dcMain(pid, dow) { return [...new Set(ppBestSlots(pid).filter(([d]) => d === dow).map(([, t]) => t))].sort(); }
+// Other good times, best first: the platform's usual good times, then each hour from 7 AM to 10 PM nearest the best time
+function _dcCands(pid, main) {
+  const base = _dcMin(main && main[0]);
+  const near = (t) => (base === null ? 0 : Math.abs(_dcMin(t) - base));
+  const grid = [];
+  for (let h = 7; h <= 22; h++) grid.push(String(h).padStart(2, '0') + ':00');
+  grid.sort((a, b) => near(a) - near(b) || _dcMin(a) - _dcMin(b));
+  return [...new Set([...((PP_GOOD_TIMES && PP_GOOD_TIMES[pid]) || []), ...grid])].filter(t => !(main || []).includes(t));
+}
+// A best day's posting times: its best time, then the next good times far enough apart, up to Posts a day
+function _ppDayTimes(pid, dow) {
+  const main = _dcMain(pid, dow);
+  if (!main.length) return [];
+  const cap = Math.max(1, ppDailyCap(pid)), gap = ppGapMin(pid), out = main.slice(0, cap);
+  if (out.length < cap) for (const t of _dcCands(pid, main)) { if (out.length >= cap) break; if (_dcFar(out, t, gap)) out.push(t); }
+  return out.sort();
+}
+// A few spare good times that day (in time order). They only stand in for a posting time that another post that day
+// already sits on or near, so a day still gets its posts a day; a posting time that has simply passed isn't replaced.
+function _ppAltTimes(pid, dow) {
+  if (ppDailyCap(pid) <= 1) return [];
+  const main = _dcMain(pid, dow);
+  if (!main.length) return [];
+  const day = _ppDayTimes(pid, dow);
+  return _dcCands(pid, main).filter(t => !day.includes(t)).slice(0, 4).sort();
+}
+// The platform's slots from a moment on: day by day, each day's posting times first, then its spare times
+function ppSlotsFrom(pid, fromMs, days) {
+  const out = [], start = new Date(fromMs), per = {};
+  start.setHours(0, 0, 0, 0);
+  for (let i = 0; i < (days || 60); i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const ds = _ppDayStr(d), dow = d.getDay();
+    if (_ppSkipDay(ds) || !_ppDayOk(pid, ds)) continue;
+    const tt = per[dow] || (per[dow] = { day: _ppDayTimes(pid, dow), alt: _ppAltTimes(pid, dow) });
+    tt.day.forEach(time => { const t = _ppT(ds, time); if (t > fromMs) out.push({ date: ds, time, t }); });
+    tt.alt.forEach(time => { const t = _ppT(ds, time); if (t > fromMs) out.push({ date: ds, time, t, alt: true, day: tt.day }); });
+  }
+  return out;
+}
+// One platform's limits, worked out once for a whole plan
+function _dcCtx(pid) {
+  let wc = 0;
+  try { wc = PP_WEEK_CAP[pid] || 0; } catch (e) {}
+  return { cap: ppDailyCap(pid), gap: ppGapMin(pid), wc, weeks: new Map() };
+}
+// Some posting time that day already has a post on it or too close to it
+function _dcBlocked(times, day, gap) {
+  const has = (t) => (times instanceof Set ? times.has(t) : times.includes(t));
+  return (day || []).some(t => has(t) || !_dcFar(times, t, gap));
+}
+// A slot is free when its day has room under Posts a day (and its week under a weekly cap), and no post that day is too close
+function ppSlotFree(pid, occ, s, ctx) {
+  ctx = ctx || _dcCtx(pid);
+  const o = occ.get(s.date);
+  if (o && (o.n >= ctx.cap || o.times.has(s.time) || !_dcFar(o.times, s.time, ctx.gap))) return false;
+  if (s.alt && !(o && _dcBlocked(o.times, s.day, ctx.gap))) return false;
+  if (ctx.wc) {
+    let wk = ctx.weeks.get(s.date);
+    if (!wk) { wk = _ppWeekOf(s.date); ctx.weeks.set(s.date, wk); }
+    let n = 0;
+    wk.forEach(d => { const x = occ.get(d); if (x && x.n > 0 && x.n < 1e8) n += x.n; });
+    if (n >= ctx.wc) return false;
+  }
+  return true;
+}
+// Posts no planner moves: live or being posted, posted by hand, scheduled on the platform itself, held on their day (📌),
+// an event on its day, an Alignable rotation post, or its time has passed
+function _dcStays(p, now) {
+  return !p || !p.scheduledDate || p.publishStatus === 'published' || p.publishStatus === 'publishing' || !!p.manualUpload || !!_ppLiveUrl(p) || !!p.platformScheduled
+    || !!p.pinnedDay || !!(p.eventDate && p.eventDate === p.scheduledDate) || !!p.alSlot || _ppT(p.scheduledDate, p.scheduledTime || '00:00') <= now;
+}
+// ⚖️ Redistribute and ⚡ Post next never move a post that's live (it has its link) or scheduled on the platform itself
+function _ppLocked(p, nowMs) {
+  return p.publishStatus === 'published' || p.publishStatus === 'publishing' || !!p.manualUpload || !!_ppLiveUrl(p) || !!p.platformScheduled || _ppT(p.scheduledDate, p.scheduledTime) <= nowMs;
+}
+function _ppBumpable(p, nowMs) {
+  return !!p.scheduledDate && p.publishStatus !== 'published' && p.publishStatus !== 'publishing' && !p.pinnedDay && !p.manualUpload && !p.platformScheduled && !_ppLiveUrl(p) && !p.alSlot
+    && !(p.eventDate && p.eventDate === p.scheduledDate) && !_ppHolidayOf(_ppAllText(p), nowMs) && _ppT(p.scheduledDate, p.scheduledTime) > nowMs;
+}
+// "Facebook 2, Instagram 3, Alignable 2 (6 a week)…" for the planners' notes
+function ppCapSummary(pids) {
+  const list = (pids && pids.length ? pids : _ppVisible().map(p => p.id)).filter((pid, i, a) => PLATFORMS[pid] && a.indexOf(pid) === i);
+  const nm = (pid) => pid === 'google' ? 'Google Biz' : pid === 'twitter' ? 'X' : PLATFORMS[pid].name;
+  const wk = (pid) => { try { return PP_WEEK_CAP[pid] || 0; } catch (e) { return 0; } };
+  const parts = list.map(pid => `${nm(pid)} ${ppDailyCap(pid)}${wk(pid) ? ` (${wk(pid)} a week)` : ''}`);
+  return parts.length > 7 ? parts.slice(0, 7).join(', ') + ', …' : parts.join(', ');
+}
+
+// ── Changing Posts a day (⭐ Best times, or the calendar when it shows one platform) ──
+function ppSetDayCap(pid, n) {
+  if (pid === 'pinterest') return ppSetPinCap(n);
+  if (!PLATFORMS[pid] || pid === 'nextdoor') return;
+  const max = ppCapMax(pid), before = ppDailyCap(pid);
+  n = Math.max(1, Math.min(max, n | 0));
+  const o = Object.assign({}, _dcStore());
+  o[pid] = n;
+  try { localStorage.setItem(wsKey('pp_day_caps'), JSON.stringify(o)); } catch (e) {}
+  _dcNoteFor(pid, before, n);
+  render();
+}
+function ppSetPinCap(n) {
+  const before = ppDailyCap('pinterest');
+  n = Math.max(1, Math.min(10, n | 0));
+  try { localStorage.setItem(wsKey('pp_pin_cap'), String(n)); } catch (e) {}
+  _dcNoteFor('pinterest', before, n);
+  render();
+}
+function _dcNoteFor(pid, before, n) {
+  if (n === before) { state.dcNote = null; return; }
+  let over = 0;
+  try { if (n < before) over = ppOverbooked('', pid).length; } catch (e) {}
+  state.dcNote = { pid, n, up: n > before, over };
+  if (state.showBestTimes) return;   // ⭐ Best times shows it at the top; elsewhere (the calendar) it's a toast
+  const what = `${(PLATFORMS[pid] || {}).name || pid}: up to ${n} ${pid === 'pinterest' ? 'pin' : 'post'}${n === 1 ? '' : 's'} a day now.`;
+  setTimeout(() => {
+    try { showToast(n > before ? `📈 ${what} ✨ Best fit can fill your best days.` : over ? `${what} ${over} day${over === 1 ? ' has' : 's have'} more than that: ⚖️ Redistribute moves the extras.` : what); } catch (e) {}
+  }, 0);
+}
+// What changed, at the top of ⭐ Best times, with the next step
+function ppDayCapNote() {
+  const d = state.dcNote;
+  if (!d || !PLATFORMS[d.pid]) return '';
+  const what = `${escapeHtml(PLATFORMS[d.pid].name)}: up to ${d.n} ${d.pid === 'pinterest' ? 'pin' : 'post'}${d.n === 1 ? '' : 's'} a day now.`;
+  if (d.up) return `<div class="dc-note" role="status">📈 ${what} <button type="button" class="od-mk" onclick="ppCloseBestTimes(); ppOpenBestFit(true)">✨ Fill best days</button></div>`;
+  if (d.over) return `<div class="dc-note warn" role="status">${what} ${d.over} day${d.over === 1 ? ' has' : 's have'} more than that. <button type="button" class="od-mk" onclick="ppCloseBestTimes(); ppOpenRedistribute()">⚖️ Redistribute</button></div>`;
+  return `<div class="dc-note" role="status">${what}</div>`;
+}
+function ppOpenBestTimes() { state.dcNote = null; state.showBestTimes = true; render(); }
+function ppCloseBestTimes() { state.dcNote = null; state.showBestTimes = false; render(); }
+// The row's Posts a day, beside each platform's days in ⭐ Best times (Nextdoor shows its week instead)
+function ppDayCapRow(pid) {
+  if (!PLATFORMS[pid] || pid === 'nextdoor') return '';
+  const max = ppCapMax(pid), cur = ppDailyCap(pid), info = (typeof DAILY_LIMIT_INFO === 'object' && DAILY_LIMIT_INFO[pid]) || {}, name = PLATFORMS[pid].name;
+  const label = pid === 'pinterest' ? 'Pins per day' : 'Posts a day', tip = escapeHtml(String(info.note || ''));
+  if (max <= 1) return `<span class="bt-cap" title="${tip}">${label}: 1</span>`;
+  const fn = pid === 'pinterest' ? 'ppSetPinCap(+this.value)' : `ppSetDayCap('${pid}', +this.value)`;
+  return `<label class="bt-cap" title="${tip}">${label} <select aria-label="${escapeHtml(name)} ${label.toLowerCase()}" onchange="${fn}">${Array.from({ length: max }, (_, i) => i + 1).map(n => `<option value="${n}" ${n === cur ? 'selected' : ''}>${n}</option>`).join('')}</select>${info.safe ? `<small class="bt-safe">safe ${escapeHtml(String(info.safe))}</small>` : ''}</label>`;
+}
+// The calendar, showing one platform: its Posts a day beside the filter
+function ppCalCapSet(f) {
+  if (!f || !PLATFORMS[f] || f === 'nextdoor') return '';
+  const max = ppCapMax(f);
+  if (max <= 1) return '';
+  const label = f === 'pinterest' ? 'Pins per day' : 'Posts a day', cur = ppDailyCap(f);
+  const fn = f === 'pinterest' ? 'ppSetPinCap(+this.value)' : `ppSetDayCap('${f}', +this.value)`;
+  return `<label class="cal-cap-set">${label} <select aria-label="${escapeHtml(PLATFORMS[f].name)} ${label.toLowerCase()}" onchange="${fn}">${Array.from({ length: max }, (_, i) => i + 1).map(n => `<option value="${n}" ${n === cur ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`;
+}
+// The editor: changing a post that stays on its day isn't stopped by that day's limit (only adding or moving a post is)
+function ppSameDayEdit(isNew, form) {
+  if (isNew || state.editingPostId == null || !form) return false;
+  const p = (state.posts[state.activePlatform] || []).find(x => String(x.id) === String(state.editingPostId));
+  return !!(p && p.scheduledDate && p.scheduledDate === form.scheduledDate);
+}
+
+// ── Missed posts: the next best day and time with room, spaced from the posts already there ──
+function ppNextBestSlot(pid, postId, plan) {
+  plan = plan || { add: {}, times: new Set() };
+  const from = Date.now() + PP_MISSED_GRACE, lim = ppDailyCap(pid), wkOff = ppWeekendsOff(), gap = ppGapMin(pid);
+  const others = (state.posts[pid] || []).filter(p => String(p.id) !== String(postId));
+  const ok = (s) => {
+    if (wkOff && [0, 6].includes(new Date(s.date + 'T12:00:00').getDay())) return false;
+    if (!_ppDayOk(pid, s.date)) return false;
+    if (PP_WEEK_CAP[pid]) { const wk = _ppWeekOf(s.date); if (others.filter(p => wk.includes(p.scheduledDate)).length + wk.reduce((t, d) => t + (plan.add[d] || 0), 0) >= PP_WEEK_CAP[pid]) return false; }
+    const same = others.filter(p => p.scheduledDate === s.date);
+    if (same.length + (plan.add[s.date] || 0) >= lim) return false;
+    const times = same.map(p => p.scheduledTime || '');
+    plan.times.forEach(k => { if (String(k).slice(0, 10) === s.date) times.push(String(k).slice(11)); });
+    if (s.alt && !_dcBlocked(times, s.day, gap)) return false;   // a spare time only stands in for a taken posting time
+    return !times.includes(s.time) && _dcFar(times, s.time, gap);
+  };
+  let s = ppSlotsFrom(pid, from, 120).find(ok);
+  for (let i = 0; i < 120 && !s; i++) {   // no best time with room: the next day with room, at the platform's usual time
+    const d = new Date(from); d.setDate(d.getDate() + i);
+    const c = { date: _ppDayStr(d), time: ppDefaultTime(pid) }; c.t = _ppT(c.date, c.time);
+    if (c.t > from && ok(c)) s = c;
+  }
+  return s || null;
+}
+// Duplicate sweep: a post on any of the day's posting times counts as "a best day and time"
+function _ppFit(pid, kind, p) {
+  if (kind === 'draft') return { score: 0, why: 'a draft, not scheduled' };
+  if (_ppIsPosted(p)) return { score: 1000, why: 'already posted (always kept)' };
+  if (!p.scheduledDate) return { score: 5, why: 'no date' };
+  let score = 100; const why = [];
+  const wd = new Date(p.scheduledDate + 'T12:00:00').getDay(), tm = p.scheduledTime || '';
+  if (_ppT(p.scheduledDate, tm || '00:00') < Date.now()) { score -= 60; why.push('its time has passed'); }
+  const best = ppBestSlots(pid);
+  if (best.some(([d, t]) => d === wd && t === tm) || _ppDayTimes(pid, wd).includes(tm)) { score += 40; why.push('a best day and time'); }
+  else if (best.some(([d]) => d === wd)) { score += 15; why.push('a best day, but not a best time'); }
+  else why.push('not one of the best days');
+  if (typeof _ppDayOk === 'function' && !_ppDayOk(pid, p.scheduledDate)) { score -= 50; why.push(`not a ${PLATFORMS[pid].name} posting day`); }
+  if ((state.posts[pid] || []).filter(x => x.scheduledDate === p.scheduledDate).length > getDailyLimit(pid)) { score -= 25; why.push('its day is over the limit'); }
+  if (ppWeekendsOff() && (wd === 0 || wd === 6)) { score -= 20; why.push('a weekend you keep clear'); }
+  return { score, why: why.join(', ') };
+}
+
+// ── ✨ Best fit: onto each platform's best days and times; "Fill each best day" moves later posts up into the room ──
+// A post on a good slot keeps its place until it actually moves (so nothing lands on it and nothing is pushed along
+// behind another), a post left as is keeps its place, and posts that end up on the same day keep their order.
+function _ppFitPlan(opts) {
+  opts = opts || {};
+  const now = Date.now(), horizon = opts.days || 60, out = [], fill = !!opts.fill, lead = now + (PP_FILL_LEAD || 3600e3);
+  const kept = new Set((opts.keep || []).map(String));
+  const end = new Date(now); end.setHours(0, 0, 0, 0); end.setDate(end.getDate() + horizon);
+  const endT = end.getTime();
+  const tOf = (p) => _ppT(p.scheduledDate, p.scheduledTime || '00:00');
+  const byT = (a, b) => tOf(a) - tOf(b);
+  const dowOf = (ds) => new Date(ds + 'T12:00:00').getDay(), today = _ppDayStr(new Date(now));
+  _ppVisible().forEach(pl => {
+    if (opts.skip && opts.skip[pl.id]) return;
+    const pid = pl.id;
+    if (!ppBestSlots(pid).length) return;
+    const all = state.posts[pid] || [];
+    const isKept = (p) => kept.has('post:' + p.id);
+    const upcoming = all.filter(p => p.scheduledDate && !_dcStays(p, now) && !isKept(p)).sort(byT);
+    const allDrafts = opts.drafts ? (state.drafts[pid] || []) : [];
+    const drafts = allDrafts.filter(d => !kept.has('draft:' + d.id));
+    const keptList = all.filter(p => p.scheduledDate && !_dcStays(p, now) && isKept(p)).sort(byT).map(p => ({ kind: 'post', ref: p }))
+      .concat(allDrafts.filter(d => kept.has('draft:' + d.id)).map(d => ({ kind: 'draft', ref: d })));
+    if (!upcoming.length && !drafts.length && !keptList.length) return;
+    const ctx = _dcCtx(pid), cap = ctx.cap, tc = {};
+    const timesOf = (w) => tc[w] || (tc[w] = { day: _ppDayTimes(pid, w), alt: _ppAltTimes(pid, w) });
+    const onGood = (p) => {
+      if (_ppSkipDay(p.scheduledDate) || !_ppDayOk(pid, p.scheduledDate)) return false;
+      const tt = timesOf(dowOf(p.scheduledDate));
+      return tt.day.includes(p.scheduledTime) || tt.alt.includes(p.scheduledTime);
+    };
+    const slots = ppSlotsFrom(pid, now, horizon), first = new Map(), days = [];
+    slots.forEach((z, i) => { if (!first.has(z.date)) { first.set(z.date, i); days.push(z.date); } });
+    // the first slot on or after a day (days are in order)
+    const fromDay = (ds) => { let lo = 0, hi = days.length; while (lo < hi) { const m = (lo + hi) >> 1; if (days[m] < ds) lo = m + 1; else hi = m; } return lo < days.length ? first.get(days[lo]) : slots.length; };
+    const hol = new Map();
+    const holOf = (x, isDraft) => { if (!hol.has(x)) hol.set(x, _ppHolidayOf(isDraft ? _ppDraftText(x) : _ppAllText(x), now)); return hol.get(x); };
+    // One pass. A post that can't go anywhere is left as is; the next pass holds its place before any move is planned,
+    // so its day and week count it
+    const planOnce = (fixed) => {
+      // Who holds each day and time: what can't move (your "keep as is" picks too), then each movable post where it is
+      const occ = new Map(), cnt = new Map();
+      const hold = (date, time) => { const k = date + '|' + (time || ''); cnt.set(k, (cnt.get(k) || 0) + 1); _ppTakeAt(occ, { date, time: time || '' }); };
+      const release = (date, time) => {
+        const k = date + '|' + (time || ''), c = (cnt.get(k) || 0) - 1, o = occ.get(date);
+        if (!o) return;
+        o.n = Math.max(0, o.n - 1);
+        if (c > 0) cnt.set(k, c); else { cnt.delete(k); o.times.delete(time || ''); }
+      };
+      all.filter(p => p.scheduledDate && (_dcStays(p, now) || isKept(p))).forEach(p => hold(p.scheduledDate, p.scheduledTime));
+      const free = (q) => ppSlotFree(pid, occ, q, ctx), take = (q) => hold(q.date, q.time);
+      const holDays = {}, moves = [], stuck = [], items = [];
+      let keepN = 0;
+      fixed.forEach((note, p) => stuck.push({ x: { kind: 'post', ref: p }, note }));
+      upcoming.forEach(p => {
+        if (fixed.has(p)) return;
+        const h = holOf(p, false);
+        // past the look-ahead: left where it is (a holiday post still goes into its lead-up)
+        if (!h && tOf(p) >= endT) { hold(p.scheduledDate, p.scheduledTime); if (onGood(p)) keepN++; return; }
+        const inWin = !h || (p.scheduledDate >= h.start && p.scheduledDate <= h.end);
+        const ok = onGood(p) && inWin && free({ date: p.scheduledDate, time: p.scheduledTime });
+        // A post on a good slot (and a holiday post, which may have nowhere else to go) keeps its place until it moves;
+        // one on a weekend you keep clear, an odd time or a crowded slot has to move anyway
+        if (ok || h) hold(p.scheduledDate, p.scheduledTime);
+        if (ok && (h || !fill)) { keepN++; if (h) (holDays[h.id] = holDays[h.id] || []).push(p.scheduledDate); return; }
+        items.push({ kind: 'post', ref: p, h, ok, why: h && !inWin ? 'holiday' : _ppSkipDay(p.scheduledDate) ? 'weekend' : onGood(p) ? 'crowded' : 'time' });
+      });
+      // posts left as is in an earlier pass take their places now, after the others have claimed theirs (a holiday
+      // post left in its lead-up keeps its day to itself)
+      const holBusy = {};
+      fixed.forEach((note, p) => {
+        hold(p.scheduledDate, p.scheduledTime);
+        const h = holOf(p, false);
+        if (h && p.scheduledDate >= h.start && p.scheduledDate <= h.end) (holBusy[h.id] = holBusy[h.id] || []).push(p.scheduledDate);
+      });
+      drafts.forEach(d => items.push({ kind: 'draft', ref: d, h: holOf(d, true), why: 'draft' }));
+      const reasonOf = (x) => x.why === 'weekend' ? `${_ppBrand()} keeps weekends clear` : x.why === 'crowded' ? 'was sharing a slot with another post' : `a better day and time for ${pl.name}`;
+      const upWhy = (ds) => `moves up to fill ${_ppNiceDay(ds)} (${pl.name} takes ${cap} a day)`;
+      // A post that has to move (it isn't holding a place now): the first free best slot on or after its day
+      const onward = (x) => {
+        const p = x.ref, i0 = fromDay(p.scheduledDate < today ? today : p.scheduledDate);
+        let q = null;
+        for (let i = i0; i < slots.length && !q; i++) if (free(slots[i])) q = slots[i];
+        for (let i = 0; i < i0 && !q; i++) if (free(slots[i])) q = slots[i];
+        if (!q) { hold(p.scheduledDate, p.scheduledTime); stuck.push({ x, note: 'no free best slot in the planning window' }); return; }
+        take(q);
+        moves.push({ x, s: q, reason: reasonOf(x) });
+      };
+      // Holiday posts: spread through the lead-up to the holiday, other posts in between (one left as is keeps its place)
+      const spread = () => {
+        const byHol = {};
+        items.filter(x => x.h).forEach(x => (byHol[x.h.id] = byHol[x.h.id] || []).push(x));
+        Object.values(byHol).forEach(list => {
+          const h = list[0].h, had = holDays[h.id] || [];
+          list.forEach(x => { if (x.kind === 'post') release(x.ref.scheduledDate, x.ref.scheduledTime); });
+          const winDays = new Set(slots.filter(z => z.date >= h.start && z.date <= h.end).map(z => z.date)).size;
+          const room = Math.max(0, Math.ceil(winDays / 2) - had.length);
+          const seen = new Set(), cands = [], busy = holBusy[h.id] || [];
+          slots.forEach(z => { if (z.date >= h.start && z.date <= h.end && !seen.has(z.date) && !had.includes(z.date) && !busy.includes(z.date) && free(z)) { seen.add(z.date); cands.push(z); } });
+          const k = Math.min(list.length, room, cands.length), used = new Set();
+          let placed = 0;
+          for (let j = 0; j < k; j++) {
+            let at = Math.min(cands.length - 1, Math.floor((j + 0.5) * cands.length / k));
+            while (at < cands.length && (used.has(at) || !free(cands[at]))) at++;
+            if (at >= cands.length) { at = cands.findIndex((z, i) => !used.has(i) && free(z)); if (at < 0) break; }
+            used.add(at); take(cands[at]); placed++;
+            moves.push({ x: list[j], s: cands[at], reason: `${h.name}: spread through ${_ppNiceDay(h.start)} to ${_ppNiceDay(h.end)}` });
+          }
+          list.slice(placed).forEach(x => {
+            if (x.kind === 'post') hold(x.ref.scheduledDate, x.ref.scheduledTime);
+            stuck.push({ x, note: cands.length ? `more ${h.name} posts than the lead-up has room for` : `no free slot before ${h.name}` });
+          });
+        });
+      };
+      const regular = items.filter(x => !x.h && x.kind === 'post');
+      spread();   // holiday posts first: their lead-up is the only place they can go
+      if (!fill) regular.forEach(onward);
+      else {
+        // Oldest first: each post takes the first free slot on an earlier day, or stays where it is (if that works)
+        let cur = 0;   // every slot before this one is full (a post leaving its day moves it back)
+        const firstFree = () => { while (cur < slots.length && (slots[cur].t < lead || !free(slots[cur]))) cur++; return slots[cur] || null; };
+        const back = (ds) => { const i = first.get(ds); if (i !== undefined && i < cur) cur = i; };
+        regular.forEach(x => {
+          const p = x.ref;
+          if (x.ok) release(p.scheduledDate, p.scheduledTime);
+          const z = tOf(p) < endT ? firstFree() : null;
+          if (z && z.date < p.scheduledDate) { take(z); back(p.scheduledDate); moves.push({ x, s: z, up: true, reason: upWhy(z.date) }); return; }
+          if (x.ok) { hold(p.scheduledDate, p.scheduledTime); return; }
+          x.why = _ppSkipDay(p.scheduledDate) ? 'weekend' : onGood(p) ? 'crowded' : 'time';
+          x.onward = true;
+          onward(x);
+          back(p.scheduledDate);
+        });
+      }
+      let dc = 0;
+      const dFrom = fill ? lead : now;
+      items.filter(x => !x.h && x.kind === 'draft').forEach(x => {
+        while (dc < slots.length && (slots[dc].t < dFrom || !free(slots[dc]))) dc++;
+        if (dc >= slots.length) return stuck.push({ x, note: 'no free best slot in the planning window' });
+        take(slots[dc]);
+        moves.push({ x, s: slots[dc], reason: 'from Drafts' });
+      });
+      if (fill) {
+        // Posts that end up on the same day go out in the order they were in: the day's times are handed out again in that order
+        // (posts that had to move on keep the time they found, and posts left as is stay)
+        const stuckSet = new Set(stuck.map(u => u.x.ref)), regs = regular.filter(x => !stuckSet.has(x.ref) && !x.onward);
+        const at = new Map(regs.map(x => [x.ref, { date: x.ref.scheduledDate, time: x.ref.scheduledTime }])), was = new Map();
+        moves.forEach(m => { if (at.has(m.x.ref)) { at.set(m.x.ref, { date: m.s.date, time: m.s.time }); was.set(m.x.ref, m); } });
+        new Set(moves.filter(m => m.up).map(m => m.s.date)).forEach(day => {
+          const ps = regs.map(x => x.ref).filter(p => at.get(p).date === day).sort(byT);
+          const ts = ps.map(p => at.get(p).time).sort();
+          ps.forEach((p, i) => at.set(p, { date: day, time: ts[i] }));
+        });
+        for (let i = moves.length - 1; i >= 0; i--) if (at.has(moves[i].x.ref)) moves.splice(i, 1);
+        regs.forEach(x => {
+          const p = x.ref, s = at.get(p), m0 = was.get(p);
+          if (s.date === p.scheduledDate && s.time === p.scheduledTime) { keepN++; return; }
+          const t = _ppT(s.date, s.time);
+          moves.push({ x, s: { date: s.date, time: s.time, t }, up: s.date < p.scheduledDate,
+            reason: s.date < p.scheduledDate ? upWhy(s.date) : m0 ? m0.reason : `${t < tOf(p) ? 'earlier' : 'later'} the same day, so posts stay in order` });
+        });
+      }
+      return { moves, stuck, keepN };
+    };
+    const fixed = new Map();
+    let res = planOnce(fixed);
+    for (let pass = 0; pass <= upcoming.length; pass++) {   // each pass leaves at least one more post as is, so it ends
+      const add = res.stuck.filter(u => u.x.kind === 'post' && !fixed.has(u.x.ref));
+      if (!add.length) break;
+      add.forEach(u => fixed.set(u.x.ref, u.note));
+      res = planOnce(fixed);
+    }
+    const real = res.moves.filter(m => !(m.x.kind === 'post' && m.s.date === m.x.ref.scheduledDate && m.s.time === m.x.ref.scheduledTime));
+    if (real.length || res.stuck.length || keptList.length) out.push({ pl, keep: res.keepN, cap, moves: real.sort((a, b) => a.s.t - b.s.t), stuck: res.stuck, kept: keptList });
+  });
+  return out;
+}
+function ppOpenBestFit(fill) {
+  state.bestFit = Object.assign({ days: 60, drafts: true, fill: true }, state.bestFit || {}, { keep: [] });
+  if (typeof fill === 'boolean') state.bestFit.fill = fill;
+  state.showBestFit = true;
+  render();
+}
+// Keep one as it is (or let it move again)
+function ppBestFitKeep(key, on) {
+  const bf = state.bestFit || (state.bestFit = { days: 60, drafts: true, fill: true, keep: [] });
+  const s = new Set((bf.keep || []).map(String));
+  if (on) s.add(String(key)); else s.delete(String(key));
+  bf.keep = [...s];
+  render();
+}
+// A very long list shows its first changes for each platform (Apply still makes every change)
+var BF_ROWS = 60;
+function renderBestFit() {
+  const bf = state.bestFit || { days: 60, drafts: true, fill: true, keep: [] };
+  const plan = _ppFitPlan(bf);
+  const total = plan.reduce((n, r) => n + r.moves.length, 0);
+  const name = (x) => escapeHtml(String(x.kind === 'draft' ? (x.ref.srcHeader || x.ref.notes || x.ref.imageName || 'Draft') : (getPostSummary ? getPostSummary(x.ref) : '') || x.ref.title || x.ref.caption || 'Post').slice(0, 46));
+  const img = (x) => escapeHtml(x.kind === 'draft' ? (x.ref.imageThumb || x.ref.imageFull || '') : (x.ref.image || ''));
+  const when = (x) => x.kind === 'draft' ? 'Drafts' : _ppNiceDay(x.ref.scheduledDate) + ' · ' + _ppClock(x.ref.scheduledTime);
+  const key = (x) => escapeHtml(JSON.stringify(x.kind + ':' + x.ref.id));
+  const pids = plan.length ? plan.map(r => r.pl.id) : [];
+  const wk = ppWeekendsOff() ? ', weekdays only' : '';
+  const intro = bf.fill
+    ? `Each platform's best days fill up to its posts a day, spaced through the day${wk}: ${ppCapSummary(pids)}. Later posts move up into the room (a post only moves later when its own day or time doesn't work). Holiday posts are spread through the lead-up to the holiday, and posts that are live, held on their day (📌) or events on their day stay put.`
+    : `Posts go onto each platform's best days and times, up to its posts a day and spaced through the day${wk}: ${ppCapSummary(pids)}. Holiday posts are spread through the lead-up to the holiday, with other posts in between.`;
+  const sec = (r) => `<div class="pw-sec" style="border-left-color:${r.pl.color}">
+        <div class="pw-head"><span style="color:${r.pl.color};font-weight:700">${escapeHtml(r.pl.name)}</span><span class="pw-count">${r.moves.length} change${r.moves.length === 1 ? '' : 's'}${r.keep ? ` · ${r.keep} already on a best time` : ''} · up to ${r.cap} a day</span></div>
+        <div class="pw-list">${r.moves.slice(0, BF_ROWS).map(m => `<div class="bp-row bf-row"><img src="${img(m.x)}" alt=""/><span class="bp-name">${name(m.x)}</span>
+          <span class="bf-when">${when(m.x)} → <b>${_ppSlotLabel(m.s)}</b></span><button type="button" class="rd-b bf-keep" onclick="ppBestFitKeep(${key(m.x)}, true)" aria-label="${m.x.kind === 'draft' ? 'Leave in Drafts' : 'Keep as is'}: ${name(m.x)}">${m.x.kind === 'draft' ? 'Leave in Drafts' : 'Keep as is'}</button><span class="bf-why">${escapeHtml(m.reason)}</span></div>`).join('')}
+          ${r.moves.length > BF_ROWS ? `<div class="bf-more">…and ${r.moves.length - BF_ROWS} more change${r.moves.length - BF_ROWS === 1 ? '' : 's'} like these (Apply makes them all)</div>` : ''}
+          ${r.stuck.slice(0, BF_ROWS).map(u => `<div class="bp-row bf-row"><img src="${img(u.x)}" alt=""/><span class="bp-name">${name(u.x)}</span><span class="bf-why warn">⚠ ${escapeHtml(u.note)}; left as is</span></div>`).join('')}
+          ${r.stuck.length > BF_ROWS ? `<div class="bf-more">…and ${r.stuck.length - BF_ROWS} more left as is</div>` : ''}
+          ${(r.kept || []).map(x => `<div class="bp-row bf-row bf-kept"><img src="${img(x)}" alt=""/><span class="bp-name">${name(x)}</span><span class="bf-when">${when(x)}</span><span class="bf-why warn">${x.kind === 'draft' ? 'Stays in Drafts' : 'Kept as is'}</span><button type="button" class="rd-b bf-keep" onclick="ppBestFitKeep(${key(x)}, false)" aria-label="Let ${name(x)} move">Let it move</button></div>`).join('')}</div>
+      </div>`;
+  return `<div class="overlay" onclick="ppCloseBestFit()" style="z-index:820"><div class="modal" style="max-width:780px" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="bf-title">
+    <div class="modal-header"><h2 class="modal-title" id="bf-title">✨ Best fit</h2><button class="close-btn" onclick="ppCloseBestFit()" aria-label="Close">×</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;max-height:68vh;overflow-y:auto">
+      <div class="pw-top"><span>${intro} <button type="button" class="od-mk" onclick="ppOpenBestTimes()">⭐ Edit best times</button></span>
+        <span class="bf-opts"><label title="Later posts move up so each best day has as many posts as the platform takes"><input type="checkbox" ${bf.fill ? 'checked' : ''} onchange="state.bestFit.fill = this.checked; render()"/> Fill each best day</label>
+        <label><input type="checkbox" ${bf.drafts ? 'checked' : ''} onchange="state.bestFit.drafts = this.checked; render()"/> Include drafts</label>
+        <label>Look ahead <select onchange="state.bestFit.days = +this.value; render()">${[30, 60, 90].map(d => `<option value="${d}" ${d === bf.days ? 'selected' : ''}>${d} days</option>`).join('')}</select></label></span></div>
+      ${plan.length ? plan.map(sec).join('') : `<div class="pw-empty">${bf.fill ? "Every best day already has as many posts as it can, or there's nothing later to move up. Nothing to change." : "Everything is already on its platform's best days and times. Nothing to change."}</div>`}
+    </div>
+    <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;padding:16px 20px">
+      <button class="btn-cancel" onclick="ppCloseBestFit()">Cancel</button>
+      <button class="btn-save" ${total ? '' : 'disabled'} onclick="ppApplyBestFit()">Apply ${total} change${total === 1 ? '' : 's'} →</button>
+    </div></div></div>`;
+}
+function ppApplyBestFit() {
+  const plan = _ppFitPlan(state.bestFit || {});
+  const posts = { ...state.posts }, drafts = { ...state.drafts }, undo = { moved: [], made: [] };
+  let n = 0, full = 0;
+  plan.forEach(r => {
+    const pid = r.pl.id, doneDrafts = new Set(), list0 = state.drafts[pid] || [];
+    r.moves.forEach(m => {
+      if (m.x.kind === 'post') {
+        let hit = false;
+        posts[pid] = (posts[pid] || []).map(p => {
+          if (p !== m.x.ref) return p;
+          hit = true;
+          undo.moved.push({ pid, id: String(p.id), date: p.scheduledDate, time: p.scheduledTime, to: { date: m.s.date, time: m.s.time } });
+          return { ...p, scheduledDate: m.s.date, scheduledTime: m.s.time };
+        });
+        if (hit) n++;
+      } else {
+        if ((posts[pid] || []).length >= MAX_POSTS) { full++; return; }
+        const d = m.x.ref, id = Date.now() + Math.random();
+        posts[pid] = [...(posts[pid] || []), { ...defaultForm(pid), ...(d.formSnapshot ? d.formSnapshot : _draftTextFields(d)), id, publishStatus: 'scheduled', platform: pid,
+          image: d.imageFull, imageOriginal: d.imageFull, imageName: d.imageName, isVideo: d.isVideo, isGif: d.isGif, tags: d.tags || [], scheduledDate: m.s.date, scheduledTime: m.s.time }];
+        doneDrafts.add(String(d.id));
+        undo.made.push({ pid, id: String(id), draft: d, idx: list0.indexOf(d), to: { date: m.s.date, time: m.s.time } });
+        n++;
+      }
+    });
+    posts[pid] = sortPosts(posts[pid] || []);
+    if (doneDrafts.size) drafts[pid] = (drafts[pid] || []).filter(d => !doneDrafts.has(String(d.id)));
+  });
+  state.posts = posts; state.drafts = drafts;
+  savePosts(state.posts); saveDrafts(state.drafts);
+  state.showBestFit = false;
+  render();
+  if (!n) { showToast(full ? `No room for more posts (${MAX_POSTS} per platform).` : 'Nothing to change.'); return; }
+  const msg = `✨ Best fit: ${n} post${n === 1 ? '' : 's'} on ${n === 1 ? 'its' : 'their'} best day${n === 1 ? '' : 's'} and time${n === 1 ? '' : 's'}.` + (full ? ` ${full} draft${full === 1 ? '' : 's'} stayed in Drafts (${MAX_POSTS} posts per platform at most).` : '');
+  if (typeof _ppUndoBar === 'function') _ppUndoBar(msg, () => ppUndoBestFit(undo));
+  else showToast(msg);
+}
+// ↩ Undo: posts back to their days and times; drafts back in Drafts with their pictures (unless posted since)
+function ppUndoBestFit(u) {
+  const posts = { ...state.posts }, drafts = { ...state.drafts };
+  let n = 0;
+  (u.moved || []).forEach(m => {
+    posts[m.pid] = (posts[m.pid] || []).map(p => (String(p.id) === m.id && p.scheduledDate === m.to.date && p.scheduledTime === m.to.time && !_ppIsPosted(p) && p.publishStatus !== 'publishing'
+      ? (n++, { ...p, scheduledDate: m.date, scheduledTime: m.time }) : p));
+  });
+  const back = {};
+  (u.made || []).forEach(m => {
+    const list = posts[m.pid] || [], p = list.find(x => String(x.id) === m.id);
+    if (!p || _ppIsPosted(p) || p.publishStatus === 'publishing' || p.scheduledDate !== m.to.date || p.scheduledTime !== m.to.time) return;
+    posts[m.pid] = list.filter(x => x !== p);
+    (back[m.pid] = back[m.pid] || []).push(m);
+    n++;
+  });
+  Object.keys(back).forEach(pid => {
+    const list = (drafts[pid] || []).slice();
+    back[pid].sort((a, b) => a.idx - b.idx).forEach(m => {
+      if (list.some(d => String(d.id) === String(m.draft.id))) return;
+      list.splice(m.idx >= 0 ? Math.min(m.idx, list.length) : list.length, 0, m.draft);
+    });
+    drafts[pid] = list;
+  });
+  [...new Set([...(u.moved || []), ...(u.made || [])].map(m => m.pid))].forEach(pid => (posts[pid] = sortPosts(posts[pid] || [])));
+  state.posts = posts; state.drafts = drafts;
+  savePosts(state.posts);
+  if (Object.keys(back).length) saveDrafts(state.drafts);
+  render();
+  showToast(`↩ Undone: ${n} post${n === 1 ? '' : 's'} back as ${n === 1 ? 'it was' : 'they were'}.`);
+}
+
+// ── Room this week: posts that could go out on a best day with room in the next 7 days (later posts or drafts) ──
+function ppRoomWeek() {
+  const now = Date.now(), lead = now + (PP_FILL_LEAD || 3600e3), out = [];
+  const wkEnd = new Date(now); wkEnd.setHours(0, 0, 0, 0); wkEnd.setDate(wkEnd.getDate() + 7);
+  const endT = wkEnd.getTime(), far = now + 60 * 864e5;
+  _ppVisible().forEach(pl => {
+    const pid = pl.id;
+    if (!ppBestSlots(pid).length) return;
+    const later = (state.posts[pid] || []).filter(p => {
+      if (_dcStays(p, now)) return false;
+      const t = _ppT(p.scheduledDate, p.scheduledTime || '00:00');
+      return t >= endT && t <= far && !_ppHolidayOf(_ppAllText(p), now);
+    }).length;
+    const supply = later + (state.drafts[pid] || []).filter(d => !_ppHolidayOf(_ppDraftText(d), now)).length;
+    if (!supply) return;
+    const room = ppBestPlan(pid, supply, lead, 7, _ppOcc(pid)).filter(s => s.t < endT).length;
+    if (room > 0) out.push({ pl, n: Math.min(room, supply) });
+  });
+  return out;
+}
+function _dcRoom() {
+  let ws = '';
+  try { ws = getActiveWorkspace(); } catch (e) {}
+  const raw = [ws, _dcLS(wsKey('pp_day_caps')), _dcLS(wsKey('pp_pin_cap')), _dcLS(wsKey('pp_best_slots')), _dcLS(wsKey('pp_weekends_off')), _dcLS(wsKey('pp_nd_week_cap')),
+    state.hiddenPlatforms ? [...state.hiddenPlatforms].join(',') : '', Math.floor(Date.now() / 60e3)].join('\u0001');
+  const m = _dcRoomMemo;
+  if (m && m.raw === raw && m.posts === state.posts && m.drafts === state.drafts) return m.v;
+  let v = [];
+  try { v = ppRoomWeek(); } catch (e) {}
+  _dcRoomMemo = { raw, posts: state.posts, drafts: state.drafts, v };
+  return v;
+}
+const _dcRoomLine = (room) => escapeHtml(room.slice(0, 4).map(r => `${r.pl.name} ${r.n}`).join(', ') + (room.length > 4 ? ', …' : ''));
+// ⚠ Needs attention lists it
+const _dcPrevAttention = _suxAttention;
+_suxAttention = function () {
+  const items = _dcPrevAttention.apply(this, arguments) || [];
+  try {
+    const room = _dcRoom();
+    if (room.length) items.push(`<button type="button" class="sux-att-i" onclick="ppOpenBestFit(true)">📈 <b>Room to post more this week</b>: ${_dcRoomLine(room)} <span>Fill best days ›</span></button>`);
+  } catch (e) {}
+  return items;
+};
+// …and the classic sidebar shows it under the tools
+const _dcPrevComingUp = renderComingUp;
+renderComingUp = function () {
+  const h = _dcPrevComingUp.apply(this, arguments);
+  try {
+    if (typeof _suxOn === 'function' && _suxOn()) return h;
+    const room = _dcRoom();
+    if (!room.length) return h;
+    const note = `<div class="cu-gaps cu-room" role="note"><div class="cu-gh">📈 Room to post more this week</div>${room.slice(0, 5).map(r => `<button type="button" class="cu-gap" onclick="ppOpenBestFit(true)" title="Fill best days with ✨ Best fit"><b style="color:${r.pl.color}">${escapeHtml(r.pl.name)}</b>: ${r.n} more</button>`).join('')}</div>`;
+    return h.replace(/<\/div>\s*$/, note + '</div>');
+  } catch (e) { return h; }
+};
+
+// ── A post dragged to another day next to a post already there moves to a free good time that day ──
+// (In the Week and Day views you drop it on a time yourself, so that time is kept.)
+var _dcAtTime = false;
+const _dcPrevDrag = applyDragMove;
+applyDragMove = function (postId, platId, toDate) {
+  if (_dcAtTime) return _dcPrevDrag.apply(this, arguments);
+  let note = '';
+  try {
+    const list = state.posts[platId] || [], p = list.find(x => String(x.id) === String(postId));
+    if (p && toDate && p.scheduledDate !== toDate && p.scheduledTime) {
+      const o = _ppOcc(platId, new Set([String(postId)])).get(toDate), gap = ppGapMin(platId);
+      if (o && (o.times.has(p.scheduledTime) || !_dcFar(o.times, p.scheduledTime, gap))) {
+        const dow = new Date(toDate + 'T12:00:00').getDay(), now = Date.now(), main = _dcMain(platId, dow);
+        const pool = [...new Set([..._ppDayTimes(platId, dow), ..._ppAltTimes(platId, dow), ..._dcCands(platId, main.length ? main : [p.scheduledTime])])];
+        const t = pool.find(x => _ppT(toDate, x) > now && !o.times.has(x) && _dcFar(o.times, x, gap));
+        if (t) {
+          state.posts = { ...state.posts, [platId]: list.map(x => (x === p ? { ...x, scheduledTime: t } : x)) };
+          const hrs = gap / 60, nm = (PLATFORMS[platId] || {}).name || platId;
+          note = `🕑 It goes out at ${_ppClock(t)} that day, ${hrs} hour${hrs === 1 ? '' : 's'} or more from the other ${nm} post${o.n === 1 ? '' : 's'}.`;
+        }
+      }
+    }
+  } catch (e) {}
+  const r = _dcPrevDrag.apply(this, arguments);
+  if (note) setTimeout(() => { try { showToast(note); } catch (e) {} }, 450);
+  return r;
+};
+if (typeof ppCalDropAt === 'function') {
+  const _dcPrevDropAt = ppCalDropAt;
+  ppCalDropAt = function () { _dcAtTime = true; try { return _dcPrevDropAt.apply(this, arguments); } finally { _dcAtTime = false; } };
+}
+// The Posts a day tooltip shows each platform's note (Patreon's had a dash in it)
+try { if (DAILY_LIMIT_INFO.patreon) DAILY_LIMIT_INFO.patreon.note = 'Patreon recommends 1–2 posts a day. Consistency matters more than volume for creators.'; } catch (e) {}
+
+(function _dcStyles() {
+  const st = document.createElement('style');
+  st.textContent = `
+    .bt-cap select, .cal-cap-set select { padding: 2px 20px 2px 7px; background-position: right 5px center; }
+    .bt-safe { margin-left: 3px; font-size: 10px; opacity: .7; white-space: nowrap; }
+    .dc-note { font-size: 12px; line-height: 1.5; padding: 7px 10px; border-radius: 8px; border: 1px solid rgba(52,211,153,.45); background: rgba(52,211,153,.08); }
+    .dc-note.warn { border-color: rgba(245,166,35,.5); background: rgba(245,166,35,.08); }
+    .bf-opts { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .bf-opts label { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .bf-opts select { width: auto; min-width: 0; height: auto; padding: 4px 26px 4px 8px; font-size: 12px; border-radius: 7px; }
+    .bf-keep { margin-left: auto; }
+    .bf-kept { opacity: .8; }
+    .bf-more { font-size: 11.5px; color: var(--text-muted, #8b8fa8); padding: 4px 2px; }
+    .bf-kept .bf-why.warn { flex-basis: auto; padding-left: 0; }
+    .cu-room .cu-gh { color: #34d399; }`;
+  document.head.appendChild(st);
+})();
 
 </scr_PPESC_ipt>
 
